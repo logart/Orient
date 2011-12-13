@@ -141,11 +141,11 @@ public class OCuckooSet extends AbstractSet<byte[]> {
 
   private boolean checkBucket(byte[] value, int bucketIndex, int tableIndex) {
     final int itemOffset = tableIndex * bucketsInTable;
-    final int beginItem = itemIndex(bucketIndex) + itemOffset;
-    final int endItem = beginItem + BUCKET_SIZE + itemOffset;
+    final int beginItem = itemIndex(bucketIndex);
+    final int endItem = beginItem + BUCKET_SIZE ;
 
     for (int i = bucketIndex; i < endItem; i++) {
-      if (!bitSet.get(i))
+      if (!bitSet.get(i + itemOffset))
         return false;
 
       if (containsValue(value, i, tableIndex))
