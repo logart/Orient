@@ -120,6 +120,11 @@ public class OCuckooSet extends AbstractSet<byte[]> {
     throw new IllegalArgumentException("Table is full");
   }
 
+  @Override
+  public void clear() {
+    bitSet.clear();
+  }
+
   private boolean appendInBucket(byte[] value, int bucketIndex, int tableIndex) {
     final int beginItem = itemIndex(bucketIndex) + tableIndex * bucketsInTable;
     final int endItem = beginItem + BUCKET_SIZE;
@@ -186,6 +191,6 @@ public class OCuckooSet extends AbstractSet<byte[]> {
 
   @Override
   public int size() {
-    return 0;
+    return size;
   }
 }
