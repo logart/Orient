@@ -31,6 +31,8 @@ public class OCuckooSet extends AbstractSet<byte[]> {
   private static final int MAXIMUM_CAPACITY = 1 << 30;
   private static final int BUCKET_SIZE = 4;
   private static final int MAX_TRIES = 1000;
+  private static final int FIRST_SEED = 0x3ac5d673;
+  private static final int SECOND_SEED = 0x6d7839d0;
 
   private int tableSize;
   private int bucketsInTable;
@@ -43,9 +45,6 @@ public class OCuckooSet extends AbstractSet<byte[]> {
 
   private int keySize;
   private int capacity;
-
-  private int seedOne;
-  private int seedTwo;
 
   public OCuckooSet(int initialCapacity,int keySize) {
     final int capacityBoundary = MAXIMUM_CAPACITY / (keySize * BUCKET_SIZE);
@@ -65,10 +64,6 @@ public class OCuckooSet extends AbstractSet<byte[]> {
     bucketsInTable = (int)(bitSet.size() >> 1);
 
     maxTries = Math.min(cuckooTable.length >> 1, MAX_TRIES);
-
-    final Random random = new Random();
-    seedOne = random.nextInt();
-    seedTwo = random.nextInt();
   }
 
   @Override
@@ -78,13 +73,13 @@ public class OCuckooSet extends AbstractSet<byte[]> {
 
     byte[] value = (byte[]) o;
 
-    final int hashOne = OMurmurHash3.murmurhash3_x86_32(value, 0, keySize, seedOne);
+    final int hashOne = OMurmurHash3.murmurhash3_x86_32(value, 0, keySize, FIRST_SEED);
 
     final int bucketIndexOne = bucketIndex(hashOne);
     if (checkBucket(value, bucketIndexOne, 0))
       return true;
 
-    final int hashTwo = OMurmurHash3.murmurhash3_x86_32(value, 0, keySize, seedTwo);
+    final int hashTwo = OMurmurHash3.murmurhash3_x86_32(value, 0, keySize, SECOND_SEED);
     final int bucketIndexTwo = bucketIndex(hashTwo) + tableSize;
 
     return checkBucket(value, bucketIndexTwo, 1);
@@ -98,7 +93,7 @@ public class OCuckooSet extends AbstractSet<byte[]> {
     int tries = 0;
 
     while (tries < maxTries) {
-      final int hashOne = OMurmurHash3.murmurhash3_x86_32(value, 0, keySize, seedOne);
+      final int hashOne = OMurmurHash3.murmurhash3_x86_32(value, 0, keySize, FIRST_SEED);
       final int bucketIndexOne = bucketIndex(hashOne);
 
       if(appendInBucket(value, bucketIndexOne, 0)) {
@@ -106,7 +101,7 @@ public class OCuckooSet extends AbstractSet<byte[]> {
         return true;
       }
 
-      final int hashTwo = OMurmurHash3.murmurhash3_x86_32(value, 0, keySize, seedTwo);
+      final int hashTwo = OMurmurHash3.murmurhash3_x86_32(value, 0, keySize, SECOND_SEED);
       final int bucketIndexTwo = bucketIndex(hashTwo);
 
       if(appendInBucket(value, bucketIndexTwo, 1)) {
