@@ -32,7 +32,10 @@ public class OCuckooSet extends AbstractSet<byte[]> {
   private static final int BUCKET_SIZE = 4;
   private static final int MAX_TRIES = 1000;
 
-  private int tableSeparator;
+  private int tableSize;
+  private int bucketsInTable;
+  private int size;
+
   private int maxTries;
 
   private byte[] cuckooTable;
@@ -57,8 +60,9 @@ public class OCuckooSet extends AbstractSet<byte[]> {
     this.keySize = keySize;
 
     cuckooTable = new byte[keySize * capacity * BUCKET_SIZE];
-    bitSet = new BitSet(cuckooTable.length);
-    tableSeparator = cuckooTable.length >> 1;
+    bitSet = new BitSet(capacity * BUCKET_SIZE);
+    tableSize = cuckooTable.length >> 1;
+    bucketsInTable = (int)(bitSet.size() >> 1);
 
     maxTries = Math.min(cuckooTable.length >> 1, MAX_TRIES);
 
@@ -69,52 +73,110 @@ public class OCuckooSet extends AbstractSet<byte[]> {
 
   @Override
   public boolean contains(Object o) {
-    if (o.getClass() != byte[].class)
+    if(size == 0)
       return false;
 
     byte[] value = (byte[]) o;
-    if (value.length != keySize)
-      return false;
 
     final int hashOne = OMurmurHash3.murmurhash3_x86_32(value, 0, keySize, seedOne);
 
-    final int beginIndexOne = indexOf(hashOne);
-    if (checkBucket(value, beginIndexOne))
+    final int bucketIndexOne = bucketIndex(hashOne);
+    if (checkBucket(value, bucketIndexOne, 0))
       return true;
 
     final int hashTwo = OMurmurHash3.murmurhash3_x86_32(value, 0, keySize, seedTwo);
-    final int beginIndexTwo = indexOf(hashTwo) + tableSeparator;
+    final int bucketIndexTwo = bucketIndex(hashTwo) + tableSize;
 
-    return checkBucket(value, beginIndexTwo);
+    return checkBucket(value, bucketIndexTwo, 1);
   }
 
   @Override
-  public boolean add(byte[] bytes) {
-    if(contains(bytes))
+  public boolean add(byte[] value) {
+    if(contains(value))
       return false;
 
-    return false;
-  }
+    int tries = 0;
 
-  private boolean checkBucket(byte[] value, int beginIndex) {
-    final int endIndex = beginIndex + BUCKET_SIZE;
+    while (tries < maxTries) {
+      final int hashOne = OMurmurHash3.murmurhash3_x86_32(value, 0, keySize, seedOne);
+      final int bucketIndexOne = bucketIndex(hashOne);
 
-    for(int i = beginIndex; i < endIndex; i++)
-      for (int j = 0; j < keySize; j++) {
-        if(!bitSet.get(i + j))
-          return false;
-
-        if (value[j] != cuckooTable[i + j])
-          break;
-
-        if (j == keySize - 1)
-          return true;
+      if(appendInBucket(value, bucketIndexOne, 0)) {
+        size++;
+        return true;
       }
+
+      final int hashTwo = OMurmurHash3.murmurhash3_x86_32(value, 0, keySize, seedTwo);
+      final int bucketIndexTwo = bucketIndex(hashTwo);
+
+      if(appendInBucket(value, bucketIndexTwo, 1)) {
+        size++;
+        return true;
+      }
+
+      maxTries++;
+    }
+
+    throw new IllegalArgumentException("Table is full");
+  }
+
+  private boolean appendInBucket(byte[] value, int bucketIndex, int tableIndex) {
+    final int beginItem = itemIndex(bucketIndex) + tableIndex * bucketsInTable;
+    final int endItem = beginItem + BUCKET_SIZE;
+    int itemIndex = beginItem;
+
+    while(bitSet.get(itemIndex) && itemIndex < endItem) {
+      itemIndex++;
+    }
+
+    if(itemIndex < endItem) {
+      final int beginIndex = itemIndexInArray(itemIndex);
+      System.arraycopy(value, 0, cuckooTable, beginIndex, keySize);
+      bitSet.set(itemIndex);
+      return true;
+    }
+
     return false;
   }
 
-  private int indexOf(int hash) {
-    return (hash & (capacity - 1)) * keySize * BUCKET_SIZE;
+  private boolean checkBucket(byte[] value, int bucketIndex, int tableIndex) {
+    final int itemOffset = tableIndex * bucketsInTable;
+    final int beginItem = itemIndex(bucketIndex) + itemOffset;
+    final int endItem = beginItem + BUCKET_SIZE + itemOffset;
+
+    for (int i = bucketIndex; i < endItem; i++) {
+      if (!bitSet.get(i))
+        return false;
+
+      if (containsValue(value, i, tableIndex))
+        return true;
+    }
+    return false;
+  }
+
+  private boolean containsValue(byte[] value, int itemIndex, int tableIndex) {
+    final int beginIndex = itemIndex * keySize + tableIndex * tableSize;
+    for (int j = 0; j < keySize; j++) {
+      if (value[j] != cuckooTable[beginIndex + j])
+        break;
+
+      if (j == keySize - 1)
+        return true;
+    }
+
+    return false;
+  }
+
+  private int bucketIndex(int hash) {
+    return (hash & (capacity - 1));
+  }
+
+  private int itemIndex(int bucketIndex) {
+    return bucketIndex * BUCKET_SIZE;
+  }
+
+  private int itemIndexInArray(int itemIndex) {
+    return  itemIndex * keySize;
   }
 
   @Override
