@@ -29,7 +29,7 @@ import java.util.Iterator;
 public class OCuckooHashSet extends AbstractSet<byte[]> {
   private static final int MAXIMUM_CAPACITY = 1 << 30;
   private static final int BUCKET_SIZE = 4;
-  private static final int MAX_TRIES_PERCENT = 10;
+  private static final int MAX_TRIES_BASE = 10;
   private static final int MAX_STASH_SIZE = 4;
   private static final int FIRST_SEED = 0x3ac5d673;
   private static final int SECOND_SEED = 0x6d7839d0;
@@ -65,7 +65,7 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
     bucketsInTable = capacity >> 1;
     stash = new byte[keySize * MAX_STASH_SIZE];
 
-    maxTries = (capacity * 100) / MAX_TRIES_PERCENT;
+    maxTries = (int)Math.round(MAX_TRIES_BASE * Math.log(capacity));
   }
 
   @Override
