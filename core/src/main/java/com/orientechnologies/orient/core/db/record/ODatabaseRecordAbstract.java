@@ -187,6 +187,12 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 		return (RET) load(iRecord, null);
 	}
 
+	@Override
+	public void reload() {
+		metadata.reload();
+		super.reload();
+	}
+
 	public void reload(final ORecordInternal<?> iRecord) {
 		executeReadRecord((ORecordId) iRecord.getIdentity(), iRecord, null, true);
 	}
@@ -453,6 +459,11 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 				record = getLevel1Cache().findRecord(iRid);
 
 			if (record != null) {
+				if (iRecord != null) {
+					iRecord.fromStream(record.toStream());
+					record = iRecord;
+				}
+
 				OFetchHelper.checkFetchPlanValid(iFetchPlan);
 				callbackHooks(TYPE.BEFORE_READ, record);
 

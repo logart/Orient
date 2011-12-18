@@ -22,7 +22,6 @@ import com.orientechnologies.common.collection.OLazyIterator;
 import com.orientechnologies.orient.core.db.record.ODetachable;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.exception.OSerializationException;
-import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.serialization.OBinaryProtocol;
@@ -45,8 +44,8 @@ public class OMVRBTreeRIDSet implements Set<OIdentifiable>, OStringBuilderSerial
 		this(new OMVRBTreeRID());
 	}
 
-	public OMVRBTreeRIDSet(final ORID iRID) {
-		this(new OMVRBTreeRID(iRID));
+	public OMVRBTreeRIDSet(final OIdentifiable iRecord) {
+		this(new OMVRBTreeRID((ODocument) iRecord.getRecord()));
 	}
 
 	public OMVRBTreeRIDSet(final String iClusterName) {
@@ -57,8 +56,22 @@ public class OMVRBTreeRIDSet implements Set<OIdentifiable>, OStringBuilderSerial
 		this((OMVRBTreeRID) new OMVRBTreeRID().setOwner(iOwner));
 	}
 
+	public OMVRBTreeRIDSet(final ORecord<?> iOwner, Collection<OIdentifiable> iInitValues) {
+		this((OMVRBTreeRID) new OMVRBTreeRID(iInitValues).setOwner(iOwner));
+	}
+
 	public OMVRBTreeRIDSet(final OMVRBTreeRID iProvider) {
 		tree = iProvider;
+	}
+
+	/**
+	 * Copy constructor
+	 * 
+	 * @param iSource
+	 *          Source object
+	 */
+	public OMVRBTreeRIDSet(final OMVRBTreeRIDSet iSource) {
+		tree = new OMVRBTreeRID(iSource.tree);
 	}
 
 	public int size() {
@@ -134,14 +147,11 @@ public class OMVRBTreeRIDSet implements Set<OIdentifiable>, OStringBuilderSerial
 	}
 
 	public ODocument toDocument() {
-		tree.save();
 		return ((OMVRBTreeRIDProvider) tree.getProvider()).toDocument();
 	}
 
 	public OMVRBTreeRIDSet copy() {
-		final OMVRBTreeRIDSet clone = new OMVRBTreeRIDSet(new OMVRBTreeRID(new OMVRBTreeRIDProvider(null, tree.getProvider()
-				.getClusterId())));
-		clone.addAll(this);
+		final OMVRBTreeRIDSet clone = new OMVRBTreeRIDSet(this);
 		return clone;
 	}
 
@@ -156,7 +166,6 @@ public class OMVRBTreeRIDSet implements Set<OIdentifiable>, OStringBuilderSerial
 	}
 
 	public OStringBuilderSerializable toStream(StringBuilder iOutput) throws OSerializationException {
-		tree.save();
 		((OMVRBTreeRIDProvider) tree.getProvider()).toStream(iOutput);
 		return this;
 	}

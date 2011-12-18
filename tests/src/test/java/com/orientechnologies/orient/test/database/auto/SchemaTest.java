@@ -29,6 +29,7 @@ import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.metadata.schema.OSchema;
 import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.impl.ODocument;
+import com.orientechnologies.orient.core.sql.OCommandSQL;
 import com.orientechnologies.orient.core.storage.OStorage;
 
 @Test(groups = "schema")
@@ -50,6 +51,10 @@ public class SchemaTest {
 
 		if (database.getMetadata().getSchema().existsClass("Account"))
 			return;
+
+		OClass rids = database.getMetadata().getSchema().getClass("ORIDs");
+		if (rids == null)
+			database.getMetadata().getSchema().createClass("ORIDs");
 
 		database.addCluster("csv", OStorage.CLUSTER_TYPE.PHYSICAL);
 		database.addCluster("flat", OStorage.CLUSTER_TYPE.PHYSICAL);
@@ -188,5 +193,79 @@ public class SchemaTest {
 
 		thread.start();
 		thread.join();
+	}
+
+	@Test
+	public void createAndDropClassTestApi() {
+		database = new ODatabaseFlat(url);
+		database.open("admin", "admin");
+		final String testClassName = "dropTestClass";
+		final int clusterId;
+		OClass dropTestClass = database.getMetadata().getSchema().createClass(testClassName);
+		clusterId = dropTestClass.getDefaultClusterId();
+		database.getMetadata().getSchema().reload();
+		dropTestClass = database.getMetadata().getSchema().getClass(testClassName);
+		Assert.assertNotNull(dropTestClass);
+		Assert.assertEquals(database.getStorage().getClusterIdByName(testClassName), clusterId);
+		Assert.assertNotNull(database.getClusterNameById(clusterId));
+		database.close();
+		database = null;
+		database = new ODatabaseFlat(url);
+		database.open("admin", "admin");
+		dropTestClass = database.getMetadata().getSchema().getClass(testClassName);
+		Assert.assertNotNull(dropTestClass);
+		Assert.assertEquals(database.getStorage().getClusterIdByName(testClassName), clusterId);
+		Assert.assertNotNull(database.getClusterNameById(clusterId));
+		database.getMetadata().getSchema().dropClass(testClassName);
+		database.getMetadata().getSchema().reload();
+		dropTestClass = database.getMetadata().getSchema().getClass(testClassName);
+		Assert.assertNull(dropTestClass);
+		Assert.assertEquals(database.getStorage().getClusterIdByName(testClassName), -1);
+		Assert.assertNull(database.getClusterNameById(clusterId));
+		database.close();
+		database = new ODatabaseFlat(url);
+		database.open("admin", "admin");
+		dropTestClass = database.getMetadata().getSchema().getClass(testClassName);
+		Assert.assertNull(dropTestClass);
+		Assert.assertEquals(database.getStorage().getClusterIdByName(testClassName), -1);
+		Assert.assertNull(database.getClusterNameById(clusterId));
+		database.close();
+	}
+
+	@Test
+	public void createAndDropClassTestCommand() {
+		database = new ODatabaseFlat(url);
+		database.open("admin", "admin");
+		final String testClassName = "dropTestClass";
+		final int clusterId;
+		OClass dropTestClass = database.getMetadata().getSchema().createClass(testClassName);
+		clusterId = dropTestClass.getDefaultClusterId();
+		database.getMetadata().getSchema().reload();
+		dropTestClass = database.getMetadata().getSchema().getClass(testClassName);
+		Assert.assertNotNull(dropTestClass);
+		Assert.assertEquals(database.getStorage().getClusterIdByName(testClassName), clusterId);
+		Assert.assertNotNull(database.getClusterNameById(clusterId));
+		database.close();
+		database = null;
+		database = new ODatabaseFlat(url);
+		database.open("admin", "admin");
+		dropTestClass = database.getMetadata().getSchema().getClass(testClassName);
+		Assert.assertNotNull(dropTestClass);
+		Assert.assertEquals(database.getStorage().getClusterIdByName(testClassName), clusterId);
+		Assert.assertNotNull(database.getClusterNameById(clusterId));
+		database.command(new OCommandSQL("drop class " + testClassName)).execute();
+		database.reload();
+		dropTestClass = database.getMetadata().getSchema().getClass(testClassName);
+		Assert.assertNull(dropTestClass);
+		Assert.assertEquals(database.getStorage().getClusterIdByName(testClassName), -1);
+		Assert.assertNull(database.getClusterNameById(clusterId));
+		database.close();
+		database = new ODatabaseFlat(url);
+		database.open("admin", "admin");
+		dropTestClass = database.getMetadata().getSchema().getClass(testClassName);
+		Assert.assertNull(dropTestClass);
+		Assert.assertEquals(database.getStorage().getClusterIdByName(testClassName), -1);
+		Assert.assertNull(database.getClusterNameById(clusterId));
+		database.close();
 	}
 }

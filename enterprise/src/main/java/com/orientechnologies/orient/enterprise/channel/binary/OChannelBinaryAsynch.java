@@ -47,7 +47,7 @@ public class OChannelBinaryAsynch extends OChannelBinary {
 		lockWrite.unlock();
 	}
 
-	public int beginResponse(final int iRequesterId) throws IOException {
+	public void beginResponse(final int iRequesterId) throws IOException {
 		// WAIT FOR THE RESPONSE
 		do {
 			lockRead.lock();
@@ -82,8 +82,6 @@ public class OChannelBinaryAsynch extends OChannelBinary {
 		} while (true);
 
 		handleStatus(currentStatus, currentTxId);
-
-		return iRequesterId;
 	}
 
 	public void endResponse() {

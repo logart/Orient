@@ -129,6 +129,9 @@ public class OSchemaShared extends ODocumentWrapperNoClass implements OSchema, O
 	 * com.orientechnologies.orient.core.metadata.schema.OClass, com.orientechnologies.orient.core.storage.OStorage.CLUSTER_TYPE)
 	 */
 	public OClass createClass(final String iClassName, final OClass iSuperClass, final OStorage.CLUSTER_TYPE iType) {
+		if (getDatabase().getTransaction().isActive())
+			throw new IllegalStateException("Cannot create a new class inside a transaction");
+
 		int clusterId = getDatabase().getClusterIdByName(iClassName);
 		if (clusterId == -1) {
 			// CREATE A NEW CLUSTER
@@ -321,6 +324,9 @@ public class OSchemaShared extends ODocumentWrapperNoClass implements OSchema, O
 	}
 
 	public void dropClassInternal(final String iClassName) {
+		if (iClassName == null)
+			throw new IllegalArgumentException("Class name is null");
+
 		getDatabase().checkSecurity(ODatabaseSecurityResources.SCHEMA, ORole.PERMISSION_DELETE);
 
 		final String key = iClassName.toLowerCase();

@@ -43,7 +43,7 @@ public class ODiscoverySignaler extends OPollerThread {
 	private TimerTask									runningTask;
 
 	public ODiscoverySignaler(final ODistributedServerManager iManager, final OServerNetworkListener iNetworkListener) {
-		super(iManager.getConfig().networkMulticastHeartbeat * 1000, Orient.getThreadGroup(), "IO-Cluster-DiscoverySignaler");
+		super(iManager.getConfig().networkMulticastHeartbeat * 1000, Orient.getThreadGroup(), "OrientDB Distributed-DiscoverySignaler");
 
 		manager = iManager;
 
@@ -90,6 +90,11 @@ public class ODiscoverySignaler extends OPollerThread {
 
 	@Override
 	protected void execute() throws Exception {
+		if (dgram == null) {
+			sendShutdown();
+			return;
+		}
+
 		OLogManager.instance().debug(this, "Sending node presence signal over the network against IP Multicast %s:%d...",
 				dgram.getAddress(), dgram.getPort());
 

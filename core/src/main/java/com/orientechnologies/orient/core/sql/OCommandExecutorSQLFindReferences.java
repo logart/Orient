@@ -15,6 +15,7 @@
  */
 package com.orientechnologies.orient.core.sql;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -112,7 +113,7 @@ public class OCommandExecutorSQLFindReferences extends OCommandExecutorSQLPermis
 
 		final ODatabaseRecord database = getDatabase();
 
-		Set<ORID> result = new HashSet<ORID>();
+		final Set<ORID> result = new HashSet<ORID>();
 		if (classList == null || classList.equals("")) {
 			for (String clusterName : database.getClusterNames()) {
 				browseCluster(clusterName, result);
@@ -128,7 +129,7 @@ public class OCommandExecutorSQLFindReferences extends OCommandExecutorSQLPermis
 			}
 		}
 
-		return result;
+		return new ArrayList<ORID>(result);
 	}
 
 	private void browseCluster(final String iClusterName, final Set<ORID> ids) {
