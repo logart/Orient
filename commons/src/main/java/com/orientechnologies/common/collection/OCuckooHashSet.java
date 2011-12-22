@@ -46,10 +46,8 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
   private BitSet bitSet;
   private byte[] stash;
   private int stashSize;
-
   private int keySize;
-
-  private volatile int modCount;
+  private int itemsInTable;
 
   public static  enum ADDITION_RESULT  {
     ITEM_WAS_ADDED,
@@ -62,6 +60,8 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
 
     if(initialCapacity > capacityBoundary)
       initialCapacity = capacityBoundary;
+    else
+      initialCapacity /= BUCKET_SIZE;
 
     int capacity = 1;
     while (capacity < initialCapacity)
@@ -73,6 +73,7 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
     bitSet = new BitSet(capacity * BUCKET_SIZE);
     tableSize = cuckooTable.length >> 1;
     bucketsInTable = capacity >> 1;
+    itemsInTable = bucketsInTable * BUCKET_SIZE;
     stash = new byte[keySize * MAX_STASH_SIZE];
 
     maxTries = (int)Math.round(MAX_TRIES_BASE * Math.log(capacity));
@@ -92,19 +93,22 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
       return true;
 
     final int hashTwo = OMurmurHash3.murmurhash3_x86_32(value, 0, keySize, SECOND_SEED);
-    final int bucketIndexTwo = bucketIndex(hashTwo) + tableSize;
+    final int bucketIndexTwo = bucketIndex(hashTwo);
 
     if(checkBucket(value, bucketIndexTwo, 1))
       return true;
 
-    for(int i = 0; i < stashSize; i++)
-      for (int j = 0; j < keySize; j++) {
+    for(int i = 0; i < stashSize; i++) {
+      int j = 0;
+      while (true) {
         if(stash[i * keySize + j] != value[j])
           break;
 
         if(j == keySize - 1)
           return true;
+        j++;
       }
+    }
 
     return false;
   }
@@ -141,7 +145,6 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
       final int bucketIndexOne = bucketIndex(hashOne);
 
       if(appendInBucket(value, bucketIndexOne, 0)) {
-        modCount++;
         size++;
         return ADDITION_RESULT.ITEM_WAS_ADDED;
       }
@@ -150,7 +153,6 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
       final int bucketIndexTwo = bucketIndex(hashTwo);
 
       if(appendInBucket(value, bucketIndexTwo, 1)) {
-        modCount++;
         size++;
         return ADDITION_RESULT.ITEM_WAS_ADDED;
       }
@@ -161,7 +163,6 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
 
     if(stashSize < MAX_STASH_SIZE) {
       System.arraycopy(value, 0, stash, stashSize * keySize, keySize);
-      modCount++;
       stashSize++;
       size++;
       return ADDITION_RESULT.ITEM_WAS_ADDED;
@@ -184,38 +185,39 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
 
     final int bucketIndexOne = bucketIndex(hashOne);
     if (removeFromBucket(value, bucketIndexOne, 0)) {
-      modCount++;
       size--;
       return true;
     }
 
     final int hashTwo = OMurmurHash3.murmurhash3_x86_32(value, 0, keySize, SECOND_SEED);
-    final int bucketIndexTwo = bucketIndex(hashTwo) + tableSize;
+    final int bucketIndexTwo = bucketIndex(hashTwo);
 
     if(removeFromBucket(value, bucketIndexTwo, 1)) {
-      modCount++;
       size--;
       return true;
     }
 
-    for(int i = 0; i < stashSize; i++)
-      for (int j = 0; j < keySize; j++) {
+    for(int i = 0; i < stashSize; i++) {
+      int j = 0;
+      while (true) {
         if(stash[i * keySize + j] != value[j])
           break;
 
         if(j == keySize - 1) {
           System.arraycopy( stash, (i + 1) * keySize, stash, i * keySize, (stashSize - i - 1) * keySize );
-          modCount++;
           size--;
+          stashSize--;
           return true;
         }
+        j++;
       }
-
+    }
     return false;
   }
 
   @Override
   public void clear() {
+    size = 0;
     bitSet.clear();
   }
 
@@ -235,9 +237,6 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
   }
 
   private void undoBucketReplacement(final byte[] value,final int[] replaceHistory,final int historySize) {
-    if(historySize == 0)
-      return;
-
     final byte tmp[] = new byte[keySize];
 
     for(int i = 0; i < historySize; i++) {
@@ -248,7 +247,7 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
   }
 
   private boolean appendInBucket(final byte[] value,final int bucketIndex,final int tableIndex) {
-    final int itemOffset = tableIndex * bucketsInTable;
+    final int itemOffset = tableIndex * itemsInTable;
     final int beginItem = itemIndex(bucketIndex);
     final int endItem = beginItem + BUCKET_SIZE;
     int currentItem = beginItem;
@@ -258,9 +257,9 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
     }
 
     if(currentItem < endItem) {
-      final int beginIndex = itemIndexInArray(currentItem);
+      final int beginIndex = itemIndexInArray(currentItem) + tableSize * tableIndex;
       System.arraycopy(value, 0, cuckooTable, beginIndex, keySize);
-      bitSet.set(currentItem);
+      bitSet.set(currentItem + itemOffset);
       return true;
     }
 
@@ -268,11 +267,11 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
   }
 
   private boolean checkBucket(final byte[] value,final int bucketIndex,final int tableIndex) {
-    final int itemOffset = tableIndex * bucketsInTable;
+    final int itemOffset = tableIndex * itemsInTable;
     final int beginItem = itemIndex(bucketIndex);
     final int endItem = beginItem + BUCKET_SIZE ;
 
-    for (int i = bucketIndex; i < endItem; i++) {
+    for (int i = beginItem; i < endItem; i++) {
       if (!bitSet.get(i + itemOffset))
         return false;
 
@@ -283,11 +282,11 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
   }
 
   private boolean removeFromBucket(final byte[] value,final int bucketIndex,final int tableIndex) {
-    final int itemOffset = tableIndex * bucketsInTable;
+    final int itemOffset = tableIndex * itemsInTable;
     final int beginItem = itemIndex(bucketIndex);
     final int endItem = beginItem + BUCKET_SIZE ;
 
-    for (int i = bucketIndex; i < endItem; i++) {
+    for (int i = beginItem; i < endItem; i++) {
       if (!bitSet.get(i + itemOffset))
         return false;
 
@@ -302,7 +301,7 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
         while (!bitSet.get( j + itemOffset )) {
           j--;
         }
-        bitSet.clear( j );
+        bitSet.clear( j + itemOffset );
 
         return true;
       }
@@ -313,12 +312,14 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
 
   private boolean containsValue(final byte[] value,final int itemIndex,final int tableIndex) {
     final int beginIndex = itemIndexInArray( itemIndex ) + tableIndex * tableSize;
-    for (int j = 0; j < keySize; j++) {
+    int j = 0;
+    while (true){
       if (value[j] != cuckooTable[beginIndex + j])
         break;
 
       if (j == keySize - 1)
         return true;
+      j++;
     }
 
     return false;
@@ -340,35 +341,36 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
   public Iterator<byte[]> iterator() {
     return new Iterator<byte[]>()
     {
-      private int currentItemIndex;
-      private final int expectedModCount = modCount;
+      private int currentItemIndex = -1;
 
       public boolean hasNext()
       {
-        if(expectedModCount != modCount) {
-          throw new ConcurrentModificationException(  );
-        }
-
-        return currentItemIndex < size;
+        return currentItemIndex + 1 < size;
       }
 
       public byte[] next()
       {
-        if(expectedModCount != modCount) {
-          throw new ConcurrentModificationException(  );
-        }
-
-        if(currentItemIndex >= size)
+        if(currentItemIndex + 1 >= size)
           throw new NoSuchElementException(  );
 
         currentItemIndex++;
-        while (!bitSet.get( currentItemIndex )){
+        final int totalItemsAmount = itemsInTable * 2;
+        while (currentItemIndex < totalItemsAmount && !bitSet.get( currentItemIndex )){
           currentItemIndex++;
         }
 
-        final int arrayIndex = itemIndexInArray( currentItemIndex );
         final byte[] result = new byte[keySize];
-        System.arraycopy( cuckooTable, arrayIndex, result, 0, keySize );
+
+        if(currentItemIndex < totalItemsAmount ) {
+          final int arrayIndex = itemIndexInArray( currentItemIndex );
+          System.arraycopy( cuckooTable, arrayIndex, result, 0, keySize );
+        } else {
+          final int stashIndex = currentItemIndex - totalItemsAmount;
+          if(stashIndex > stashSize)
+            throw new IllegalStateException( "Stash size is less than expected." );
+
+          System.arraycopy( stash, stashIndex * keySize, result, 0, keySize );
+        }
 
         return result;
       }
