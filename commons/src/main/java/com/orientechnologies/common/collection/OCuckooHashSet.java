@@ -27,6 +27,8 @@ import java.util.NoSuchElementException;
  * Hash set implementation that is based on Cuckoo Hashing algorithm.
  * It is intended to effectively store integer numbers that is presented by int array.
  * It uses MurmurHash {@link com.orientechnologies.common.util.OMurmurHash3} for hash generation.
+ *
+ * For the sake of performance optimization  <code>Set</code> does not check concurrent collection modifications during its iteration.
  */
 public class OCuckooHashSet extends AbstractSet<byte[]> {
   private static final int MAXIMUM_CAPACITY = 1 << 30;
@@ -56,27 +58,25 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
   }
 
   public OCuckooHashSet(int initialCapacity, int keySize) {
-    final int capacityBoundary = MAXIMUM_CAPACITY / (keySize * BUCKET_SIZE);
+    final int capacityBoundary = MAXIMUM_CAPACITY / keySize;
 
     if(initialCapacity > capacityBoundary)
       initialCapacity = capacityBoundary;
-    else
-      initialCapacity /= BUCKET_SIZE;
 
-    int capacity = 1;
+    int capacity = 2 * BUCKET_SIZE;
     while (capacity < initialCapacity)
-      capacity <<= 2;
+      capacity <<= 1;
 
     this.keySize = keySize;
 
-    cuckooTable = new byte[keySize * capacity * BUCKET_SIZE];
-    bitSet = new BitSet(capacity * BUCKET_SIZE);
+    cuckooTable = new byte[keySize * capacity ];
+    bitSet = new BitSet(capacity);
     tableSize = cuckooTable.length >> 1;
-    bucketsInTable = capacity >> 1;
-    itemsInTable = bucketsInTable * BUCKET_SIZE;
+    bucketsInTable = (capacity / BUCKET_SIZE) >> 1;
+    itemsInTable = capacity >> 1;
     stash = new byte[keySize * MAX_STASH_SIZE];
 
-    maxTries = (int)Math.round(MAX_TRIES_BASE * Math.log(capacity));
+    maxTries = (int)Math.round(MAX_TRIES_BASE * Math.log(bucketsInTable << 1));
   }
 
   @Override
@@ -342,15 +342,16 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
     return new Iterator<byte[]>()
     {
       private int currentItemIndex = -1;
+      private int processedItems;
 
       public boolean hasNext()
       {
-        return currentItemIndex + 1 < size;
+        return processedItems < size;
       }
 
       public byte[] next()
       {
-        if(currentItemIndex + 1 >= size)
+        if(processedItems >= size)
           throw new NoSuchElementException(  );
 
         currentItemIndex++;
@@ -366,12 +367,10 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
           System.arraycopy( cuckooTable, arrayIndex, result, 0, keySize );
         } else {
           final int stashIndex = currentItemIndex - totalItemsAmount;
-          if(stashIndex > stashSize)
-            throw new IllegalStateException( "Stash size is less than expected." );
-
           System.arraycopy( stash, stashIndex * keySize, result, 0, keySize );
         }
 
+        processedItems++;
         return result;
       }
 
@@ -385,5 +384,9 @@ public class OCuckooHashSet extends AbstractSet<byte[]> {
   @Override
   public int size() {
     return size;
+  }
+
+  public int capacity() {
+    return itemsInTable << 1;
   }
 }
