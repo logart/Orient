@@ -201,7 +201,7 @@ public class CuckooHashSetTest
 
   @Test
   public void testCapacityCalculationMax() {
-    final OCuckooHashSet cuckooSet = new OCuckooHashSet(  1 << 30, 2 );
+    final OCuckooHashSet cuckooSet = new OCuckooHashSet(  1 << 30, 1 );
     Assert.assertEquals( cuckooSet.capacity(), 1 << 29 );
   }
 
