@@ -171,6 +171,9 @@ public class OHopscotchHashSet extends AbstractSet<ORID>  {
         final long clearMask = ~(1L << distance);
         cell.hopscotchInfo &= clearMask;
 
+        if(cellToMatch.hopscotchInfo == 0 && cellToMatch.value == null)
+          cells[cellIndex] = null;
+
         size--;
         return true;
       } else
@@ -224,7 +227,9 @@ public class OHopscotchHashSet extends AbstractSet<ORID>  {
     bucketCell.hopscotchInfo &= clearMask;
     bucketCell.hopscotchInfo |= setMask;
 
-    cells[fromCellIndex].value = null;
+    fromCell.value = null;
+    if(fromCell.hopscotchInfo == 0)
+      cells[fromCellIndex] = null;
   }
 
   private int distance(int fromIndex, int toIndex) {
