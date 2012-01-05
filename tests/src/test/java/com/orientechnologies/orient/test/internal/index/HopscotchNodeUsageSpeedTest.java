@@ -21,8 +21,9 @@ public class HopscotchNodeUsageSpeedTest extends SpeedTestMonoThread
   @Override
   @Test(enabled = false)
   public void init() throws Exception {
+    final Random random = new Random();
     for(int i = 0; i < 512; i++) {
-      final ORecordId recordId = new ORecordId(1, i);
+      final ORecordId recordId = new ORecordId(1, random.nextLong());
 
       hashSet.add(recordId);
     }
