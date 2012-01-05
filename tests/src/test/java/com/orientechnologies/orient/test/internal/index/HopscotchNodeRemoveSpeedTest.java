@@ -4,7 +4,6 @@ import com.orientechnologies.common.collection.OMVRBTreeSet;
 import com.orientechnologies.common.test.SpeedTestMonoThread;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
-import com.orientechnologies.orient.core.index.OHopscotchHashSet;
 import org.testng.annotations.Test;
 
 import java.util.Set;

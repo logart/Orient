@@ -1,18 +1,16 @@
 package com.orientechnologies.orient.test.internal.index;
 
-import com.orientechnologies.common.collection.OMVRBTreeSet;
 import com.orientechnologies.common.test.SpeedTestMonoThread;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.index.OHopscotchHashSet;
-import com.sun.media.sound.RIFFInvalidDataException;
 import org.testng.annotations.Test;
 
 import java.util.Set;
 
 public class HopscotchNodeLookupSpeedTest extends SpeedTestMonoThread
 {
-  private Set<ORID> hashSet = new OMVRBTreeSet<ORID>();
+  private Set<ORID> hashSet = new OHopscotchHashSet(512);
   private ORID[] rids = new ORID[512];
 
   public  HopscotchNodeLookupSpeedTest()

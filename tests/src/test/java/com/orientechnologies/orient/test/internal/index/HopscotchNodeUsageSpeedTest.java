@@ -1,6 +1,5 @@
 package com.orientechnologies.orient.test.internal.index;
 
-import com.orientechnologies.common.collection.OMVRBTreeSet;
 import com.orientechnologies.common.test.SpeedTestMonoThread;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
@@ -12,7 +11,7 @@ import java.util.Set;
 
 public class HopscotchNodeUsageSpeedTest extends SpeedTestMonoThread
 {
-  private Set<ORID> hashSet = new OMVRBTreeSet<ORID>();
+  private Set<ORID> hashSet = new OHopscotchHashSet(512);
 
   public HopscotchNodeUsageSpeedTest()
   {

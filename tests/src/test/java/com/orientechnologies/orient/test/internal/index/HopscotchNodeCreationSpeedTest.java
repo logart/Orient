@@ -2,7 +2,6 @@ package com.orientechnologies.orient.test.internal.index;
 
 import java.util.Set;
 
-import com.orientechnologies.common.collection.OMVRBTreeSet;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.index.OHopscotchHashSet;
 import org.testng.annotations.Test;
