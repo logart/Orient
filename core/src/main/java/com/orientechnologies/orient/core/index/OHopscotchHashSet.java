@@ -81,7 +81,7 @@ public class OHopscotchHashSet extends AbstractSet<ORID>  {
       cell.value = value;
       size++;
 
-      if(cells.length - size < threshold)
+      if(size > threshold)
         rehash();
 
       return true;
@@ -109,7 +109,7 @@ public class OHopscotchHashSet extends AbstractSet<ORID>  {
 
       size++;
 
-      if(cells.length - size < threshold)
+      if(size > threshold)
         rehash();
 
       return true;
@@ -139,7 +139,7 @@ public class OHopscotchHashSet extends AbstractSet<ORID>  {
 
         size++;
 
-        if(cells.length - size < threshold)
+        if(size > threshold)
           rehash();
 
         return true;
