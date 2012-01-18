@@ -397,19 +397,19 @@ public class HopscotchHashSetTest
     }
 
     return new Object[][] {
-//      {keysOne, absentKeysOne},
-//      {keysTwo, absentKeysTwo},
-//      {keysThree, absentKeysThree},
-//      {keysFour, absentKeysFour},
+      {keysOne, absentKeysOne},
+      {keysTwo, absentKeysTwo},
+      {keysThree, absentKeysThree},
+      {keysFour, absentKeysFour},
       {keysFive, absentKeysFive},
-//      {keysSix, absentKeysSix},
-//      {keysSeven, absentKeysSeven},
-//      {keysEight, absentKeysEight},
-//      {keysNine, absentKeysNine},
-//      {keysTen, absentKeysTen},
-//      {keysEleven, absentKeysEleven},
-//      {keysTwelve, absentKeysTwelve},
-//      {keysThirteen, absentKeysThirteen},
+      {keysSix, absentKeysSix},
+      {keysSeven, absentKeysSeven},
+      {keysEight, absentKeysEight},
+      {keysNine, absentKeysNine},
+      {keysTen, absentKeysTen},
+      {keysEleven, absentKeysEleven},
+      {keysTwelve, absentKeysTwelve},
+      {keysThirteen, absentKeysThirteen},
     };
   }
 }
