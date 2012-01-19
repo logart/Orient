@@ -61,6 +61,10 @@ public class OBinaryProtocol {
 		return beginOffset;
 	}
 
+/*    public static int string2bytes(final String iInputText, final byte[] b, final int iBeginOffset) {
+
+    }*/
+
 	public static final byte[] string2bytes(final String iInputText) {
 		if (iInputText == null)
 			return null;
