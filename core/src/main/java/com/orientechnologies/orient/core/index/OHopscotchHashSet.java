@@ -70,7 +70,7 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
 
 
 
-    } while ((cellToMatch.nextDistance != 0)/*&&(cellToMatch.firstDistance != 0)*/);
+    } while (cellToMatch.nextDistance != 0);
 
 //      System.out.println("**********************************end*contains**************************************\n\n");
     return false;
@@ -225,6 +225,9 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
 
 //          System.out.println("writing info to cell");
         final Cell cellToSet = cells[cellMoveIndex];
+
+          assert cellToSet != null;
+
         cellToSet.value = value;
 
 //          System.out.println("{\n\tcell.firstDistance : " + cellToSet.firstDistance);
@@ -393,7 +396,7 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
     if (bucketCell.firstDistance == fromDistance)
       bucketCell.firstDistance = (byte) distance(bucketCellIndex, toCellIndex, cells.length);
     else {
-      final int lastCellIndex = findLastBucketCell(bucketCellIndex);
+      final int lastCellIndex = findPrevBucketCell(bucketCellIndex + bucketCell.firstDistance, toCellIndex);
       final Cell lastCell = cells[lastCellIndex];
 
       lastCell.nextDistance = (byte)calculateNextCellDistance(bucketCellIndex, lastCellIndex, toCellIndex, cells.length);
@@ -402,6 +405,23 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
     if (fromCell.firstDistance == EMPTY_BUCKET)
          cells[fromCellIndex] = null;
   }
+
+    private int findPrevBucketCell(int bucketCellIndex, int currentCellIndex){
+
+        if (bucketCellIndex == currentCellIndex){
+            throw new RuntimeException("bucket cell does not have previous cell");
+        }
+
+        final Cell bucketCell = cells[bucketCellIndex];
+        int cellIndex = normalizeCellIndex(bucketCellIndex + bucketCell.firstDistance, cells.length);
+        Cell cell = cells[cellIndex];
+        while (cellIndex + cell.nextDistance != currentCellIndex ) {
+            cellIndex = normalizeCellIndex(cellIndex + cell.nextDistance, cells.length);
+            cell = cells[cellIndex];
+        }
+
+        return cellIndex;
+    }
 
   private int[] findClosestCellToMove(final int index) {
     int beginWith = index - HOPSCOTCH_DISTANCE + 1;
