@@ -103,7 +103,16 @@ public enum OType {
 		allowAssignmentFrom = iAllowAssignmentBy;
 	}
 
-	/**
+    /**
+     * Obtain one byte id of the type
+     *
+     * @return
+     */
+    public byte getByteId() {
+        return (byte) id;
+    }
+
+    /**
 	 * Return the type by ID.
 	 * 
 	 * @param iId

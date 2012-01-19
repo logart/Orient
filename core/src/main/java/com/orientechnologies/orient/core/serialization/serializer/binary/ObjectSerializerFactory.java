@@ -24,13 +24,13 @@ public class ObjectSerializerFactory {
 
     private ObjectSerializerFactory() {
         //TODO populate map with objectSerializerImplementations
-        serializerMap.put(OType.BOOLEAN.getId(), new OBooleanSerializer());
-        serializerMap.put(OType.BYTE.getId(), new OByteSerializer());
-        serializerMap.put(OType.SHORT.getId(), new OShortSerializer());
-        serializerMap.put(OType.INTEGER.getId(), new OIntegerSerializer());
-        serializerMap.put(OType.LONG.getId(), new OIntegerSerializer());
-        serializerMap.put(OType.FLOAT.getId(), new OFloatSerializer());
-        serializerMap.put(OType.DOUBLE.getId(), new ODoubleSerializer());
+        serializerMap.put(OType.BOOLEAN.getByteId(), new OBooleanSerializer());
+        serializerMap.put(OType.BYTE.getByteId(), new OByteSerializer());
+        serializerMap.put(OType.SHORT.getByteId(), new OShortSerializer());
+        serializerMap.put(OType.INTEGER.getByteId(), new OIntegerSerializer());
+        serializerMap.put(OType.LONG.getByteId(), new OIntegerSerializer());
+        serializerMap.put(OType.FLOAT.getByteId(), new OFloatSerializer());
+        serializerMap.put(OType.DOUBLE.getByteId(), new ODoubleSerializer());
     }
 
     /**
@@ -50,6 +50,6 @@ public class ObjectSerializerFactory {
      * @return byte type identifier to write into stream
      */
     public ObjectSerializer getObjectSerializer(final OType type) {
-        return serializerMap.get(type.getId());
+        return serializerMap.get(type.getByteId());
     }
 }

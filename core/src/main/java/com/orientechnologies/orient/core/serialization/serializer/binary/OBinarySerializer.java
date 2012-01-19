@@ -80,7 +80,7 @@ public class OBinarySerializer implements OPartialRecordSerializer {
             //calculate offset of the record
             final int offset = metadataOffset+entry.getFieldOffset();
             //write field type identifier
-            typeIdentifierSerializer.serialize(entry.getFieldType().getId(), stream, offset);
+            typeIdentifierSerializer.serialize(entry.getFieldType().getByteId(), stream, offset);
             //write field data
             osf.getObjectSerializer(entry.getFieldType()).serialize(entry.getFieldValue(), stream, offset+1);
         }
