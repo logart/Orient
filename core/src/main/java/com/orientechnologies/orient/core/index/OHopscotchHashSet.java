@@ -224,6 +224,11 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
 //          System.out.println("distance < HOPSCOTCH_DISTANCE ("+distance+" < "+HOPSCOTCH_DISTANCE+")");
 
 //          System.out.println("writing info to cell");
+
+
+        if (cells[cellMoveIndex] == null){
+          cells[cellMoveIndex] = new Cell();
+        }
         final Cell cellToSet = cells[cellMoveIndex];
 
           assert cellToSet != null;
@@ -425,7 +430,7 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
 
   private int[] findClosestCellToMove(final int index) {
     int beginWith = index - HOPSCOTCH_DISTANCE + 1;
-    if (beginWith > 0) {
+    if (beginWith >= 0) {
       for (int i = beginWith; i < index; i++) {
         final Cell cell = cells[i];
         assert cell != null;
@@ -538,4 +543,24 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
   public int size() {
     return size;
   }
+
+
+
+//  public void correctBucket(int bucketCellIndex){
+//    final Cell bucketCell = cells[bucketCellIndex];
+//
+//    Cell currentCell;
+//    int currentCellIndex = normalizeCellIndex( bucketCell.firstDistance + bucketCellIndex, cells.length );
+//
+//    currentCell = cells[currentCellIndex];
+//
+//    while (currentCell.nextDistance != 0){
+////      int prevCellIndex = currentCellIndex;
+//      currentCellIndex = normalizeCellIndex( currentCellIndex + currentCell.nextDistance, cells.length );
+//      currentCell = cells[currentCellIndex];
+//      return;
+//    }
+//    return;
+////    throw new RuntimeException( "bucket is incorrect" );
+//  }
 }
