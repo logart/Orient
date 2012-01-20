@@ -1,168 +1,239 @@
 package com.orientechnologies.orient.core.serialization.serializer.binary;
 
+import com.orientechnologies.orient.core.exception.OSerializationException;
 import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.impl.ODocument;
+import com.orientechnologies.orient.core.serialization.OMemoryInputStream;
+import com.orientechnologies.orient.core.serialization.OMemoryStream;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /**
- * This class will store some addition information and direct links to the fields about
- * ODocument while serializing and deserializing to speed up process
+ * This class represents metadata block. Contains its serialized size, size of serialized data,
+ * name of the document class and offsets after metadata block for each field
+ *
+ * Structure of the metadata block:
+ * |-serialized-data-offset-|-document-class-name-(nullable)-|-information-about-fields-offset-as-map-|
  *
  * @author <a href="mailto:gmandnepr@gmail.com">Evgeniy Degtiarenko</a>
  */
-public class OMetadata implements Iterable<OMetadata.OMetadataEntry> {
+public class OMetadata {
 
-    private final List<OMetadataEntry> entries = new ArrayList<OMetadataEntry>();
-
-    private int metadataSize;
+    /**
+     * Contains size that is required for serializing metadata
+     */
+//    private int metaSize;
+    /**
+     * Contains size that is required for serializing all fields
+     * data + 1 byte for each field to determine type
+     */
     private int dataSize;
-    private String documentClassName;
+    /**
+     * Contains document class name
+     */
+    private final String documentClassName;
+    /**
+     * Contains fields serialized data offsets after metadata
+     */
+    private final Map<String, Integer> fieldOffsets = new HashMap<String, Integer>();
 
     /**
-     * Serialize metadata into bytes array
-     * This operation is responsible to serialize metadata block size and document class name
+     * Constructor for the class
      *
-     * @return serialized metadata
+     * @param dataSize is the size of the data block
+     * @param metaSize is the size of the metadata block
+     * @param documentClassName is the document class name (may be null)
+     * @param fieldOffsets is the fields offset in stream
      */
-    public void toBytes(final byte[] source) {
-        //TODO implement
-    }
-
-    /**
-     * Deserialize metadata from the byte array
-     * This operation is responsible for restoring metadata block size and document class name
-     *
-     * @return deserialized metadata
-     */
-    public static OMetadata fromBytes(final byte[] source) {
-        //TODO implement
-        return new OMetadata();
-    }
-
-    /**
-     * Creates metadata for the ODocument that caches fields names, types and values and contains
-     * fields data offset in data stream and offset for the previous offsets to provide fastest changes of structure
-     *
-     * @param doc is the document to extract data
-     * @return the instance of the metadata
-     */
-    public static OMetadata createForDocument(final ODocument doc) {
-
-        if(doc instanceof OMetadataAwareDocument){
-            //TODO update cached values
-            return ((OMetadataAwareDocument) doc).getMetadata();
-        } else {
-            //TODO implement
-
-            return null;
-        }
-    }
-
-    public int getMetadataSize() {
-        return metadataSize;
-    }
-
-    public void setMetadataSize(int metadataSize) {
-        this.metadataSize = metadataSize;
-    }
-
-    public int getDataSize() {
-        return dataSize;
-    }
-
-    public void setDataSize(int dataSize) {
+    public OMetadata(final int metaSize, final int dataSize, final String documentClassName, final Map<String, Integer> fieldOffsets) {
+        this.documentClassName = documentClassName;
+        this.fieldOffsets.putAll(fieldOffsets);
         this.dataSize = dataSize;
+//        this.metaSize = countMetadataSize();
     }
 
+    /**
+     * @return document class name
+     */
     public String getDocumentClassName() {
         return documentClassName;
     }
 
-    public void setDocumentClassName(String documentClassName) {
-        this.documentClassName = documentClassName;
+    /**
+     * @return size of the metadata block
+     */
+    public int getMetaSize() {
+        return countMetadataSize();
     }
 
-    public void addEntry(final OMetadataEntry entry) {
-        entries.add(entry);
+    /**
+     * @return size of the data block
+     */
+    public int getDataSize() {
+        return dataSize;
     }
 
-    public Iterator<OMetadataEntry> iterator() {
-        return entries.iterator();
+     /**
+     * @return offsets of the fields after metadata block
+     */
+    public Map<String, Integer> getMetadata() {
+        return fieldOffsets;
     }
 
-    public static class OMetadataEntry {
+    /**
+     * @return offsets of the fields after metadata block
+     */
+    public Set<Map.Entry<String, Integer>> getMetadataSet() {
+        return fieldOffsets.entrySet();
+    }
 
-        private final String fieldName;
-        private final OType fieldType;
-        private final Object fieldValue;
-        private int fieldOffsetLocation;
-        private int fieldOffset;
+    /**
+     * Serialize metadata to the begin of the source
+     *
+     * @param source is the stream to serialize into
+     */
+    public void toBytes(final byte[] source) {
+        final ObjectSerializerFactory osf = ObjectSerializerFactory.INSTANCE;
+        final ObjectSerializer<Object> indexSerializer = osf.getObjectSerializer(OType.INTEGER);
 
-        public OMetadataEntry(final String fieldName, final int fieldOffset) {
-            this(fieldName, null, null, -1, fieldOffset);
+        indexSerializer.serialize(countMetadataSize(), source, 0);
+        int position = indexSerializer.getFieldSize(null);
+        //write documentClassName type identifier (string or null)
+        source[position] = documentClassName != null ? OType.STRING.getByteId() : ObjectSerializerFactory.NULL_TYPE;
+        position += 1;
+        //serialize string if not null
+        if(documentClassName != null) {
+            final ObjectSerializer nameSerializer = osf.getObjectSerializer(OType.STRING);
+            nameSerializer.serialize(documentClassName, source, position);
+            position += nameSerializer.getFieldSize(documentClassName);
         }
 
-        public OMetadataEntry(final String fieldName, final int fieldOffsetLocation, final int fieldOffset) {
-            this(fieldName, null, null, fieldOffsetLocation, fieldOffset);
-        }
+        //serialize hash map
+        OMemoryStream mem = null;
+        ObjectOutputStream os = null;
+        try {
+            mem = new OMemoryStream();
+            os = new ObjectOutputStream(mem);
+            os.writeObject(fieldOffsets);
 
-        public OMetadataEntry(final String fieldName, final OType fieldType, final Object fieldValue,
-                              final int fieldOffsetLocation, final int fieldOffset) {
-            this.fieldName = fieldName;
-            this.fieldType = fieldType;
-            this.fieldValue = fieldValue;
-            this.fieldOffsetLocation = fieldOffsetLocation;
-            this.fieldOffset = fieldOffset;
-        }
+            final byte[] map = mem.toByteArray();
 
-        public String getFieldName() {
-            return fieldName;
-        }
+            System.arraycopy(map, 0, source, position, map.length);
 
-        public OType getFieldType() {
-            return fieldType;
-        }
-
-        public Object getFieldValue() {
-            return fieldValue;
-        }
-
-        public int getFieldOffsetLocation() {
-            return fieldOffsetLocation;
-        }
-
-        public int getFieldOffset() {
-            return fieldOffset;
-        }
-
-        public void setFieldOffsetLocation(int fieldOffsetLocation) {
-            this.fieldOffsetLocation = fieldOffsetLocation;
-        }
-
-        public void setFieldOffset(int fieldOffset) {
-            this.fieldOffset = fieldOffset;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
+        } catch (final IOException e) {
+            throw new OSerializationException("Problem while writing metadata", e);
+        } finally {
+            try{
+                if(os != null) {
+                    os.close();
+                }
+            } catch (final IOException e) {/*will newer happen*/}
+            if(mem != null) {
+                mem.close();
             }
-            if (o == null || getClass() != o.getClass()) {
-                return false;
+        }
+    }
+
+    /**
+     * Deserialize metadata from the begin of the source
+     *
+     * @param source is the stream to create metadata from
+     */
+    public static OMetadata createFromBytes(final byte[] source) {
+        final ObjectSerializerFactory osf = ObjectSerializerFactory.INSTANCE;
+        final ObjectSerializer<Object> indexSerializer = osf.getObjectSerializer(OType.INTEGER);
+
+        final int metaSize = (Integer) indexSerializer.deserialize(source, 0);
+        final int dataSize = source.length - metaSize;
+        int position = indexSerializer.getFieldSize(null);
+
+        //obtain serializer for documentClassName (string or null serializer)
+        final ObjectSerializer nameSerializer = osf.getObjectSerializer(source[position]);
+        position += 1;
+        final String documentClassName = (String) nameSerializer.deserialize(source, position);
+        position += nameSerializer.getFieldSize(documentClassName);
+
+        final Map<String, Integer> fieldOffsets = new HashMap<String, Integer>();
+        OMemoryInputStream mem = null;
+        ObjectInputStream obj = null;
+
+        try {
+            final byte[] metaBytes = new byte[metaSize];
+            System.arraycopy(source, 0, metaBytes, 0, metaSize);
+
+            mem = new OMemoryInputStream();
+            obj = new ObjectInputStream(mem);
+
+            fieldOffsets.putAll((Map<String, Integer>) obj.readObject());
+
+        } catch (final IOException e) {
+            throw new OSerializationException("Problem while reading metadata", e);
+        } catch (final ClassNotFoundException e) {
+            throw new OSerializationException("Problem while reading metadata", e);
+        } finally {
+            try{
+                if(obj != null){
+                    obj.close();
+                }
+            } catch (final IOException e) {/*will newer happen*/}
+            if(mem != null) {
+                mem.close();
             }
-
-            final OMetadataEntry that = (OMetadataEntry) o;
-
-            return fieldName != null && fieldName.equals(that.fieldName);
         }
 
-        @Override
-        public int hashCode() {
-            return fieldName != null ? fieldName.hashCode() : 0;
+        return new OMetadata(metaSize, dataSize, documentClassName, fieldOffsets);
+    }
+
+    /**
+     * Create metadata for the document
+     */
+    public static OMetadata createFromDocument(final ODocument doc) {
+        final ObjectSerializerFactory osf = ObjectSerializerFactory.INSTANCE;
+
+        int position = 0;
+        final String[] fields = doc.fieldNames();
+        final Map<String, Integer> fieldsOffsets = new HashMap<String, Integer>();
+        for(final String field : fields) {
+            final OType type = doc.fieldType(field);
+            final Object value = doc.field(field);
+
+            final ObjectSerializer ser = osf.getObjectSerializer(type, value);
+            position += ser.getFieldSize(value) + 1;//1 is for byte type identifier
         }
+
+        //TODO put real metadata size when it will be possible
+        return new OMetadata(-1, position, doc.getClassName(), fieldsOffsets);
+    }
+
+    private int countMetadataSize() {
+        final ObjectSerializerFactory osf = ObjectSerializerFactory.INSTANCE;
+        int size = osf.getObjectSerializer(OType.INTEGER).getFieldSize(null) +
+                osf.getObjectSerializer(OType.STRING, documentClassName).getFieldSize(documentClassName);
+
+        OMemoryStream mem = null;
+        ObjectOutputStream obj = null;
+        try {
+            mem = new OMemoryStream();
+            obj = new ObjectOutputStream(mem);
+            size += mem.size();
+        } catch (final IOException e) {
+            throw new OSerializationException("Problem while evaluating metadata", e);
+        } finally {
+            try{
+                if(obj != null){
+                    obj.close();
+                }
+            } catch (final IOException e) {/*will newer happen*/}
+            if(mem != null) {
+                mem.close();
+            }
+        }
+
+        return size;
     }
 }

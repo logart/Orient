@@ -116,6 +116,17 @@ public abstract class ORecordAbstract<T> implements ORecord<T>, ORecordInternal<
 		return _source;
 	}
 
+    /**
+     * This method is used in binary serialization.
+     * It obtain document source, if it null or empty then it will serialize object from scratch,
+     * otherwise it will reuse existing source
+     *
+     * @return documents bytes source
+     */
+    public byte[] getPureSource() {
+        return _source;
+    }
+
 	public ORecordAbstract<T> fromStream(final byte[] iRecordBuffer) {
 		_dirty = false;
 		_source = iRecordBuffer;
