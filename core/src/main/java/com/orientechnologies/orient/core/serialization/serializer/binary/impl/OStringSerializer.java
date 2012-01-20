@@ -11,7 +11,7 @@ import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.in
  */
 public class OStringSerializer implements ObjectSerializer<String>{
     public int getFieldSize(String object) {
-        return object.length() * 2 + 4;
+        return object.length() * 2 + OIntegerSerializer.INT_SIZE;
     }
 
     public void serialize(String object, byte[] stream, int startPosition) {
@@ -19,7 +19,7 @@ public class OStringSerializer implements ObjectSerializer<String>{
         int length = object.length();
         int2bytes(length, stream, startPosition);
         for(int i = 0; i < length; i++) {
-            charSerializer.serialize(object.charAt(i), stream, startPosition + 4 + i * 2);
+            charSerializer.serialize(object.charAt(i), stream, startPosition + OIntegerSerializer.INT_SIZE + i * 2);
         }
     }
 
@@ -28,7 +28,7 @@ public class OStringSerializer implements ObjectSerializer<String>{
         int len = bytes2int(stream, startPosition);
         StringBuilder stringBuilder = new StringBuilder();
         for(int i = 0; i < len; i++) {
-            stringBuilder.append(charSerializer.deserialize(stream, startPosition + 4 + i * 2));
+            stringBuilder.append(charSerializer.deserialize(stream, startPosition + OIntegerSerializer.INT_SIZE + i * 2));
         }
         return stringBuilder.toString();
     }

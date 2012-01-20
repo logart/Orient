@@ -7,8 +7,13 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.ObjectS
  * @since 18.01.12
  */
 public class OBooleanSerializer implements ObjectSerializer<Boolean>{
+     /**
+     *  size of boolean value in bytes
+     */
+    public static final int BOOLEAN_SIZE = 1;
+
     public int getFieldSize(Boolean object) {
-        return 1;
+        return BOOLEAN_SIZE;
     }
 
     public void serialize(Boolean object, byte[] stream, int startPosition) {

@@ -10,8 +10,13 @@ import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.lo
  * @since 17.01.12
  */
 public class ODoubleSerializer implements ObjectSerializer <Double>{
+     /**
+     *  size of double value in bytes
+     */
+    public static final int DOUBLE_SIZE = 8;
+
     public int getFieldSize(Double object) {
-        return 8;
+        return DOUBLE_SIZE;
     }
 
     public void serialize(Double object, byte[] stream, int startPosition) {

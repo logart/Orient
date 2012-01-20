@@ -7,8 +7,13 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.ObjectS
  * @since 18.01.12
  */
 public class OCharSerializer implements ObjectSerializer<Character> {
+     /**
+     *  size of char value in bytes
+     */
+    public static final int CHAR_SIZE = 2;
+
     public int getFieldSize(Character object) {
-        return 2;
+        return CHAR_SIZE;
     }
 
     public void serialize(Character object, byte[] stream, int startPosition) {

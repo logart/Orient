@@ -10,8 +10,13 @@ import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.in
  * @since 18.01.12
  */
 public class OFloatSerializer implements ObjectSerializer<Float>{
+    /**
+     *  size of float value in bytes
+     */
+    public static final int FLOAT_SIZE = 4;
+
     public int getFieldSize(Float object) {
-        return 4;
+        return FLOAT_SIZE;
     }
 
     public void serialize(Float object, byte[] stream, int startPosition) {

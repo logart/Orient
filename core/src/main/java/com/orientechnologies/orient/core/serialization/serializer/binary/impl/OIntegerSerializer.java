@@ -10,8 +10,13 @@ import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.in
  * @since 17.01.12
  */
 public class OIntegerSerializer implements ObjectSerializer<Integer>{
+     /**
+     *  size of int value in bytes
+     */
+    public static final int INT_SIZE = 4;
+
     public int getFieldSize(Integer object) {
-        return 4;
+        return INT_SIZE;
     }
 
     public void serialize(Integer object, byte[] stream, int startPosition) {

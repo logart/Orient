@@ -10,9 +10,13 @@ import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.sh
  * @since 18.01.12
  */
 public class OShortSerializer implements ObjectSerializer<Short> {
+    /**
+     *  size of short value in bytes
+     */
+    public static final int SHORT_SIZE = 2;
 
     public int getFieldSize(Short object) {
-        return 2;
+        return SHORT_SIZE;
     }
 
     public void serialize(Short object, byte[] stream, int startPosition) {

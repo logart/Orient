@@ -10,8 +10,13 @@ import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.lo
  * @since 18.01.12
  */
 public class OLongSerializer implements ObjectSerializer<Long> {
+     /**
+     *  size of long value in bytes
+     */
+    public static final int LONG_SIZE = 8;
+
     public int getFieldSize(Long object) {
-        return 8;
+        return LONG_SIZE;
     }
 
     public void serialize(Long object, byte[] stream, int startPosition) {
