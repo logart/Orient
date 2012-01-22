@@ -105,7 +105,7 @@ public class OMetadata {
         int position = indexSerializer.getFieldSize(null);
         //write documentClassName type identifier (string or null)
         source[position] = documentClassName != null ? OType.STRING.getByteId() : ObjectSerializerFactory.NULL_TYPE;
-        position += 1;
+        position += ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE;
         //serialize string if not null
         if(documentClassName != null) {
             final ObjectSerializer nameSerializer = osf.getObjectSerializer(OType.STRING);
@@ -120,11 +120,8 @@ public class OMetadata {
             mem = new OMemoryStream();
             os = new ObjectOutputStream(mem);
             os.writeObject(fieldOffsets);
-
             final byte[] map = mem.toByteArray();
-
             System.arraycopy(map, 0, source, position, map.length);
-
         } catch (final IOException e) {
             throw new OSerializationException("Problem while writing metadata", e);
         } finally {
@@ -154,23 +151,19 @@ public class OMetadata {
 
         //obtain serializer for documentClassName (string or null serializer)
         final ObjectSerializer nameSerializer = osf.getObjectSerializer(source[position]);
-        position += 1;
+        position += ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE;
         final String documentClassName = (String) nameSerializer.deserialize(source, position);
         position += nameSerializer.getFieldSize(documentClassName);
 
         final Map<String, Integer> fieldOffsets = new HashMap<String, Integer>();
         OMemoryInputStream mem = null;
         ObjectInputStream obj = null;
-
         try {
-            final byte[] metaBytes = new byte[metaSize];
-            System.arraycopy(source, 0, metaBytes, 0, metaSize);
-
-            mem = new OMemoryInputStream();
+            final byte[] metaBytes = new byte[metaSize-position];
+            System.arraycopy(source, position, metaBytes, 0, metaSize-position);
+            mem = new OMemoryInputStream(metaBytes);
             obj = new ObjectInputStream(mem);
-
             fieldOffsets.putAll((Map<String, Integer>) obj.readObject());
-
         } catch (final IOException e) {
             throw new OSerializationException("Problem while reading metadata", e);
         } catch (final ClassNotFoundException e) {
@@ -194,6 +187,7 @@ public class OMetadata {
      */
     public static OMetadata createFromDocument(final ODocument doc) {
         final ObjectSerializerFactory osf = ObjectSerializerFactory.INSTANCE;
+        final int typeIdentifierSize = ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE;
 
         int position = 0;
         final String[] fields = doc.fieldNames();
@@ -201,9 +195,11 @@ public class OMetadata {
         for(final String field : fields) {
             final OType type = doc.fieldType(field);
             final Object value = doc.field(field);
-
+            //adding record to the metadata
+            fieldsOffsets.put(field, position);
+            //calculate next position
             final ObjectSerializer ser = osf.getObjectSerializer(type, value);
-            position += ser.getFieldSize(value) + 1;//1 is for byte type identifier
+            position += ser.getFieldSize(value) + typeIdentifierSize;
         }
 
         //TODO put real metadata size when it will be possible
@@ -213,6 +209,7 @@ public class OMetadata {
     private int countMetadataSize() {
         final ObjectSerializerFactory osf = ObjectSerializerFactory.INSTANCE;
         int size = osf.getObjectSerializer(OType.INTEGER).getFieldSize(null) +
+                ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE +
                 osf.getObjectSerializer(OType.STRING, documentClassName).getFieldSize(documentClassName);
 
         OMemoryStream mem = null;
@@ -220,6 +217,7 @@ public class OMetadata {
         try {
             mem = new OMemoryStream();
             obj = new ObjectOutputStream(mem);
+            obj.writeObject(fieldOffsets);
             size += mem.size();
         } catch (final IOException e) {
             throw new OSerializationException("Problem while evaluating metadata", e);

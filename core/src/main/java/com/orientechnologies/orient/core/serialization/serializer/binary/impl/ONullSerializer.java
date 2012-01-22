@@ -9,17 +9,14 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.ObjectS
  */
 public class ONullSerializer implements ObjectSerializer<Object> {
 
-    @Override
     public int getFieldSize(final Object object) {
         return 0;
     }
 
-    @Override
     public void serialize(final Object object, final byte[] stream, final int startPosition) {
         //nothing to serialize
     }
 
-    @Override
     public Object deserialize(final byte[] stream, final int startPosition) {
         //nothing to deserialize
         return null;

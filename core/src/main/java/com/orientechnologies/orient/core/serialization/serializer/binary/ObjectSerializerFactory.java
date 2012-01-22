@@ -28,8 +28,14 @@ public class ObjectSerializerFactory {
 
     private final Map<Byte, ObjectSerializer<?>> serializerMap = new HashMap<Byte, ObjectSerializer<?>>();
 
+    /**
+     * Instance of the factory
+     */
     public static final ObjectSerializerFactory INSTANCE = new ObjectSerializerFactory();
-
+    /**
+     * Size of the type identifier block size
+     */
+    public static final int TYPE_IDENTIFIER_SIZE = 1;
     /**
      * Type identifier for the null fields
      */

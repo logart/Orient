@@ -17,13 +17,7 @@ import java.util.Set;
 public class OBinarySerializer implements OPartialRecordSerializer {
 
     private static final String NAME = "ORecordDocument2binary";
-
-    @Override
-    public String toString() {
-        return NAME;
-    }
-
-    @Override
+    
     public ORecordInternal<?> fromStream(final byte[] iSource, final ORecordInternal<?> iRecord) {
 
         if (!(iRecord instanceof ODocument)) {
@@ -38,7 +32,6 @@ public class OBinarySerializer implements OPartialRecordSerializer {
         return doc;
     }
 
-    @Override
     public ORecordInternal<?> fromStream(final byte[] iSource, final ORecordInternal<?> iRecord, final Set<String> fieldsToRead) {
 
         if (!(iRecord instanceof ODocument)) {
@@ -67,10 +60,10 @@ public class OBinarySerializer implements OPartialRecordSerializer {
         return doc;
     }
 
-    @Override
     public byte[] toStream(final ORecordInternal<?> iSource, final boolean iOnlyDelta) {
         final ObjectSerializerFactory osf = ObjectSerializerFactory.INSTANCE;
-
+        final int typeIdentifierSize = ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE;
+        
         final ODocument doc = (ODocument) iSource;
 
         if (doc.getPureSource() == null || doc.getPureSource().length == 0) {
@@ -89,7 +82,7 @@ public class OBinarySerializer implements OPartialRecordSerializer {
                 //obtain serializer and write type identifier
                 final byte typeId = value != null ? doc.fieldType(name).getByteId() : ObjectSerializerFactory.NULL_TYPE;
                 stream[offset] = typeId;
-                osf.getObjectSerializer(typeId).serialize(value, stream, offset+1);
+                osf.getObjectSerializer(typeId).serialize(value, stream, offset + typeIdentifierSize);
             }
 
             return stream;
@@ -116,15 +109,20 @@ public class OBinarySerializer implements OPartialRecordSerializer {
                     //obtain serializer and write type identifier
                     final byte typeId = value != null ? doc.fieldType(name).getByteId() : ObjectSerializerFactory.NULL_TYPE;
                     stream[offset] = typeId;
-                    osf.getObjectSerializer(typeId).serialize(value, stream, offset+1);
+                    osf.getObjectSerializer(typeId).serialize(value, stream, offset + typeIdentifierSize);
                 } else {
                     final int oldOffset = oldMetadata.getMetadata().get(name);
-                    final int sizeToCopy = osf.getObjectSerializer(doc.fieldType(name)).getFieldSize(value) + 1;
+                    final int sizeToCopy = osf.getObjectSerializer(doc.fieldType(name)).getFieldSize(value) + typeIdentifierSize;
                     System.arraycopy(oldStream, oldOffset, stream, offset, sizeToCopy);
                 }
             }
 
             return stream;
         }
+    }
+
+    @Override
+    public String toString() {
+        return NAME;
     }
 }

@@ -14,7 +14,6 @@ public interface OPartialRecordSerializer extends ORecordSerializer {
 
     /**
      * This method will allow to deserialize subset of the fields of the document
-
      */
     public ORecordInternal<?> fromStream(byte[] iSource, ORecordInternal<?> iRecord, Set<String> fieldsToRead);
 }
