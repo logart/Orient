@@ -10,12 +10,13 @@ import java.util.NoSuchElementException;
 public class OHopscotchHashSet extends AbstractSet<ORID> {
   private static final int MAXIMUM_CAPACITY = 1 << 30;
   private static final byte HOPSCOTCH_DISTANCE = 64;
-  private static final byte EMPTY_BUCKET = HOPSCOTCH_DISTANCE + 1;
+  private static final int END_OF_CHAIN = -1;
   private static final double LOAD_FACTOR = 0.85;
 
   private static final class Cell {
-    private byte nextDistance;
-    private byte firstDistance = EMPTY_BUCKET;
+    private int nextPosition = END_OF_CHAIN;
+    private int firstPosition = END_OF_CHAIN;
+    private int size = 0;
     private ORID value;
   }
 
@@ -32,245 +33,148 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
       capacity = capacity << 1;
 
     cells = new Cell[capacity];
-    threshold = (int) Math.ceil(capacity * (1 - LOAD_FACTOR));
+    threshold = (int) Math.ceil(capacity * LOAD_FACTOR);
   }
 
   @Override
   public boolean contains(final Object o) {
-//      System.out.println("\n\n\n**************************************contains**************************************");
     final ORID value = (ORID) o;
 
     final int index = cellIndex(value.hashCode(), cells.length);
 
+    assert index > -1 && index < cells.length;
     final Cell cell = cells[index];
-    if (cell == null || cell.firstDistance == EMPTY_BUCKET){
-//        System.out.println("**********************************end*contains**************************************\n\n");
+    if (cell == null || cell.size == 0){
       return false;
     }
 
     Cell cellToMatch;
-    int cellIndex = normalizeCellIndex(index + cell.firstDistance, cells.length);
+    int cellIndex = cell.firstPosition;
 
     do {
+      assert cellIndex > -1 && cellIndex < cells.length;
       cellToMatch = cells[cellIndex];
+      assert value != null;
+      assert cellToMatch != null;
       if (value.equals(cellToMatch.value)) {
-//          System.out.println("**********************************end*contains**************************************\n\n");
         return true;
       }
+      cellIndex = cellToMatch.nextPosition;
 
+    } while (cellIndex != END_OF_CHAIN);
 
-//        System.out.println(
-//                "new cell index is : " + cellIndex +
-//                        "\n\tvalue : " + cellToMatch.value +
-//                        "\n\tfirst distance : " +cellToMatch.firstDistance +
-//                        "\n\tnext distance : " +cellToMatch.nextDistance);
-
-
-      cellIndex = normalizeCellIndex(cellIndex + cellToMatch.nextDistance, cells.length);
-
-
-
-    } while (cellToMatch.nextDistance != 0);
-
-//      System.out.println("**********************************end*contains**************************************\n\n");
     return false;
   }
 
   @Override
   public boolean add(ORID value) {
-//      System.out.println("*****************************************start adding*****************************************");
-//      System.out.print("try to find value( " + value + " ) in set "+value.hashCode());
-
     if (contains(value)){
-//        System.out.println("exist");
       return false;
     }
 
-//      System.out.println("not exist");
-
     final int index = cellIndex(value.hashCode(), cells.length);
 
-//      System.out.println("calculating index of hascode ( "+value.hashCode()+" ) \t\t"+index);
-
-//      System.out.print("bucket cell with index ( " + index + " ) is\t\t\t");
+    assert index > -1 && index<cells.length;
     Cell bucketCell = cells[index];
     if (bucketCell == null) {
 
-//        System.out.println("empty");
-//        System.out.println("creating new bucket cell");
       bucketCell = new Cell();
+      assert index > -1 && index<cells.length;
       cells[index] = bucketCell;
 
-      bucketCell.firstDistance = 0;
+      bucketCell.firstPosition = index;
+      bucketCell.size++;
       bucketCell.value = value;
-//        System.out.println("cell created");
-//        System.out.println("{\n\tcell.firstDistance : " + bucketCell.firstDistance);
-//        System.out.println("\tcell.nextDistance : " + bucketCell.nextDistance);
-//        System.out.println("\tcell.value : " + bucketCell.value+"\n}");
 
-//        System.out.println("incrementing size");
       size++;
 
-//        System.out.println("size is " + size);
       if (size > threshold)
         rehash();
 
       return true;
     }
-//      System.out.println("not empty");
-//      System.out.println("{\n\tcell.firstDistance : " + bucketCell.firstDistance);
-//      System.out.println("\tcell.nextDistance : " + bucketCell.nextDistance);
-//      System.out.println("\tcell.value : " + bucketCell.value+"\n}");
 
-//      System.out.println("finding first empty index");
     final int emptyIndex = findFirstEmptyIndex(index);
-//      System.out.println("first empty index is \t\t"+emptyIndex);
-    if (emptyIndex == -1) {
-      rehash();
-      return add(value);
-    }
+
+//    if (emptyIndex == -1) {
+//      rehash();
+//      return add(value);
+//    }
 
     int distance = distance(index, emptyIndex, cells.length);
-//      System.out.println("distance between index and emptyIndex is \t\t"+distance);
     if (distance < HOPSCOTCH_DISTANCE) {
-//        System.out.println("distance < HOPSCOTCH_DISTANCE ("+distance+" < "+HOPSCOTCH_DISTANCE+")");
+      assert emptyIndex > -1;
+      assert emptyIndex<cells.length;
       Cell emptyCell = cells[emptyIndex];
 
-//        System.out.print("empty cell is \t\t");
-
-
       if (emptyCell == null) {
-//          System.out.println("null. Creating new empty cell");
         emptyCell = new Cell();
-
-//          System.out.println("{\n\tcell.firstDistance : " + emptyCell.firstDistance);
-//          System.out.println("\tcell.nextDistance : " + emptyCell.nextDistance);
-//          System.out.println("\tcell.value : " + emptyCell.value+"\n}");
-//
-//          System.out.println("writing empty cell to "+emptyIndex);
+        assert emptyIndex > -1 && emptyIndex<cells.length;
         cells[emptyIndex] = emptyCell;
-
-//          System.out.println("{\n\tcell.firstDistance : " + emptyCell.firstDistance);
-//          System.out.println("\tcell.nextDistance : " + emptyCell.nextDistance);
-//          System.out.println("\tcell.value : " + emptyCell.value+"\n}");
-//
       }
-//        System.out.println("writing "+value+" to emptyCell.value");
       emptyCell.value = value;
 
-//        System.out.print("checking if bucketCell.firstDistance(" + bucketCell.firstDistance + ") == EMPTY_BUCKET \t\t");
-      if (bucketCell.firstDistance == EMPTY_BUCKET) {
-//          System.out.println("true");
-        bucketCell.firstDistance = (byte) distance;
+      if (bucketCell.size == 0) {
+        bucketCell.firstPosition = emptyIndex;
       } else {
-//          System.out.println("false");
-//          System.out.println("finding last bucket cell");
         final int lastCellIndex = findLastBucketCell(index);
-//          System.out.println("lastCell have index "+lastCellIndex);
+        assert lastCellIndex > -1 && lastCellIndex<cells.length;
         final Cell lastCell = cells[lastCellIndex];
-//          System.out.println("and contains");
-
-//          System.out.println("{\n\tcell.firstDistance : " + lastCell.firstDistance);
-//          System.out.println("\tcell.nextDistance : " + lastCell.nextDistance);
-//          System.out.println("\tcell.value : " + lastCell.value+"\n}");
-//
-//          System.out.println("writing distance to last cell");
-          lastCell.nextDistance = (byte)calculateNextCellDistance(index, lastCellIndex, emptyIndex, cells.length);
-//        int t = 1;
-//          System.out.println("{\n\tcell.firstDistance : " + lastCell.firstDistance);
-//          System.out.println("\tcell.nextDistance : " + lastCell.nextDistance);
-//          System.out.println("\tcell.value : " + lastCell.value+"\n}");
-
+        lastCell.nextPosition = emptyIndex;
       }
-//        System.out.println("incrementing size");
+
+      bucketCell.size++;
+
       size++;
-//        System.out.println("size is " + size);
+
       if (size > threshold)
         rehash();
 
       return true;
     }
 
-//      System.out.println("creating index to process");
     int indexToProcess = emptyIndex;
-//      System.out.println("index to process is " + indexToProcess);
-//      System.out.println("moving buckets!");
     while (true) {
-
-//        System.out.println("finding closestCellToMove");
       final int[] moveInfo = findClosestCellToMove(indexToProcess);
-//        System.out.println("move info contains");
 
       if (moveInfo == null) {
-//          System.out.println("move info is null");
         rehash();
         return add(value);
       }
-//        System.out.println("moveInfo[0] "+moveInfo[0]+"\nmoveInfo[1] "+moveInfo[1]);
+
       final int bucketMoveIndex = moveInfo[0];
       final int cellMoveIndex = moveInfo[1];
 
-//        System.out.println("moving values");
-
       moveValues(bucketMoveIndex, cellMoveIndex, indexToProcess);
-
-//        System.out.println("calculating distance");
 
       distance = distance(index, cellMoveIndex, cells.length);
 
-//        System.out.println("distance is " + distance);
-
       if (distance < HOPSCOTCH_DISTANCE) {
-//          System.out.println("distance < HOPSCOTCH_DISTANCE ("+distance+" < "+HOPSCOTCH_DISTANCE+")");
-
-//          System.out.println("writing info to cell");
-
-
+        assert cellMoveIndex > -1 && cellMoveIndex<cells.length;
         if (cells[cellMoveIndex] == null){
+          assert cellMoveIndex > -1 && cellMoveIndex<cells.length;
           cells[cellMoveIndex] = new Cell();
         }
+
+        assert cellMoveIndex > -1 && cellMoveIndex<cells.length;
         final Cell cellToSet = cells[cellMoveIndex];
 
-          assert cellToSet != null;
+        assert cellToSet != null;
 
         cellToSet.value = value;
 
-//          System.out.println("{\n\tcell.firstDistance : " + cellToSet.firstDistance);
-//          System.out.println("\tcell.nextDistance : " + cellToSet.nextDistance);
-//          System.out.println("\tcell.value : " + cellToSet.value+"\n}");
-//
-//
-//          System.out.println("changing bucket cell");
-//
-//          System.out.println("checking if bucketCell.firstDistance("+bucketCell.firstDistance+") == EMPTY_BUCKET \t\t");
-        if (bucketCell.firstDistance == EMPTY_BUCKET) {
-//            System.out.println("true");
-          bucketCell.firstDistance = (byte) distance;
+        if (bucketCell.size == 0) {
+          bucketCell.firstPosition = cellMoveIndex;
         } else {
-//            System.out.println("false");
-//            System.out.println("finding last bucket cell");
-
           final int lastCellIndex = findLastBucketCell(index);
-//            System.out.println("lastCell have index "+lastCellIndex);
-
+          assert lastCellIndex > -1 && lastCellIndex<cells.length;
           final Cell lastCell = cells[lastCellIndex];
-//            System.out.println("and contains");
-
-//            System.out.println("{\n\tcell.firstDistance : " + lastCell.firstDistance);
-//            System.out.println("\tcell.nextDistance : " + lastCell.nextDistance);
-//            System.out.println("\tcell.value : " + lastCell.value+"\n}");
-//
-//            System.out.println("writing distance to last cell");
-          lastCell.nextDistance = (byte)calculateNextCellDistance(index, lastCellIndex, cellMoveIndex, cells.length);
-//          int t = 1;
-//
-//            System.out.println("{\n\tcell.firstDistance : " + lastCell.firstDistance);
-//            System.out.println("\tcell.nextDistance : " + lastCell.nextDistance);
-//            System.out.println("\tcell.value : " + lastCell.value+"\n}");
+          lastCell.nextPosition = cellMoveIndex;
         }
-//          System.out.print("incrementing size \t\t");
+
+        bucketCell.size++;
         size++;
-//          System.out.println("size is " + size);
+
         if (size > threshold)
           rehash();
 
@@ -278,9 +182,6 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
       }
 
       indexToProcess = cellMoveIndex;
-
-//        System.out.println("indexToProcess " + indexToProcess + " cellMoveIndex "+cellMoveIndex);
-//        System.out.println("next iteration");
 
     }
   }
@@ -291,52 +192,63 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
 
     final int index = cellIndex(value.hashCode(), cells.length);
 
+    assert index > -1 && index < cells.length;
     final Cell bucketCell = cells[index];
-    if (bucketCell == null || bucketCell.firstDistance == EMPTY_BUCKET)
+    if (bucketCell == null || bucketCell.size == 0)
       return false;
 
     Cell cellToMatch;
-    int cellIndex = normalizeCellIndex(index + bucketCell.firstDistance, cells.length);
+    int cellIndex = bucketCell.firstPosition;
     int prevCellIndex = -1;
 
     do {
+      assert cellIndex > -1 && cellIndex < cells.length;
       cellToMatch = cells[cellIndex];
+      assert value != null;
+      assert cellToMatch != null;
       if (value.equals(cellToMatch.value)) {
         if (prevCellIndex != -1) {
+          assert prevCellIndex > -1 && prevCellIndex < cells.length;
           final Cell prevCell = cells[prevCellIndex];
-          if (cellToMatch.nextDistance != 0) {
-            final int nextCellIndex = normalizeCellIndex(cellIndex + cellToMatch.nextDistance, cells.length);
-            prevCell.nextDistance = (byte)calculateNextCellDistance(index, prevCellIndex, nextCellIndex, cells.length);
+          if (cellToMatch.nextPosition != END_OF_CHAIN) {
+            prevCell.nextPosition = cellToMatch.nextPosition;
+          }else{
+            prevCell.nextPosition = END_OF_CHAIN;
           }
-          else
-            prevCell.nextDistance = 0;
         } else {
-          if(cellToMatch.nextDistance != 0) {
-            final int nextCellIndex = normalizeCellIndex(cellIndex + cellToMatch.nextDistance, cells.length);
-            bucketCell.firstDistance = (byte)distance(index, nextCellIndex, cells.length);
+          if(cellToMatch.nextPosition != END_OF_CHAIN) {
+            final int nextCellIndex = cellToMatch.nextPosition;
+            bucketCell.firstPosition = nextCellIndex;
           } else {
-            if(bucketCell.value == null)
+            if(bucketCell.value == null){
+              assert index > -1 && index < cells.length;
               cells[index] = null;
-            else
-              bucketCell.firstDistance = EMPTY_BUCKET;
+            }else{
+//              bucketCell.size = 0;
+              bucketCell.firstPosition = END_OF_CHAIN;
+            }
           }
-
         }
 
-        if(cellToMatch.firstDistance == EMPTY_BUCKET)
+        if(cellToMatch.size == 0){
+          assert cellIndex > -1 && cellIndex < cells.length;
           cells[cellIndex] = null;
-        else
+        }else{
           cellToMatch.value = null;
+          cellToMatch.nextPosition = END_OF_CHAIN;
+        }
+
+        bucketCell.size--;
 
         size--;
         return true;
       }
 
       prevCellIndex = cellIndex;
-      cellIndex = normalizeCellIndex(cellIndex + cellToMatch.nextDistance, cells.length);
+      cellIndex = cellToMatch.nextPosition;
     }
 
-    while (cellToMatch.nextDistance != 0);
+    while (cellToMatch.nextPosition != END_OF_CHAIN);
 
     return false;
   }
@@ -352,90 +264,103 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
   }
 
   private int findLastBucketCell(final int bucketCellIndex) {
+    assert bucketCellIndex > -1 && bucketCellIndex < cells.length;
     final Cell bucketCell = cells[bucketCellIndex];
-    int cellIndex = normalizeCellIndex(bucketCellIndex + bucketCell.firstDistance, cells.length);
+    int cellIndex = bucketCell.firstPosition;
+    assert cellIndex > -1 && cellIndex < cells.length;
     Cell cell = cells[cellIndex];
-    while (cell.nextDistance != 0) {
-      cellIndex = normalizeCellIndex(cellIndex + cell.nextDistance, cells.length);
+    while (cell.nextPosition != END_OF_CHAIN) {
+      cellIndex = cell.nextPosition;
+      assert cellIndex > -1 && cellIndex < cells.length;
       cell = cells[cellIndex];
     }
 
     return cellIndex;
   }
 
-  private static int calculateNextCellDistance(final int bucketIndex, final int lastCellIndex,
-                                               final int cellToAddIndex, final int tableSize) {
-    if(cellToAddIndex < bucketIndex && lastCellIndex > bucketIndex || cellToAddIndex > bucketIndex && lastCellIndex < bucketIndex)
-      return tableSize - lastCellIndex + cellToAddIndex;
-    return cellToAddIndex - lastCellIndex;
-  }
+//  private static int calculateNextCellDistance(final int bucketIndex, final int lastCellIndex,
+//                                               final int cellToAddIndex, final int tableSize) {
+//    if(cellToAddIndex < bucketIndex && lastCellIndex > bucketIndex || cellToAddIndex > bucketIndex && lastCellIndex < bucketIndex)
+//      return tableSize - lastCellIndex + cellToAddIndex;
+//    return cellToAddIndex - lastCellIndex;
+//  }
 
-  private static int normalizeCellIndex(final int cellIndex, final int tableSize) {
-    if(cellIndex < 0)
-      return cellIndex + tableSize;
-
-    if(cellIndex >= tableSize)
-      return cellIndex - tableSize;
-
-    return cellIndex;
-  }
+//  private static int normalizeCellIndex(final int cellIndex, final int tableSize) {
+//    if(cellIndex < 0)
+//      return cellIndex + tableSize;
+//
+//    if(cellIndex >= tableSize)
+//      return cellIndex - tableSize;
+//
+//    return cellIndex;
+//  }
   
   private static int cellIndex(final int hash, final int tableSize) {
     return (tableSize - 1) & hash;
   }
 
+  //проработать внимательнее
   private void moveValues(final int bucketCellIndex, final int fromCellIndex, final int toCellIndex) {
+    assert bucketCellIndex > -1 && bucketCellIndex < cells.length;
     final Cell bucketCell = cells[bucketCellIndex];
+    assert fromCellIndex > -1 && fromCellIndex < cells.length;
     final Cell fromCell = cells[fromCellIndex];
-
+    assert toCellIndex > -1 && toCellIndex < cells.length;
     Cell toCell = cells[toCellIndex];
+
     if (toCell == null) {
       toCell = new Cell();
+      assert toCellIndex > -1 && toCellIndex < cells.length;
       cells[toCellIndex] = toCell;
     }
 
     toCell.value = fromCell.value;
     fromCell.value = null;
 
-    final int fromDistance = (byte) distance(bucketCellIndex, fromCellIndex, cells.length);
-    if (bucketCell.firstDistance == fromDistance)
-      bucketCell.firstDistance = (byte) distance(bucketCellIndex, toCellIndex, cells.length);
+     if (bucketCell.firstPosition == fromCellIndex)
+      bucketCell.firstPosition = toCellIndex;
     else {
-      final int lastCellIndex = findPrevBucketCell(bucketCellIndex + bucketCell.firstDistance, toCellIndex);
+      final int lastCellIndex = findPrevBucketCell(bucketCell.firstPosition, fromCellIndex);
       final Cell lastCell = cells[lastCellIndex];
 
-      lastCell.nextDistance = (byte)calculateNextCellDistance(bucketCellIndex, lastCellIndex, toCellIndex, cells.length);
+      lastCell.nextPosition = toCellIndex;
     }
 
-    if (fromCell.firstDistance == EMPTY_BUCKET)
+//    уточнить так ли это
+    if (fromCell.size == 0)
          cells[fromCellIndex] = null;
   }
 
-    private int findPrevBucketCell(int bucketCellIndex, int currentCellIndex){
+    private int findPrevBucketCell(int firstCellIndex, int currentCellIndex){
 
-        if (bucketCellIndex == currentCellIndex){
+        if (firstCellIndex == currentCellIndex){
             throw new RuntimeException("bucket cell does not have previous cell");
         }
 
-        final Cell bucketCell = cells[bucketCellIndex];
-        int cellIndex = normalizeCellIndex(bucketCellIndex + bucketCell.firstDistance, cells.length);
+      assert firstCellIndex > -1 && firstCellIndex < cells.length;
+      int cellIndex = firstCellIndex;
+      assert cellIndex > -1 && cellIndex < cells.length;
         Cell cell = cells[cellIndex];
-        while (cellIndex + cell.nextDistance != currentCellIndex ) {
-            cellIndex = normalizeCellIndex(cellIndex + cell.nextDistance, cells.length);
+        while ((cell.nextPosition != currentCellIndex) && (cell.nextPosition!= END_OF_CHAIN)) {
+            cellIndex = cell.nextPosition;
+          assert cellIndex > -1 && cellIndex < cells.length;
             cell = cells[cellIndex];
         }
 
         return cellIndex;
     }
 
+  //review and optimize
   private int[] findClosestCellToMove(final int index) {
     int beginWith = index - HOPSCOTCH_DISTANCE + 1;
     if (beginWith >= 0) {
       for (int i = beginWith; i < index; i++) {
+        assert i > -1 && i < cells.length;
         final Cell cell = cells[i];
         assert cell != null;
-        if (cell.firstDistance != EMPTY_BUCKET) {
-          final int closestIndex = cell.firstDistance + i;
+        //first position or size to determine bucket
+        if (cell.size > 0) {
+          final int closestIndex = cell.firstPosition;
           if (closestIndex < index)
             return new int[]{i, closestIndex};
         }
@@ -444,25 +369,28 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
       return null;
     } else {
       for (int i = cells.length + beginWith; i < cells.length; i++) {
+        assert i > -1 && i < cells.length;
         final Cell cell = cells[i];
         assert cell != null;
-        if (cell.firstDistance != EMPTY_BUCKET) {
-          final int firstDistance = cell.firstDistance;
-          if (firstDistance + i < cells.length)
-            return new int[]{i, firstDistance + i};
+        if (cell.size > 0) {
+          final int closestIndex = cell.firstPosition;
+          if (closestIndex < index)
+            return new int[]{i, closestIndex};
 
-          if (firstDistance + i - cells.length < beginWith)
-            return new int[]{i, firstDistance + i - cells.length};
+//          if (firstPosition - cells.length < beginWith)
+//            return new int[]{i, firstPosition};
         }
       }
 
       for (int i = 0; i < index; i++) {
+        assert i > -1 && i < cells.length;
         final Cell cell = cells[i];
         assert cell != null;
-        if (cell.firstDistance != EMPTY_BUCKET) {
-          final int closestIndex = cell.firstDistance + i;
+        if (cell.size > 0) {
+          final int closestIndex = cell.firstPosition;
           if (closestIndex < index)
-            return new int[]{closestIndex, i};
+            //why this values are swapped?
+            return new int[]{i, closestIndex};
         }
       }
 
@@ -485,6 +413,7 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
   }
 
   private boolean isEmpty(final int index) {
+    assert index > -1 && index < cells.length;
     final Cell cell = cells[index];
     return cell == null || cell.value == null;
   }
@@ -497,6 +426,7 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
 
   private void rehash() {
     final Cell[] oldCells = cells;
+    assert oldCells.length << 1 < Integer.MAX_VALUE;
     cells = new Cell[oldCells.length << 1];
     threshold = (int) Math.ceil(cells.length * LOAD_FACTOR);
     size = 0;
@@ -521,10 +451,11 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
       public ORID next() {
         if (processedItems >= size)
           throw new NoSuchElementException();
-
+        assert currentIndex > -1 && currentIndex < cells.length;
         while (currentIndex < cells.length && (cells[currentIndex] == null || cells[currentIndex].value == null))
           currentIndex++;
 
+        assert currentIndex > -1 && currentIndex < cells.length;
         final ORID result = cells[currentIndex].value;
 
         currentIndex++;

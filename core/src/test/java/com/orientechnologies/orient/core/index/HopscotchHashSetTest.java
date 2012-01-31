@@ -396,6 +396,43 @@ public class HopscotchHashSetTest
       absentKeysThirteen[i] =  new ORecordId(i, 2);
     }
 
+//    ORID[] keysFourteen = new ORID[512];
+//    ORID[] absentKeysFourteen = new ORID[512];
+//
+//    final int C1 = 543;
+//    final int C2 = 544;
+//    final int C3 = 545;
+//    final int C4 = 546;
+//    final int C5 = 547;
+//    final int C6 = 548;
+//    final int C7 = 549;
+//
+//    for (int i = 0; i < 64; i ++){
+//      keysFourteen[i] = new ORecordId((C1 - i) - 31, 31 * i);
+//    }
+//    for (int i = 64; i < 128;i ++){
+//      keysFourteen[i] = new ORecordId((C2 - i) - 31, 31 * i);
+//    }
+//    for (int i = 128; i < 192; i ++){
+//      keysFourteen[i] = new ORecordId((C3 - i) - 31, 31 * i);
+//    }
+//    for (int i = 192; i < 256; i ++){
+//      keysFourteen[i] = new ORecordId((C4 - i) - 31, 31 * i);
+//    }
+//    for (int i = 256; i < 320; i ++){
+//      keysFourteen[i] = new ORecordId((C5 - i) - 31, 31 * i);
+//    }
+//    for (int i = 320; i < 484; i ++){
+//      keysFourteen[i] = new ORecordId((C6 - i) - 31, 31 * i);
+//    }
+//    for (int i = 484; i < 512; i ++){
+//      keysFourteen[i] = new ORecordId((C7 - i) - 31, 31 * i);
+//    }
+//
+//    for (int i = 0; i < 512; i++){
+//      absentKeysFourteen[i] = new ORecordId(4096, i);
+//    }
+
     return new Object[][] {
       {keysOne, absentKeysOne},
       {keysTwo, absentKeysTwo},
@@ -410,6 +447,7 @@ public class HopscotchHashSetTest
       {keysEleven, absentKeysEleven},
       {keysTwelve, absentKeysTwelve},
       {keysThirteen, absentKeysThirteen},
+//      {keysFourteen, absentKeysFourteen}
     };
   }
 }

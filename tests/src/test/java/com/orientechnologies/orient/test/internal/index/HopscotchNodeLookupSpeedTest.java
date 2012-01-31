@@ -6,6 +6,7 @@ import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.index.OHopscotchHashSet;
 import org.testng.annotations.Test;
 
+import java.util.HashSet;
 import java.util.Set;
 
 public class HopscotchNodeLookupSpeedTest extends SpeedTestMonoThread
