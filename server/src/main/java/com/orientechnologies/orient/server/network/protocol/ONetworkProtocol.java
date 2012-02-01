@@ -21,29 +21,22 @@ import java.net.Socket;
 import com.orientechnologies.common.thread.OSoftThread;
 import com.orientechnologies.orient.core.config.OContextConfiguration;
 import com.orientechnologies.orient.enterprise.channel.OChannel;
-import com.orientechnologies.orient.server.OClientConnection;
 import com.orientechnologies.orient.server.OServer;
 
 public abstract class ONetworkProtocol extends OSoftThread {
-	protected ONetworkProtocolData	data	= new ONetworkProtocolData();
-	protected OServer								server;
+	protected OServer	server;
 
 	public ONetworkProtocol(ThreadGroup group, String name) {
 		super(group, name);
 	}
 
-	public abstract void config(OServer iServer, Socket iSocket, OClientConnection iConnection, OContextConfiguration iConfiguration)
-			throws IOException;
+	public abstract void config(OServer iServer, Socket iSocket, OContextConfiguration iConfiguration) throws IOException;
 
 	public abstract String getType();
 
 	public abstract OChannel getChannel();
 
 	public void registerCommand(final Object iServerCommandInstance) {
-	}
-
-	public ONetworkProtocolData getData() {
-		return data;
 	}
 
 	public OServer getServer() {

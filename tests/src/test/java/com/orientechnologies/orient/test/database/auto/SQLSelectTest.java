@@ -42,6 +42,7 @@ import com.orientechnologies.orient.core.sql.OCommandSQL;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 
 @Test(groups = "sql-select")
+@SuppressWarnings("unchecked")
 public class SQLSelectTest {
 	private ODatabaseDocument	database;
 	private ODocument					record;
@@ -192,8 +193,8 @@ public class SQLSelectTest {
 		tags.add("smart");
 		tags.add("nice");
 
-		ODocument doc = new ODocument(database, "Profile");
-		doc.field("tags", tags);
+		ODocument doc = new ODocument("Profile");
+		doc.field("tags", tags, OType.EMBEDDEDSET);
 
 		doc.save();
 
@@ -201,6 +202,13 @@ public class SQLSelectTest {
 
 		Assert.assertEquals(resultset.size(), 1);
 		Assert.assertEquals(resultset.get(0).getIdentity(), doc.getIdentity());
+
+		resultset = database.query(new OSQLSynchQuery<ODocument>("select from Profile where tags[0-1]  CONTAINSALL ['smart','nice']"));
+
+		Assert.assertEquals(resultset.size(), 1);
+		Assert.assertEquals(resultset.get(0).getIdentity(), doc.getIdentity());
+
+		// doc.delete();
 
 		database.close();
 	}
@@ -213,7 +221,7 @@ public class SQLSelectTest {
 		tags.add("smart");
 		tags.add("nice");
 
-		ODocument doc = new ODocument(database, "Profile");
+		ODocument doc = new ODocument("Profile");
 		doc.field("tags", tags);
 
 		doc.save();
@@ -246,7 +254,7 @@ public class SQLSelectTest {
 		coll.add(new ODocument("name", "Luca", "surname", "Garulli"));
 		coll.add(new ODocument("name", "Jay", "surname", "Miner"));
 
-		ODocument doc = new ODocument(database, "Profile");
+		ODocument doc = new ODocument("Profile");
 		doc.field("coll", coll, OType.EMBEDDEDSET);
 
 		doc.save();
@@ -270,7 +278,7 @@ public class SQLSelectTest {
 		coll.add(new ODocument("name", "Luca", "surname", "Garulli"));
 		coll.add(new ODocument("name", "Jay", "surname", "Miner"));
 
-		ODocument doc = new ODocument(database, "Profile");
+		ODocument doc = new ODocument("Profile");
 		doc.field("coll", coll, OType.EMBEDDEDLIST);
 
 		doc.save();
@@ -294,7 +302,7 @@ public class SQLSelectTest {
 		customReferences.put("first", new ODocument("name", "Luca", "surname", "Garulli"));
 		customReferences.put("second", new ODocument("name", "Jay", "surname", "Miner"));
 
-		ODocument doc = new ODocument(database, "Profile");
+		ODocument doc = new ODocument("Profile");
 		doc.field("customReferences", customReferences, OType.EMBEDDEDMAP);
 
 		doc.save();
@@ -337,7 +345,7 @@ public class SQLSelectTest {
 		customReferences.put("first", new ODocument("name", "Luca", "surname", "Garulli"));
 		customReferences.put("second", new ODocument("name", "Jay", "surname", "Miner"));
 
-		ODocument doc = new ODocument(database, "Profile");
+		ODocument doc = new ODocument("Profile");
 		doc.field("customReferences", customReferences, OType.EMBEDDEDMAP);
 
 		doc.save();
@@ -1317,5 +1325,69 @@ public class SQLSelectTest {
 		} finally {
 			database.close();
 		}
+	}
+
+	@Test
+	public void testSquareBracketsOnCondition() {
+		database.open("admin", "admin");
+
+		try {
+			List<ODocument> result = database.query(new OSQLSynchQuery<ODocument>(
+					"select from Account where addresses[@class='Address'][city.country.name] = 'Washington'"));
+			Assert.assertFalse(result.isEmpty());
+			for (ODocument d : result) {
+				Assert.assertNotNull(d.field("addresses"));
+				Assert.assertEquals(((ODocument) ((Collection<OIdentifiable>) d.field("addresses")).iterator().next().getRecord())
+						.getSchemaClass().getName(), "Address");
+			}
+
+		} finally {
+			database.close();
+		}
+	}
+
+	public void testParams() {
+		database.open("admin", "admin");
+
+		try {
+			OClass test = database.getMetadata().getSchema().getClass("test");
+			if (test == null) {
+				test = database.getMetadata().getSchema().createClass("test");
+				test.createProperty("f1", OType.STRING);
+				test.createProperty("f2", OType.STRING);
+			}
+			ODocument document = new ODocument(test);
+			document.field("f1", "a").field("f2", "a");
+			database.save(document);
+
+			Map<String, Object> parameters = new HashMap<String, Object>();
+			parameters.put("p1", "a");
+			System.out.println(database.query(new OSQLSynchQuery<ODocument>("select from test where (f1 = :p1)"), parameters));
+			System.out.println(database.query(new OSQLSynchQuery<ODocument>("select from test where f1 = :p1 and f2 = :p1"), parameters));
+
+		} finally {
+			database.close();
+		}
+	}
+
+	@Test
+	public void queryInstanceOfOperator() {
+		database.open("admin", "admin");
+
+		List<ODocument> result = database.command(new OSQLSynchQuery<ODocument>("select from Account")).execute();
+
+		Assert.assertTrue(result.size() != 0);
+
+		List<ODocument> result2 = database.command(
+				new OSQLSynchQuery<ODocument>("select from Account where @this instanceof 'Account'")).execute();
+
+		Assert.assertEquals(result2.size(), result.size());
+
+		List<ODocument> result3 = database.command(
+				new OSQLSynchQuery<ODocument>("select from Account where @class instanceof 'Account'")).execute();
+
+		Assert.assertEquals(result3.size(), result.size());
+
+		database.close();
 	}
 }

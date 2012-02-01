@@ -25,11 +25,10 @@ import java.net.Socket;
 import java.net.SocketException;
 
 import com.orientechnologies.common.log.OLogManager;
+import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.config.OContextConfiguration;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.serialization.serializer.OStringSerializerHelper;
-import com.orientechnologies.orient.server.OClientConnection;
-import com.orientechnologies.orient.server.OClientConnectionManager;
 import com.orientechnologies.orient.server.OServer;
 import com.orientechnologies.orient.server.config.OServerCommandConfiguration;
 import com.orientechnologies.orient.server.config.OServerParameterConfiguration;
@@ -50,6 +49,7 @@ public class OServerNetworkListener extends Thread {
 	public OServerNetworkListener(final OServer iServer, final String iHostName, final String iHostPortRange,
 			final String iProtocolName, final Class<? extends ONetworkProtocol> iProtocol,
 			final OServerParameterConfiguration[] iParameters, final OServerCommandConfiguration[] iCommands) {
+		super(Orient.getThreadGroup(), "OrientDB " + iProtocol.getSimpleName() + " (" + iHostName + ":" + iHostPortRange + ")");
 		server = iServer;
 
 		if (iProtocol == null)
@@ -117,8 +117,8 @@ public class OServerNetworkListener extends Thread {
 			}
 		}
 
-		OLogManager.instance().error(this, "Unable to listen for connections using the configured ports '%s' on host '%s'", iHostPortRange,
-				iHostName);
+		OLogManager.instance().error(this, "Unable to listen for connections using the configured ports '%s' on host '%s'",
+				iHostPortRange, iHostName);
 		System.exit(1);
 	}
 
@@ -129,7 +129,6 @@ public class OServerNetworkListener extends Thread {
 	@Override
 	public void run() {
 		ONetworkProtocol protocol;
-		OClientConnection connection;
 
 		try {
 			while (active) {
@@ -144,11 +143,8 @@ public class OServerNetworkListener extends Thread {
 					// CREATE A NEW PROTOCOL INSTANCE
 					protocol = protocolType.newInstance();
 
-					// CREATE THE CLIENT CONNECTION
-					connection = OClientConnectionManager.instance().connect(socket, protocol);
-
 					// CONFIGURE THE PROTOCOL FOR THE INCOMING CONNECTION
-					protocol.config(server, socket, connection, configuration);
+					protocol.config(server, socket, configuration);
 
 					if (commands != null)
 						// REGISTER ADDITIONAL COMMANDS

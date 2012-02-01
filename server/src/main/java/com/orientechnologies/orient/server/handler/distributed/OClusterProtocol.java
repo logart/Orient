@@ -13,18 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.orientechnologies.orient.client.remote;
-
-import com.orientechnologies.orient.core.record.ORecord;
+package com.orientechnologies.orient.server.handler.distributed;
 
 /**
- * Listener Interface to get called when asynchronous events are received from the remote server.
+ * Cluster protocol. The range of requests is 80-110.
  * 
  * @author Luca Garulli (l.garulli--at--orientechnologies.com)
  * 
  */
-public interface ORemoteServerEventListener {
-	public void onRecordPulled(final ORecord<?> iRecord);
+public class OClusterProtocol {
+	public static final short	CURRENT_PROTOCOL_VERSION										= 0;
 
-	public void onClusterConfigurationChange(final byte[] clusterConfig);
+	public static final byte	REQUEST_NODE2NODE_CONNECT										= 80;
+	public static final byte	REQUEST_LEADER2PEER_CONNECT									= 81;
+	public static final byte	REQUEST_LEADER2PEER_HEARTBEAT								= 82;
+	public static final byte	REQUEST_NODE2NODE_DB_COPY										= 83;
+	public static final byte	REQUEST_NODE2NODE_REPLICATION_SYNCHRONIZE		= 84;
+	public static final byte	REQUEST_NODE2NODE_REPLICATION_RECORD_CHANGE	= 85;
+
+	public static final byte	PUSH_LEADER_AVAILABLE_DBS										= 100;
+
 }

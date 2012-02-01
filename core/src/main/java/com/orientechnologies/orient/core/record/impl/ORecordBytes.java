@@ -16,7 +16,6 @@
 package com.orientechnologies.orient.core.record.impl;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -27,6 +26,7 @@ import com.orientechnologies.orient.core.db.record.ORecordElement;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.record.ORecordAbstract;
+import com.orientechnologies.orient.core.serialization.OMemoryStream;
 import com.orientechnologies.orient.core.serialization.serializer.record.ORecordSerializerFactory;
 import com.orientechnologies.orient.core.serialization.serializer.record.ORecordSerializerRaw;
 
@@ -49,7 +49,7 @@ public class ORecordBytes extends ORecordAbstract<byte[]> {
 		ODatabaseRecordThreadLocal.INSTANCE.set(iDatabase);
 	}
 
-	public ORecordBytes(final ODatabaseRecord iDatabase, byte[] iSource) {
+	public ORecordBytes(final ODatabaseRecord iDatabase, final byte[] iSource) {
 		this(iSource);
 		ODatabaseRecordThreadLocal.INSTANCE.set(iDatabase);
 	}
@@ -97,8 +97,17 @@ public class ORecordBytes extends ORecordAbstract<byte[]> {
 		_recordFormat = ORecordSerializerFactory.instance().getFormat(ORecordSerializerRaw.NAME);
 	}
 
-	public void fromInputStream(final InputStream in) throws IOException {
-		ByteArrayOutputStream out = new ByteArrayOutputStream();
+	/**
+	 * Reads the input stream in memory. This is less efficient than {@link #fromInputStream(InputStream, int)} because allocation is
+	 * made multiple times. If you already know the input size use {@link #fromInputStream(InputStream, int)}.
+	 * 
+	 * @param in
+	 *          Input Stream, use buffered input stream wrapper to speed up reading
+	 * @return Buffer read from the stream. It's also the internal buffer size in bytes
+	 * @throws IOException
+	 */
+	public int fromInputStream(final InputStream in) throws IOException {
+		final OMemoryStream out = new OMemoryStream();
 		try {
 			while (in.available() > 0) {
 				out.write(in.read());
@@ -109,6 +118,27 @@ public class ORecordBytes extends ORecordAbstract<byte[]> {
 			out.close();
 		}
 		_size = _source.length;
+		return _size;
+	}
+
+	/**
+	 * Reads the input stream in memory specifying the maximum bytes to read. This is more efficient than
+	 * {@link #fromInputStream(InputStream)} because allocation is made only once. If input stream contains less bytes than total size
+	 * parameter, the rest of content will be empty (filled to 0)
+	 * 
+	 * @param in
+	 *          Input Stream, use buffered input stream wrapper to speed up reading
+	 * @param iMaxSize
+	 *          Maximin size to read
+	 * @return Buffer read from the stream. It's also the internal buffer size in bytes
+	 * @throws IOException
+	 */
+	public int fromInputStream(final InputStream in, final int iMaxSize) throws IOException {
+		final int bufferSize = Math.min(in.available(), iMaxSize);
+		_source = new byte[bufferSize];
+		in.read(_source);
+		_size = bufferSize;
+		return _size;
 	}
 
 	public void toOutputStream(final OutputStream out) throws IOException {

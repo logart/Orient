@@ -13,21 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.orientechnologies.orient.core.storage.fs;
-
-import java.io.IOException;
+package com.orientechnologies.orient.enterprise.channel.binary;
 
 /**
- * <br/>
+ * Listener Interface to get called when asynchronous events are received from the remote server.
+ * 
+ * @author Luca Garulli (l.garulli--at--orientechnologies.com)
+ * 
  */
-public class OFileMMapSecure extends OFileMMap {
-
-	public OFileMMapSecure(String iFileName, String iMode) throws IOException {
-		super(iFileName, iMode);
-	}
-
-	@Override
-	public void synch() {
-		headerBuffer.force();
-	}
+public interface ORemoteServerEventListener {
+	public void onRequest(final byte iRequestCode, Object obj);
 }

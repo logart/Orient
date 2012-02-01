@@ -31,7 +31,6 @@ import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.enterprise.channel.binary.OChannelBinaryClient;
 import com.orientechnologies.orient.enterprise.channel.binary.OChannelBinaryProtocol;
-import com.orientechnologies.orient.enterprise.channel.distributed.OChannelDistributedProtocol;
 
 /**
  * Remote administration class of OrientDB Server instances.
@@ -234,7 +233,7 @@ public class OServerAdmin {
 
 		try {
 
-			final OChannelBinaryClient network = storage.beginRequest(OChannelBinaryProtocol.REQUEST_DB_DELETE);
+			final OChannelBinaryClient network = storage.beginRequest(OChannelBinaryProtocol.REQUEST_DB_DROP);
 			try {
 				network.writeString(storage.getName());
 			} finally {
@@ -247,6 +246,8 @@ public class OServerAdmin {
 			OLogManager.instance().exception("Cannot delete the remote storage: " + storage.getName(), e, OStorageException.class);
 			storage.close(true);
 		}
+
+		storage.setSessionId(-1);
 
 		for (OStorage s : Orient.instance().getStorages()) {
 			if (s.getURL().startsWith(getURL())) {
@@ -267,31 +268,31 @@ public class OServerAdmin {
 	 * @param iDatabaseUserName
 	 * @param iDatabaseUserPassword
 	 * @param iRemoteName
+	 * @param iRemoteEngine
 	 * @param iSynchronousMode
 	 * @return The instance itself. Useful to execute method in chain
 	 * @throws IOException
 	 */
 	public synchronized OServerAdmin shareDatabase(final String iDatabaseName, final String iDatabaseUserName,
-			final String iDatabaseUserPassword, final String iRemoteName, final boolean iSynchronousMode) throws IOException {
+			final String iDatabaseUserPassword, final String iRemoteName, final String iRemoteEngine) throws IOException {
 		storage.checkConnection();
 
 		try {
 
-			final OChannelBinaryClient network = storage.beginRequest(OChannelDistributedProtocol.REQUEST_DISTRIBUTED_DB_SHARE_SENDER);
+			final OChannelBinaryClient network = storage.beginRequest(OChannelBinaryProtocol.REQUEST_DB_COPY);
 			try {
 				network.writeString(iDatabaseName);
 				network.writeString(iDatabaseUserName);
 				network.writeString(iDatabaseUserPassword);
 				network.writeString(iRemoteName);
-				network.writeByte((byte) (iSynchronousMode ? 1 : 0));
+				network.writeString(iRemoteEngine);
 			} finally {
 				storage.endRequest(network);
 			}
 
 			storage.getResponse(network);
 
-			OLogManager.instance().debug(this, "Database '%s' has been shared in mode '%s' with the server '%s'", iDatabaseName,
-					iSynchronousMode, iRemoteName);
+			OLogManager.instance().debug(this, "Database '%s' has been shared with the server '%s'", iDatabaseName, iRemoteName);
 
 		} catch (Exception e) {
 			OLogManager.instance().exception("Cannot share the database: " + iDatabaseName, e, OStorageException.class);

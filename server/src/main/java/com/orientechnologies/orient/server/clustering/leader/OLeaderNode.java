@@ -28,7 +28,6 @@ import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.db.record.ORecordLazyList;
 import com.orientechnologies.orient.core.record.impl.ODocument;
-import com.orientechnologies.orient.server.OClientConnectionManager;
 import com.orientechnologies.orient.server.OServerMain;
 import com.orientechnologies.orient.server.handler.distributed.ODistributedServerManager;
 
@@ -53,7 +52,7 @@ public class OLeaderNode {
 
 	public OLeaderNode(final ODistributedServerManager iManager) {
 		this.manager = iManager;
-		OLogManager.instance().warn(this, "Cluster '%s': current node is the new Leader Node", iManager.getConfig().name);
+		OLogManager.instance().warn(this, "Cluster <%s>: current node is the new Leader Node", iManager.getConfig().name);
 
 		for (String db : OServerMain.server().getAvailableStorageNames().keySet()) {
 			try {
@@ -119,12 +118,10 @@ public class OLeaderNode {
 					node = new ORemotePeer(this, serverAddress, iServerPort);
 
 				try {
-					if (!node.connect(manager.getConfig().networkTimeoutNode, manager.getConfig().name, manager.getConfig().securityKey))
-						// LEADERSHIP NOT ACCEPTED
-						return;
+					if (node.connect(manager.getConfig().networkTimeoutNode, manager.getConfig().name, manager.getConfig().securityKey))
+						// CONNECTION OK: ADD IT IN THE NODE LIST
+						nodes.put(key, node);
 
-					// CONNECTION OK: ADD IT IN THE NODE LIST
-					nodes.put(key, node);
 					return;
 
 				} catch (Exception e) {
@@ -133,8 +130,8 @@ public class OLeaderNode {
 			}
 		}
 
-		OLogManager.instance().error(this, "Cannot connect to distributed server node using addresses %s:%d and %s:%d", lastException,
-				iServerAddresses[0], iServerPort, iServerAddresses[1], iServerPort);
+		OLogManager.instance().error(this, "Cluster <%s>: cannot connect to distributed server node using addresses %s:%d and %s:%d",
+				manager.getConfig().name, lastException, iServerAddresses[0], iServerPort, iServerAddresses[1], iServerPort);
 	}
 
 	/**
@@ -144,8 +141,8 @@ public class OLeaderNode {
 		iNode.disconnect();
 
 		// ERROR
-		OLogManager.instance().warn(this, "Peer node %s:%d seems down, retrying to connect...", iNode.networkAddress,
-				iNode.networkPort);
+		OLogManager.instance()
+				.warn(this, "Peer node %s:%d seems down, retrying to connect...", iNode.networkAddress, iNode.networkPort);
 
 		// RETRY TO CONNECT
 		try {
@@ -178,6 +175,21 @@ public class OLeaderNode {
 
 			return new ArrayList<ORemotePeer>(nodes.values());
 		}
+	}
+
+	public ODocument updatePeerDatabases(final String iNodeId, final ODocument iConfiguration) throws UnknownHostException {
+		// RECEIVE AVAILABLE DATABASES
+		ODocument answer = new ODocument();
+
+		for (String dbName : iConfiguration.fieldNames()) {
+			// UPDATE LEADER'S CONFIGURATION
+			manager.getLeader().addServerInConfiguration(dbName, iNodeId, "synch");
+
+			// ANSWER WITH THE SERVER LIST THAT OWN THE REQUESTED DATABASES
+			answer.field(dbName, manager.getLeader().getClusteredConfigurationForDatabase(dbName));
+		}
+
+		return answer;
 	}
 
 	/**
@@ -232,60 +244,9 @@ public class OLeaderNode {
 		node.field("id", iNodeId);
 		node.field("mode", iReplicationMode);
 
-		broadcastClusterConfiguration(iDatabaseName);
+		manager.sendClusterConfigurationToClients(iDatabaseName, getClusteredConfigurationForDatabase(iDatabaseName));
 
 		return node;
-	}
-
-	public void broadcastClusterConfiguration(final String iDatabaseName) {
-		if (getPeerNodeList() == null && OClientConnectionManager.instance().getConnections().size() == 0)
-			return;
-
-		// GET UPDATED CONFIGURATION
-		final ODocument config = getClusteredConfigurationForDatabase(iDatabaseName);
-
-		OLogManager.instance().info(this,
-				"Broadcasting distributed configuration for database '%s' to the connected servers and clients: %s", iDatabaseName,
-				config.toJSON("attribSameRow"));
-
-		// UPDATE ALL THE NODES
-		if (getPeerNodeList() != null)
-			for (ORemotePeer node : getPeerNodeList()) {
-				if (node.getStatus() == ORemotePeer.STATUS.CONNECTED) {
-					node.sendConfiguration(config);
-				}
-			}
-
-		// // UPDATE ALL THE CLIENTS
-		// OChannelBinary ch;
-		// for (OClientConnection c : OClientConnectionManager.instance().getConnections()) {
-		// if (c.protocol.getChannel() instanceof OChannelBinary) {
-		// ch = (OChannelBinary) c.protocol.getChannel();
-		//
-		// OLogManager.instance().info(this, "Sending distributed configuration for database '%s' to the connected client %s...",
-		// iDatabaseName, ch.socket.getRemoteSocketAddress());
-		//
-		// try {
-		// ch.acquireExclusiveLock();
-		//
-		// try {
-		// ch.writeByte(OChannelBinaryProtocol.PUSH_DATA);
-		// ch.writeInt(Integer.MIN_VALUE);
-		// ch.writeByte(OChannelDistributedProtocol.PUSH_DISTRIBUTED_CONFIG);
-		//
-		// ch.writeBytes(config.toStream());
-		//
-		// } catch (IOException e) {
-		// e.printStackTrace();
-		// } finally {
-		// ch.releaseExclusiveLock();
-		// }
-		// } catch (InterruptedException e1) {
-		// OLogManager.instance().warn(this, "[broadcastClusterConfiguration] Timeout on sending configuration to remote node %s",
-		// ch.socket.getRemoteSocketAddress());
-		// }
-		// }
-		// }
 	}
 
 	public ODistributedServerManager getManager() {
@@ -311,7 +272,7 @@ public class OLeaderNode {
 			}
 		}
 
-		OLogManager.instance().warn(this, "Removed server node %s:%d from distributed cluster '%s'", iNode.networkAddress,
-				iNode.networkPort, manager.getConfig().name);
+		OLogManager.instance().warn(this, "Cluster <%s>: removed server node %s:%d", manager.getConfig().name, iNode.networkAddress,
+				iNode.networkPort);
 	}
 }

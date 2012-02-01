@@ -917,7 +917,7 @@ public class IndexTest {
 		final OIndex<?> idx = database.getMetadata().getIndexManager().getIndex("Whiz.account");
 
 		for (int i = 0; i < 5; i++) {
-			final ODocument whiz = new ODocument(database.getUnderlying(), "Whiz");
+			final ODocument whiz = new ODocument("Whiz");
 
 			whiz.field("id", i);
 			whiz.field("text", "This is a test");
@@ -937,10 +937,10 @@ public class IndexTest {
 			resDoc.delete();
 		}
 
-		final ODocument whiz = new ODocument(database.getUnderlying(), "Whiz");
+		final ODocument whiz = new ODocument("Whiz");
 		whiz.field("id", 100);
 		whiz.field("text", "This is a test!");
-		whiz.field("account", new ODocument(database.getUnderlying(), "Company").field("id", 9999));
+		whiz.field("account", new ODocument("Company").field("id", 9999));
 		whiz.save();
 
 		Assert.assertTrue(((ODocument) whiz.field("account")).getIdentity().isValid());
@@ -964,7 +964,7 @@ public class IndexTest {
 		}
 		ODocument testClassDocument = db.newInstance("TestClass");
 		testClassDocument.field("name", "Test Class 1");
-		ODocument testLinkClassDocument = new ODocument(db, "TestLinkClass");
+		ODocument testLinkClassDocument = new ODocument("TestLinkClass");
 		testLinkClassDocument.field("testString", "Test Link Class 1");
 		testLinkClassDocument.field("testBoolean", true);
 		testClassDocument.field("testLink", testLinkClassDocument);
@@ -981,32 +981,32 @@ public class IndexTest {
 		db.close();
 	}
 
-  @Test(dependsOnMethods = "linkedIndexedProperty")
-  public void testLinkedIndexedPropertyInTx() {
-    ODatabaseDocument db = new ODatabaseDocumentTx(database.getURL());
-    db.open("admin", "admin");
+	@Test(dependsOnMethods = "linkedIndexedProperty")
+	public void testLinkedIndexedPropertyInTx() {
+		ODatabaseDocument db = new ODatabaseDocumentTx(database.getURL());
+		db.open("admin", "admin");
 
-    db.begin();
-    ODocument testClassDocument = db.newInstance("TestClass");
-    testClassDocument.field("name", "Test Class 2");
-    ODocument testLinkClassDocument = new ODocument(db, "TestLinkClass");
-    testLinkClassDocument.field("testString", "Test Link Class 2");
-    testLinkClassDocument.field("testBoolean", true);
-    testClassDocument.field("testLink", testLinkClassDocument);
-    testClassDocument.save();
-    db.commit();
+		db.begin();
+		ODocument testClassDocument = db.newInstance("TestClass");
+		testClassDocument.field("name", "Test Class 2");
+		ODocument testLinkClassDocument = new ODocument("TestLinkClass");
+		testLinkClassDocument.field("testString", "Test Link Class 2");
+		testLinkClassDocument.field("testBoolean", true);
+		testClassDocument.field("testLink", testLinkClassDocument);
+		testClassDocument.save();
+		db.commit();
 
-    // THIS WILL THROW A java.lang.ClassCastException: com.orientechnologies.orient.core.id.ORecordId cannot be cast to
-    // java.lang.Boolean
-    List<ODocument> result = db.query(new OSQLSynchQuery<ODocument>("select from TestClass where testLink.testBoolean = true"));
-    Assert.assertEquals(result.size(), 2);
-    // THIS WILL THROW A java.lang.ClassCastException: com.orientechnologies.orient.core.id.ORecordId cannot be cast to
-    // java.lang.String
-    result = db.query(new OSQLSynchQuery<ODocument>("select from TestClass where testLink.testString = 'Test Link Class 2'"));
-    Assert.assertEquals(result.size(), 1);
+		// THIS WILL THROW A java.lang.ClassCastException: com.orientechnologies.orient.core.id.ORecordId cannot be cast to
+		// java.lang.Boolean
+		List<ODocument> result = db.query(new OSQLSynchQuery<ODocument>("select from TestClass where testLink.testBoolean = true"));
+		Assert.assertEquals(result.size(), 2);
+		// THIS WILL THROW A java.lang.ClassCastException: com.orientechnologies.orient.core.id.ORecordId cannot be cast to
+		// java.lang.String
+		result = db.query(new OSQLSynchQuery<ODocument>("select from TestClass where testLink.testString = 'Test Link Class 2'"));
+		Assert.assertEquals(result.size(), 1);
 
-    db.close();
-  }
+		db.close();
+	}
 
 	public void testDictionary() {
 		ODatabaseDocument db = new ODatabaseDocumentTx(database.getURL());
@@ -1018,13 +1018,56 @@ public class IndexTest {
 		pClass.createProperty("age", OType.INTEGER);
 		pClass.createIndex("testIdx", INDEX_TYPE.DICTIONARY, "firstName", "lastName");
 
-		ODocument person = new ODocument(db, "Person2");
+		ODocument person = new ODocument("Person2");
 		person.field("firstName", "foo").field("lastName", "bar").save();
 
-		person = new ODocument(db, "Person2");
+		person = new ODocument("Person2");
 		person.field("firstName", "foo").field("lastName", "bar").field("age", 32).save();
+
+    db.close();
 	}
 
+  public void testConcurrentRemoveDelete() {
+    ODatabaseDocument db = new ODatabaseDocumentTx(database.getURL());
+    db.open("admin", "admin");
+
+    if ( !db.getMetadata().getSchema().existsClass( "MyFruit" ) ) {
+      OClass fruitClass = db.getMetadata().getSchema().createClass( "MyFruit" );
+      fruitClass.createProperty( "name", OType.STRING );
+      fruitClass.createProperty( "color", OType.STRING );
+
+      db.getMetadata().getSchema().getClass( "MyFruit" ).getProperty( "name" ).createIndex( OClass.INDEX_TYPE.UNIQUE );
+
+      db.getMetadata().getSchema().getClass( "MyFruit" ).getProperty( "color" ).createIndex( OClass.INDEX_TYPE.NOTUNIQUE );
+
+      db.getMetadata().getSchema().save();
+    }
+
+    final int passCount = 10;
+    final int chunkSize = 1000;
+    for( int pass = 0; pass < passCount; pass++ ) {
+      List<ODocument> recordsToDelete = new ArrayList<ODocument>(  );
+      db.begin();
+      for( int i = 0; i < chunkSize; i++ ) {
+        ODocument d = new ODocument( "MyFruit" ).field( "name", "ABC" + pass + 'K' + i ).field( "color", "FOO"
+          + pass );
+        d.save();
+        if ( i < chunkSize / 2 ) {
+          recordsToDelete.add( d );
+        }
+      }
+      db.commit();
+
+      // do delete
+      db.begin();
+      for(final ODocument recordToDelete : recordsToDelete ) {
+        db.delete(recordToDelete );
+      }
+      db.commit();
+    }
+
+    db.close();
+  }
 
 	/*
 	 * @Test(dependsOnMethods = "linkedIndexedProperty") public void testIndexRemovalLink() { List<ODocument> result =

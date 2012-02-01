@@ -106,7 +106,7 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
 		try {
 
 			name = iName;
-			configuration = new ODocument(iDatabase);
+			configuration = new ODocument();
 
 			indexDefinition = iIndexDefinition;
 
@@ -146,7 +146,7 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
 
 			final ORID rid = (ORID) iConfig.field(CONFIG_MAP_RID, ORID.class);
 			if (rid == null)
-				return null;
+				throw new OIndexException("Error during deserialization of index definition: '" + CONFIG_MAP_RID + "' attribute is null");
 
 			configuration = iConfig;
 			name = configuration.field(OIndexInternal.CONFIG_NAME);
@@ -490,7 +490,15 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
 
 	@Override
 	public String toString() {
-		return name + " (" + (type != null ? type : "?") + ")" + (map != null ? " " + map : "");
+		if (tryAcquireExclusiveLock())
+			try {
+
+				return name + " (" + (type != null ? type : "?") + ")" + (map != null ? " " + map : "");
+
+			} finally {
+				releaseExclusiveLock();
+			}
+		return "!Locked resource";
 	}
 
 	public OIndexInternal<T> getInternal() {
@@ -688,6 +696,10 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
 	}
 
 	public void onBeforeTxRollback(final ODatabase iDatabase) {
+	}
+
+	public boolean onCorruptionRepairDatabase(final ODatabase iDatabase, final String iReason, String iWhatWillbeFixed) {
+		return false;
 	}
 
 	public void onAfterTxRollback(final ODatabase iDatabase) {

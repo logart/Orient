@@ -15,6 +15,8 @@
  */
 package com.orientechnologies.orient.test.database.auto;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -46,6 +48,30 @@ public class ComplexTypesTest {
 	}
 
 	@Test
+	public void testBigDecimal() {
+		database = ODatabaseDocumentPool.global().acquire(url, "admin", "admin");
+
+		ODocument newDoc = new ODocument();
+		newDoc.field("integer", new BigInteger("10"));
+		newDoc.field("decimal_integer", new BigDecimal(10));
+		newDoc.field("decimal_float", new BigDecimal("10.34"));
+		database.save(newDoc);
+
+		final ORID rid = newDoc.getIdentity();
+
+		database.close();
+
+		database = ODatabaseDocumentPool.global().acquire(url, "admin", "admin");
+
+		ODocument loadedDoc = database.load(rid);
+		Assert.assertEquals(loadedDoc.field("integer"), 10);
+		Assert.assertEquals(loadedDoc.field("decimal_integer"), new BigDecimal(10));
+		Assert.assertEquals(loadedDoc.field("decimal_float"), new BigDecimal("10.34"));
+
+		database.close();
+	}
+
+	@Test
 	public void testEmbeddedList() {
 		database = ODatabaseDocumentPool.global().acquire(url, "admin", "admin");
 
@@ -54,7 +80,7 @@ public class ComplexTypesTest {
 		final ArrayList<ODocument> list = new ArrayList<ODocument>();
 		newDoc.field("embeddedList", list, OType.EMBEDDEDLIST);
 		list.add(new ODocument().field("name", "Luca"));
-		list.add(new ODocument(database, "Account").field("name", "Marcus"));
+		list.add(new ODocument("Account").field("name", "Marcus"));
 
 		database.save(newDoc);
 		final ORID rid = newDoc.getIdentity();
@@ -86,7 +112,7 @@ public class ComplexTypesTest {
 		final ArrayList<ODocument> list = new ArrayList<ODocument>();
 		newDoc.field("linkedList", list, OType.LINKLIST);
 		list.add(new ODocument().field("name", "Luca"));
-		list.add(new ODocument(database, "Account").field("name", "Marcus"));
+		list.add(new ODocument("Account").field("name", "Marcus"));
 
 		database.save(newDoc);
 		final ORID rid = newDoc.getIdentity();
@@ -119,7 +145,7 @@ public class ComplexTypesTest {
 		final Set<ODocument> set = new HashSet<ODocument>();
 		newDoc.field("embeddedSet", set, OType.EMBEDDEDSET);
 		set.add(new ODocument().field("name", "Luca"));
-		set.add(new ODocument(database, "Account").field("name", "Marcus"));
+		set.add(new ODocument("Account").field("name", "Marcus"));
 
 		database.save(newDoc);
 		final ORID rid = newDoc.getIdentity();
@@ -159,7 +185,7 @@ public class ComplexTypesTest {
 		final Set<ODocument> set = new HashSet<ODocument>();
 		newDoc.field("linkedSet", set, OType.LINKSET);
 		set.add(new ODocument().field("name", "Luca"));
-		set.add(new ODocument(database, "Account").field("name", "Marcus"));
+		set.add(new ODocument("Account").field("name", "Marcus"));
 
 		database.save(newDoc);
 		final ORID rid = newDoc.getIdentity();
@@ -200,7 +226,7 @@ public class ComplexTypesTest {
 		newDoc.field("embeddedMap", map, OType.EMBEDDEDMAP);
 		map.put("Luca", new ODocument().field("name", "Luca"));
 		map.put("Marcus", new ODocument().field("name", "Marcus"));
-		map.put("Cesare", new ODocument(database, "Account").field("name", "Cesare"));
+		map.put("Cesare", new ODocument("Account").field("name", "Cesare"));
 
 		database.save(newDoc);
 		final ORID rid = newDoc.getIdentity();
@@ -264,7 +290,7 @@ public class ComplexTypesTest {
 		newDoc.field("linkedMap", map, OType.LINKMAP);
 		map.put("Luca", new ODocument().field("name", "Luca"));
 		map.put("Marcus", new ODocument().field("name", "Marcus"));
-		map.put("Cesare", new ODocument(database, "Account").field("name", "Cesare"));
+		map.put("Cesare", new ODocument("Account").field("name", "Cesare"));
 
 		database.save(newDoc);
 		final ORID rid = newDoc.getIdentity();

@@ -97,6 +97,8 @@ public class CRUDDocumentPhysicalTest {
 
 		base64 = OBase64Utils.encodeBytes(binary);
 
+		final int accountClusterId = database.getClusterIdByName("Account");
+
 		for (long i = startRecordNumber; i < startRecordNumber + TOT_RECORDS; ++i) {
 			record.reset();
 
@@ -111,6 +113,7 @@ public class CRUDDocumentPhysicalTest {
 			record.field("value", (byte) 10);
 
 			record.save("Account");
+			Assert.assertEquals(record.getIdentity().getClusterId(), accountClusterId);
 		}
 
 		database.close();
@@ -205,6 +208,8 @@ public class CRUDDocumentPhysicalTest {
 		vDoc.setClassName("Profile");
 		vDoc.field("nick", "JayM1").field("name", "Jay").field("surname", "Miner");
 		vDoc.save();
+
+		Assert.assertEquals(vDoc.getIdentity().getClusterId(), vDoc.getSchemaClass().getDefaultClusterId());
 
 		vDoc = database.load(vDoc.getIdentity());
 		vDoc.field("nick", "JayM2");
@@ -331,7 +336,7 @@ public class CRUDDocumentPhysicalTest {
 	@SuppressWarnings("unchecked")
 	@Test
 	public void testNestedEmbeddedMap() {
-		ODocument newDoc = new ODocument(database);
+		ODocument newDoc = new ODocument();
 
 		final Map<String, HashMap<?, ?>> map1 = new HashMap<String, HashMap<?, ?>>();
 		newDoc.field("map1", map1, OType.EMBEDDEDMAP);
@@ -451,7 +456,7 @@ public class CRUDDocumentPhysicalTest {
 	// public void testTransientField() {
 	// database = ODatabaseDocumentPool.global().acquire(url, "admin", "admin");
 	//
-	// ODocument doc = new ODocument(database, "Profile");
+	// ODocument doc = new ODocument( "Profile");
 	// doc.field("nick", "LucaPhotoTest");
 	// doc.field("photo", "testPhoto"); // THIS IS DECLARED TRANSIENT IN SCHEMA (see SchemaTest.java)
 	// doc.save();
@@ -602,7 +607,7 @@ public class CRUDDocumentPhysicalTest {
 	public void testEncoding() {
 		String s = " \r\n\t:;,.|+*/\\=!?[]()'\"";
 
-		ODocument doc = new ODocument(database);
+		ODocument doc = new ODocument();
 		doc.field("test", s);
 		doc.unpin();
 		doc.save();
@@ -615,7 +620,7 @@ public class CRUDDocumentPhysicalTest {
 	public void polymorphicQuery() {
 		database = ODatabaseDocumentPool.global().acquire(url, "admin", "admin");
 
-		final ORecordAbstract<Object> newAccount = new ODocument(database, "Account").field("name", "testInheritanceName").save();
+		final ORecordAbstract<Object> newAccount = new ODocument("Account").field("name", "testInheritanceName").save();
 
 		List<ODocument> superClassResult = database.query(new OSQLSynchQuery<ODocument>("select from Account"));
 		List<ODocument> subClassResult = database.query(new OSQLSynchQuery<ODocument>("select from Company"));
@@ -644,7 +649,7 @@ public class CRUDDocumentPhysicalTest {
 	public void nonPolymorphicQuery() {
 		database = ODatabaseDocumentPool.global().acquire(url, "admin", "admin");
 
-		final ORecordAbstract<Object> newAccount = new ODocument(database, "Account").field("name", "testInheritanceName").save();
+		final ORecordAbstract<Object> newAccount = new ODocument("Account").field("name", "testInheritanceName").save();
 
 		List<ODocument> superClassResult = database
 				.query(new OSQLSynchQuery<ODocument>("select from Account where @class = 'Account'"));

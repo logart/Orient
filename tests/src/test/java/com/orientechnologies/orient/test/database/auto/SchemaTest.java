@@ -22,6 +22,7 @@ import org.testng.annotations.Parameters;
 import org.testng.annotations.Test;
 
 import com.orientechnologies.orient.client.db.ODatabaseHelper;
+import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.record.ODatabaseFlat;
 import com.orientechnologies.orient.core.exception.OSchemaException;
 import com.orientechnologies.orient.core.exception.OValidationException;
@@ -83,6 +84,11 @@ public class SchemaTest {
 		whiz.createProperty("date", OType.DATE).setMin("2010-01-01");
 		whiz.createProperty("text", OType.STRING).setMandatory(true).setMin("1").setMax("140").createIndex(OClass.INDEX_TYPE.FULLTEXT);
 		whiz.createProperty("replyTo", OType.LINK, account);
+
+		OClass strictTest = database.getMetadata().getSchema().createClass("StrictTest");
+		strictTest.setStrictMode(true);
+		strictTest.createProperty("id", OType.INTEGER).isMandatory();
+		strictTest.createProperty("name", OType.STRING);
 
 		database.close();
 	}
@@ -181,7 +187,8 @@ public class SchemaTest {
 		Thread thread = new Thread(new Runnable() {
 
 			public void run() {
-				ODocument doc = new ODocument(database, "NewClass");
+				ODatabaseRecordThreadLocal.INSTANCE.set(database);
+				ODocument doc = new ODocument("NewClass");
 				database.save(doc);
 
 				doc.delete();
