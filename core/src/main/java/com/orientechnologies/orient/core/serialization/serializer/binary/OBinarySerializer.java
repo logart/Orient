@@ -25,7 +25,7 @@ public class OBinarySerializer implements OPartialRecordSerializer {
         }
 
         final ODocument doc = (ODocument) iRecord;
-        final OMetadata metadata = OMetadata.createFromBytes(iSource);
+        final OBinarySerializationMetadata metadata = OBinarySerializationMetadata.createFromBytes(iSource);
         doc.setMetadata(metadata);
         doc.setClassName(metadata.getDocumentClassName());
 
@@ -41,7 +41,7 @@ public class OBinarySerializer implements OPartialRecordSerializer {
         final ObjectSerializerFactory osf = ObjectSerializerFactory.INSTANCE;
 
         final ODocument doc = (ODocument) iRecord;
-        final OMetadata metadata = doc.getMetadata();
+        final OBinarySerializationMetadata metadata = doc.getMetadata();
 
         //obtain metadata size for using as offset
         final int metadataOffset = metadata.getMetaSize();
@@ -68,7 +68,7 @@ public class OBinarySerializer implements OPartialRecordSerializer {
 
         if (doc.getPureSource() == null || doc.getPureSource().length == 0) {
             //object has not been serialized ever before
-            final OMetadata metadata = OMetadata.createFromDocument(doc);
+            final OBinarySerializationMetadata metadata = OBinarySerializationMetadata.createFromDocument(doc);
             final int metadataSize = metadata.getMetaSize();
             final byte[] stream = new byte[metadataSize + metadata.getDataSize()];
             metadata.toBytes(stream);
@@ -91,8 +91,8 @@ public class OBinarySerializer implements OPartialRecordSerializer {
             return doc.getPureSource();
         } else {
             //object has been serialized before and has been changed after
-            final OMetadata oldMetadata = doc.getMetadata();
-            final OMetadata newMetadata = OMetadata.createFromDocument(doc);
+            final OBinarySerializationMetadata oldMetadata = doc.getMetadata();
+            final OBinarySerializationMetadata newMetadata = OBinarySerializationMetadata.createFromDocument(doc);
             final int metadataSize = newMetadata.getMetaSize();
             final byte[] stream = new byte[metadataSize + newMetadata.getDataSize()];
             final byte[] oldStream = doc.getPureSource();

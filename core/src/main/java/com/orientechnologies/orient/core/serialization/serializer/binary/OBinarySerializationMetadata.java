@@ -22,7 +22,7 @@ import java.util.Set;
  *
  * @author <a href="mailto:gmandnepr@gmail.com">Evgeniy Degtiarenko</a>
  */
-public class OMetadata {
+public class OBinarySerializationMetadata {
 
     /**
      * Contains size that is required for serializing metadata
@@ -50,7 +50,7 @@ public class OMetadata {
      * @param documentClassName is the document class name (may be null)
      * @param fieldOffsets is the fields offset in stream
      */
-    public OMetadata(final int metaSize, final int dataSize, final String documentClassName, final Map<String, Integer> fieldOffsets) {
+    public OBinarySerializationMetadata(final int metaSize, final int dataSize, final String documentClassName, final Map<String, Integer> fieldOffsets) {
         this.documentClassName = documentClassName;
         this.fieldOffsets.putAll(fieldOffsets);
         this.dataSize = dataSize;
@@ -141,7 +141,7 @@ public class OMetadata {
      *
      * @param source is the stream to create metadata from
      */
-    public static OMetadata createFromBytes(final byte[] source) {
+    public static OBinarySerializationMetadata createFromBytes(final byte[] source) {
         final ObjectSerializerFactory osf = ObjectSerializerFactory.INSTANCE;
         final ObjectSerializer<Object> indexSerializer = osf.getObjectSerializer(OType.INTEGER);
 
@@ -179,13 +179,13 @@ public class OMetadata {
             }
         }
 
-        return new OMetadata(metaSize, dataSize, documentClassName, fieldOffsets);
+        return new OBinarySerializationMetadata(metaSize, dataSize, documentClassName, fieldOffsets);
     }
 
     /**
      * Create metadata for the document
      */
-    public static OMetadata createFromDocument(final ODocument doc) {
+    public static OBinarySerializationMetadata createFromDocument(final ODocument doc) {
         final ObjectSerializerFactory osf = ObjectSerializerFactory.INSTANCE;
         final int typeIdentifierSize = ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE;
 
@@ -203,7 +203,7 @@ public class OMetadata {
         }
 
         //TODO put real metadata size when it will be possible
-        return new OMetadata(-1, position, doc.getClassName(), fieldsOffsets);
+        return new OBinarySerializationMetadata(-1, position, doc.getClassName(), fieldsOffsets);
     }
 
     private int countMetadataSize() {
