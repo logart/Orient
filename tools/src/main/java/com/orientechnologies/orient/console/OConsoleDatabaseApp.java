@@ -27,6 +27,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Scanner;
 import java.util.Set;
 
 import com.orientechnologies.common.console.TTYConsoleReader;
@@ -169,6 +170,8 @@ public class OConsoleDatabaseApp extends OrientConsole implements OCommandOutput
 			currentDatabase = new ODatabaseDocumentTx(iURL);
 			if (currentDatabase == null)
 				throw new OException("Database " + iURL + " not found");
+
+			currentDatabase.registerListener(new OConsoleDatabaseListener(this));
 			currentDatabase.open(iUserName, iUserPassword);
 
 			currentDatabaseName = currentDatabase.getName();
@@ -994,17 +997,16 @@ public class OConsoleDatabaseApp extends OrientConsole implements OCommandOutput
 			@ConsoleParameter(name = "db-user", description = "Database user") final String iDatabaseUserName,
 			@ConsoleParameter(name = "db-password", description = "Database password") String iDatabaseUserPassword,
 			@ConsoleParameter(name = "server-name", description = "Remote server's name as <address>:<port>") final String iRemoteName,
-			@ConsoleParameter(name = "mode", description = "replication mode: 'synch' or 'asynch'") final String iMode)
+			@ConsoleParameter(name = "engine-name", description = "Remote server's engine to use between 'local' or 'memory'") final String iRemoteEngine)
 			throws IOException {
 
 		try {
 			if (serverAdmin == null)
 				throw new IllegalStateException("You must be connected to a remote server to share a database");
 
-			serverAdmin.shareDatabase(iDatabaseName, iDatabaseUserName, iDatabaseUserPassword, iRemoteName,
-					iMode.equalsIgnoreCase("synch"));
+			serverAdmin.shareDatabase(iDatabaseName, iDatabaseUserName, iDatabaseUserPassword, iRemoteName, iRemoteEngine);
 
-			out.println("Database '" + iDatabaseName + "' has been shared in '" + iMode + "' mode with the server '" + iRemoteName + "'");
+			out.println("Database '" + iDatabaseName + "' has been shared with the server '" + iRemoteName + "'");
 
 		} catch (Exception e) {
 			printError(e);
@@ -1431,7 +1433,15 @@ public class OConsoleDatabaseApp extends OrientConsole implements OCommandOutput
 		out.println();
 	}
 
-	public void onMessage(String iText) {
+	public String ask(final String iText) {
+		out.print(iText);
+		final Scanner scanner = new Scanner(in);
+		final String answer = scanner.nextLine();
+		scanner.close();
+		return answer;
+	}
+
+	public void onMessage(final String iText) {
 		out.print(iText);
 	}
 

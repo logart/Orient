@@ -19,14 +19,15 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
-import com.orientechnologies.common.io.OIOException;
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.exception.OConfigurationException;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.enterprise.channel.binary.OChannelBinary;
 import com.orientechnologies.orient.enterprise.channel.binary.OChannelBinaryProtocol;
 import com.orientechnologies.orient.server.OClientConnection;
+import com.orientechnologies.orient.server.OClientConnectionManager;
 import com.orientechnologies.orient.server.OServer;
+import com.orientechnologies.orient.server.clustering.OClusterNetworkProtocol;
 import com.orientechnologies.orient.server.clustering.ODiscoverySignaler;
 import com.orientechnologies.orient.server.clustering.leader.ODiscoveryListener;
 import com.orientechnologies.orient.server.clustering.leader.OLeaderNode;
@@ -34,7 +35,6 @@ import com.orientechnologies.orient.server.clustering.peer.OPeerNode;
 import com.orientechnologies.orient.server.config.OServerParameterConfiguration;
 import com.orientechnologies.orient.server.handler.OServerHandlerAbstract;
 import com.orientechnologies.orient.server.network.OServerNetworkListener;
-import com.orientechnologies.orient.server.network.protocol.distributed.ONetworkProtocolDistributed;
 import com.orientechnologies.orient.server.replication.ODistributedException;
 import com.orientechnologies.orient.server.replication.OReplicator;
 
@@ -107,7 +107,7 @@ public class ODistributedServerManager extends OServerHandlerAbstract {
 		discoverySignaler = new ODiscoverySignaler(this, distributedNetworkListener);
 	}
 
-	public void becomePeer() {
+	public void becomePeer(final OClusterNetworkProtocol iConnection) {
 		synchronized (this) {
 
 			if (discoverySignaler != null) {
@@ -121,7 +121,7 @@ public class ODistributedServerManager extends OServerHandlerAbstract {
 			}
 
 			if (peer == null)
-				peer = new OPeerNode(this);
+				peer = new OPeerNode(this, iConnection);
 		}
 	}
 
@@ -130,6 +130,9 @@ public class ODistributedServerManager extends OServerHandlerAbstract {
 	 * 
 	 */
 	public void becameLeader() {
+		if (id.equals("192.168.1.100:2425"))
+			return;
+
 		synchronized (this) {
 
 			if (peer != null) {
@@ -144,23 +147,6 @@ public class ODistributedServerManager extends OServerHandlerAbstract {
 		}
 	}
 
-	@Override
-	public void onAfterClientRequest(final OClientConnection iConnection, final byte iRequestType) {
-		if (iRequestType == OChannelBinaryProtocol.REQUEST_DB_OPEN)
-			try {
-				final ODocument clusterConfig = null;// getClusteredConfigurationForDatabase(iConnection.database.getName());
-				byte[] serializedDocument = clusterConfig != null ? clusterConfig.toStream() : null;
-				((OChannelBinary) iConnection.protocol.getChannel()).writeBytes(serializedDocument);
-			} catch (IOException e) {
-				throw new OIOException("Error on marshalling of cluster configuration", e);
-			}
-	}
-
-	@Override
-	public void onClientError(final OClientConnection iConnection, final Throwable iThrowable) {
-		// handleNodeFailure(node);
-	}
-
 	/**
 	 * Parse parameters and configure services.
 	 */
@@ -173,7 +159,7 @@ public class ODistributedServerManager extends OServerHandlerAbstract {
 			if (status == STATUS.DISABLED)
 				return;
 
-			distributedNetworkListener = server.getListenerByProtocol(ONetworkProtocolDistributed.class);
+			distributedNetworkListener = server.getListenerByProtocol(OClusterNetworkProtocol.class);
 			if (distributedNetworkListener == null)
 				OLogManager.instance().error(this,
 						"Cannot find a configured network listener with 'distributed' protocol. Cannot start distributed node", null,
@@ -260,5 +246,33 @@ public class ODistributedServerManager extends OServerHandlerAbstract {
 
 	public OReplicator getReplicator() {
 		return replicator;
+	}
+
+	public void sendClusterConfigurationToClients(final String iDatabaseName, final ODocument config) {
+		for (OClientConnection c : OClientConnectionManager.instance().getConnections()) {
+			if (c != null && c.database != null && iDatabaseName.equals(c.database.getName())
+					&& c.protocol.getChannel() instanceof OChannelBinary) {
+				OChannelBinary ch = (OChannelBinary) c.protocol.getChannel();
+
+				OLogManager.instance().info(this,
+						"Cluster <%s>: pushing distributed configuration for database '%s' to the connected client %s...", getConfig().name,
+						iDatabaseName, ch.socket.getRemoteSocketAddress());
+
+				ch.acquireExclusiveLock();
+
+				try {
+					ch.writeByte(OChannelBinaryProtocol.PUSH_DATA);
+					ch.writeInt(Integer.MIN_VALUE);
+					ch.writeByte(OChannelBinaryProtocol.PUSH_NODE2CLIENT_DB_CONFIG);
+
+					ch.writeBytes(config.toStream());
+
+				} catch (IOException e) {
+					e.printStackTrace();
+				} finally {
+					ch.releaseExclusiveLock();
+				}
+			}
+		}
 	}
 }

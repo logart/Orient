@@ -63,7 +63,6 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 	protected OSchemaShared									owner;
 	protected String												name;
 	protected Class<?>											javaClass;
-	protected int														fixedSize		= 0;
 	protected final Map<String, OProperty>	properties	= new HashMap<String, OProperty>();
 
 	protected int[]													clusterIds;
@@ -73,6 +72,7 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 	protected List<OClass>									baseClasses;
 	protected float													overSize		= 0f;
 	protected String												shortName;
+	protected boolean												strictMode	= false;														// @SINCE v1.0rc8
 
 	/**
 	 * Constructor used in unmarshalling.
@@ -84,7 +84,7 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 	 * Constructor used in unmarshalling.
 	 */
 	protected OClassImpl(final OSchemaShared iOwner) {
-		document = new ODocument(getDatabase());
+		document = new ODocument();
 		owner = iOwner;
 	}
 
@@ -280,10 +280,6 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 		return addProperty(iPropertyName, iType, iLinkedType, null);
 	}
 
-	public int fixedSize() {
-		return fixedSize;
-	}
-
 	public boolean existsProperty(final String iPropertyName) {
 		return properties.containsKey(iPropertyName.toLowerCase());
 	}
@@ -315,8 +311,6 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 
 		if (prop == null)
 			throw new OSchemaException("Property '" + iPropertyName + "' not found in class " + name + "'");
-
-		fixedSize -= prop.getType().size;
 	}
 
 	public OProperty addProperty(final String iPropertyName, final OType iType, final OType iLinkedType, final OClass iLinkedClass) {
@@ -362,6 +356,8 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 		name = document.field("name");
 		shortName = document.field("shortName");
 		defaultClusterId = (Integer) document.field("defaultClusterId");
+		if (document.containsField("strictMode"))
+			strictMode = (Boolean) document.field("strictMode");
 
 		if (document.field("overSize") != null)
 			overSize = (Float) document.field("overSize");
@@ -400,6 +396,7 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 			document.field("defaultClusterId", defaultClusterId);
 			document.field("clusterIds", clusterIds);
 			document.field("overSize", overSize);
+			document.field("strictMode", strictMode);
 
 			final Set<ODocument> props = new HashSet<ODocument>();
 			for (final OProperty p : properties.values()) {
@@ -538,6 +535,23 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 		this.overSize = overSize;
 	}
 
+	public boolean isStrictMode() {
+		return strictMode;
+	}
+
+	public OClass setStrictMode(final boolean iStrict) {
+		getDatabase().checkSecurity(ODatabaseSecurityResources.SCHEMA, ORole.PERMISSION_UPDATE);
+		final String cmd = String.format("alter class %s strictmode %s", name, iStrict);
+		getDatabase().command(new OCommandSQL(cmd)).execute();
+		setStrictModeInternal(iStrict);
+		return this;
+	}
+
+	public void setStrictModeInternal(final boolean iStrict) {
+		getDatabase().checkSecurity(ODatabaseSecurityResources.SCHEMA, ORole.PERMISSION_UPDATE);
+		this.strictMode = iStrict;
+	}
+
 	@Override
 	public String toString() {
 		return name;
@@ -659,6 +673,8 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 			return getSuperClass();
 		case OVERSIZE:
 			return getOverSize();
+		case STRICTMODE:
+			return isStrictMode();
 		}
 
 		throw new IllegalArgumentException("Cannot find attribute '" + iAttribute + "'");
@@ -683,6 +699,9 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 		case OVERSIZE:
 			setOverSizeInternal(Float.parseFloat(stringValue.replace(',', '.')));
 			break;
+		case STRICTMODE:
+			setStrictModeInternal(Boolean.parseBoolean(stringValue));
+			break;
 		}
 
 		saveInternal();
@@ -706,6 +725,9 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 			break;
 		case OVERSIZE:
 			setOverSize(Float.parseFloat(stringValue));
+			break;
+		case STRICTMODE:
+			setStrictMode(Boolean.parseBoolean(stringValue));
 			break;
 		}
 		return this;
@@ -750,7 +772,6 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 		final OPropertyImpl prop = new OPropertyImpl(this, iName, iType);
 
 		properties.put(lowerName, prop);
-		fixedSize += iType.size;
 
 		if (iLinkedType != null)
 			prop.setLinkedTypeInternal(iLinkedType);
@@ -783,7 +804,7 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 		final List<String> fieldsToIndex = new LinkedList<String>();
 
 		for (final String fieldToIndex : fields) {
-			final String fieldName = extractFieldName( fieldToIndex );
+			final String fieldName = extractFieldName(fieldToIndex);
 			if (!existingFieldNames.contains(fieldName.toLowerCase()))
 				throw new OIndexException("Index with name : '" + iName + "' cannot be created on class : '" + name + "' because field: '"
 						+ fieldName + "' is absent in class definition.");
@@ -793,10 +814,9 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 
 		final OIndexDefinition indexDefinition;
 		if (fieldsToIndex.size() == 1) {
-      indexDefinition = createSingleFieldIndexDefinition(fields[0] );
-    }
-		else {
-      indexDefinition = createMultipleFieldIndexDefinition( fieldsToIndex );
+			indexDefinition = createSingleFieldIndexDefinition(fields[0]);
+		} else {
+			indexDefinition = createMultipleFieldIndexDefinition(fieldsToIndex);
 		}
 
 		final OIndex<?> index = getDatabase().getMetadata().getIndexManager()
@@ -804,72 +824,69 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 		return index;
 	}
 
-  private OIndexDefinition createMultipleFieldIndexDefinition( final List<String> fieldsToIndex )
-  {
-    final OIndexDefinition indexDefinition;
-    final OCompositeIndexDefinition compositeIndex = new OCompositeIndexDefinition(name);
+	private OIndexDefinition createMultipleFieldIndexDefinition(final List<String> fieldsToIndex) {
+		final OIndexDefinition indexDefinition;
+		final OCompositeIndexDefinition compositeIndex = new OCompositeIndexDefinition(name);
 
-    for (final String fieldName : fieldsToIndex) {
-      final OProperty propertyToIndex = properties.get(fieldName.toLowerCase());
-      final OType propertyType = propertyToIndex.getType();
-      if (propertyType.equals(OType.EMBEDDEDLIST) || propertyType.equals(OType.EMBEDDEDSET) || propertyType.equals(OType.LINKSET)
-          || propertyType.equals(OType.LINKSET) || propertyType.equals( OType.EMBEDDEDMAP ) || propertyType.equals( OType.LINKMAP ))
-        throw new OIndexException("Collections are not supported in composite indexes");
+		for (final String fieldName : fieldsToIndex) {
+			final OProperty propertyToIndex = properties.get(fieldName.toLowerCase());
+			final OType propertyType = propertyToIndex.getType();
+			if (propertyType.equals(OType.EMBEDDEDLIST) || propertyType.equals(OType.EMBEDDEDSET) || propertyType.equals(OType.LINKSET)
+					|| propertyType.equals(OType.LINKSET) || propertyType.equals(OType.EMBEDDEDMAP) || propertyType.equals(OType.LINKMAP))
+				throw new OIndexException("Collections are not supported in composite indexes");
 
-      final OPropertyIndexDefinition propertyIndex = new OPropertyIndexDefinition(name, propertyToIndex.getName(), propertyType);
-      compositeIndex.addIndex(propertyIndex);
-    }
+			final OPropertyIndexDefinition propertyIndex = new OPropertyIndexDefinition(name, propertyToIndex.getName(), propertyType);
+			compositeIndex.addIndex(propertyIndex);
+		}
 
-    indexDefinition = compositeIndex;
-    return indexDefinition;
-  }
+		indexDefinition = compositeIndex;
+		return indexDefinition;
+	}
 
-  private OIndexDefinition createSingleFieldIndexDefinition( final String field )
-  {
-    final String fieldName = extractFieldName( field );
-    final OIndexDefinition indexDefinition;
- 
-    final OProperty propertyToIndex = properties.get(fieldName.toLowerCase());
-    final OType propertyToIndexType = propertyToIndex.getType();
-    final OType indexType;
+	private OIndexDefinition createSingleFieldIndexDefinition(final String field) {
+		final String fieldName = extractFieldName(field);
+		final OIndexDefinition indexDefinition;
 
-    if( propertyToIndexType == OType.EMBEDDEDMAP || propertyToIndexType == OType.LINKMAP) {
-      final OPropertyMapIndexDefinition.INDEX_BY indexBy = extractMapIndexSpecifier( field );
+		final OProperty propertyToIndex = properties.get(fieldName.toLowerCase());
+		final OType propertyToIndexType = propertyToIndex.getType();
+		final OType indexType;
 
-      if(indexBy.equals( OPropertyMapIndexDefinition.INDEX_BY.KEY ))
-        indexType = OType.STRING;
-      else {
-        if ( propertyToIndexType == OType.LINKMAP)
-          indexType = OType.LINK;
-        else {
-          indexType = propertyToIndex.getLinkedType();
-          if(indexType == null)
-            throw new OIndexException("Linked type was not provided." +
-                    " You should provide linked type for embedded collections that are going to be indexed.");
-        }
-          
-      }
+		if (propertyToIndexType == OType.EMBEDDEDMAP || propertyToIndexType == OType.LINKMAP) {
+			final OPropertyMapIndexDefinition.INDEX_BY indexBy = extractMapIndexSpecifier(field);
 
-      indexDefinition = new OPropertyMapIndexDefinition(name, propertyToIndex.getName(), indexType, indexBy);
-    } else if ( propertyToIndexType.equals( OType.EMBEDDEDLIST ) || propertyToIndexType.equals( OType.EMBEDDEDSET ) ||
-      propertyToIndexType.equals( OType.LINKLIST ) || propertyToIndexType.equals( OType.LINKSET )) {
-      if(propertyToIndexType.equals( OType.LINKLIST ) || propertyToIndexType.equals( OType.LINKSET ))
-        indexType = OType.LINK;
-      else  {
-        indexType = propertyToIndex.getLinkedType();
-        if(indexType == null)
-          throw new OIndexException("Linked type was not provided." +
-                  " You should provide linked type for embedded collections that are going to be indexed.");
-      }
+			if (indexBy.equals(OPropertyMapIndexDefinition.INDEX_BY.KEY))
+				indexType = OType.STRING;
+			else {
+				if (propertyToIndexType == OType.LINKMAP)
+					indexType = OType.LINK;
+				else {
+					indexType = propertyToIndex.getLinkedType();
+					if (indexType == null)
+						throw new OIndexException("Linked type was not provided."
+								+ " You should provide linked type for embedded collections that are going to be indexed.");
+				}
 
-      
-      indexDefinition = new OPropertyListIndexDefinition(name, propertyToIndex.getName(), indexType);
-    } else 
-      indexDefinition = new OPropertyIndexDefinition( name, propertyToIndex.getName(), propertyToIndexType );
-    return indexDefinition;
-  }
+			}
 
-  public boolean areIndexed(final String... fields) {
+			indexDefinition = new OPropertyMapIndexDefinition(name, propertyToIndex.getName(), indexType, indexBy);
+		} else if (propertyToIndexType.equals(OType.EMBEDDEDLIST) || propertyToIndexType.equals(OType.EMBEDDEDSET)
+				|| propertyToIndexType.equals(OType.LINKLIST) || propertyToIndexType.equals(OType.LINKSET)) {
+			if (propertyToIndexType.equals(OType.LINKLIST) || propertyToIndexType.equals(OType.LINKSET))
+				indexType = OType.LINK;
+			else {
+				indexType = propertyToIndex.getLinkedType();
+				if (indexType == null)
+					throw new OIndexException("Linked type was not provided."
+							+ " You should provide linked type for embedded collections that are going to be indexed.");
+			}
+
+			indexDefinition = new OPropertyListIndexDefinition(name, propertyToIndex.getName(), indexType);
+		} else
+			indexDefinition = new OPropertyIndexDefinition(name, propertyToIndex.getName(), propertyToIndexType);
+		return indexDefinition;
+	}
+
+	public boolean areIndexed(final String... fields) {
 		return areIndexed(Arrays.asList(fields));
 	}
 
@@ -929,40 +946,44 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 		return result;
 	}
 
-  private String extractFieldName(final String fieldName) {
-    String[] fieldNameParts = fieldName.split( "\\s+" );
-    if(fieldNameParts.length == 1)
-      return fieldName;
-    if(fieldNameParts.length == 3)
-      return fieldNameParts[0];
+	private String extractFieldName(final String fieldName) {
+		String[] fieldNameParts = fieldName.split("\\s+");
+		if (fieldNameParts.length == 1)
+			return fieldName;
+		if (fieldNameParts.length == 3)
+			return fieldNameParts[0];
 
-    throw new IllegalArgumentException( "Illegal field name format, should be '<property> [by key|value]' but was '" + fieldName + "'" );
-  }
+		throw new IllegalArgumentException("Illegal field name format, should be '<property> [by key|value]' but was '" + fieldName
+				+ "'");
+	}
 
-  private OPropertyMapIndexDefinition.INDEX_BY extractMapIndexSpecifier(final String fieldName) {
-    String[] fieldNameParts = fieldName.split( "\\s+" );
-    if(fieldNameParts.length == 1)
-      return OPropertyMapIndexDefinition.INDEX_BY.KEY;
+	private OPropertyMapIndexDefinition.INDEX_BY extractMapIndexSpecifier(final String fieldName) {
+		String[] fieldNameParts = fieldName.split("\\s+");
+		if (fieldNameParts.length == 1)
+			return OPropertyMapIndexDefinition.INDEX_BY.KEY;
 
-    if(fieldNameParts.length == 3) {
-      if("by".equals(fieldNameParts[1].toLowerCase()))
-        try{
-          return OPropertyMapIndexDefinition.INDEX_BY.valueOf( fieldNameParts[2].toUpperCase() );
-        } catch( IllegalArgumentException iae ) {
-          throw new IllegalArgumentException( "Illegal field name format, should be '<property> [by key|value]' but was '" + fieldName + "'");
-        }
-    }
+		if (fieldNameParts.length == 3) {
+			if ("by".equals(fieldNameParts[1].toLowerCase()))
+				try {
+					return OPropertyMapIndexDefinition.INDEX_BY.valueOf(fieldNameParts[2].toUpperCase());
+				} catch (IllegalArgumentException iae) {
+					throw new IllegalArgumentException("Illegal field name format, should be '<property> [by key|value]' but was '"
+							+ fieldName + "'");
+				}
+		}
 
-    throw new IllegalArgumentException( "Illegal field name format, should be '<property> [by key|value]' but was '" + fieldName + "'" );
-  }
+		throw new IllegalArgumentException("Illegal field name format, should be '<property> [by key|value]' but was '" + fieldName
+				+ "'");
+	}
 
 	private void setPolymorphicClusterIds(final int[] iClusterIds) {
 		polymorphicClusterIds = iClusterIds;
 		Arrays.sort(polymorphicClusterIds);
 	}
 
-	private void setClusterIds(final int[] iClusterIds) {
+	private OClass setClusterIds(final int[] iClusterIds) {
 		clusterIds = iClusterIds;
 		Arrays.sort(clusterIds);
+		return this;
 	}
 }

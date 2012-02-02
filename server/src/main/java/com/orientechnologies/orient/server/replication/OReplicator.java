@@ -25,7 +25,6 @@ import java.util.Set;
 
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.common.parser.OSystemVariableResolver;
-import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.db.record.ORecordOperation;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.record.impl.ODocument;
@@ -75,7 +74,6 @@ public class OReplicator {
 		manager = iManager;
 		trigger = new OReplicatorRecordHook(this);
 		replicatorUser = OServerMain.server().getConfiguration().getUser(ODistributedServerConfiguration.REPLICATOR_USER);
-		Orient.instance().registerEngine(new ODistributedEngine(this));
 
 		final String conflictResolvertStrategy = iManager.getConfig().replicationConflictResolverConfig.get("strategy");
 		try {
@@ -92,7 +90,7 @@ public class OReplicator {
 	}
 
 	/**
-	 * Updates the distributed configuration and reconnect to new servers.
+	 * Updates the distributed configuration and connects to new servers if needed.
 	 * 
 	 * @param iDocument
 	 *          Configuration as JSON document
@@ -104,62 +102,42 @@ public class OReplicator {
 		// OPEN CONNECTIONS AGAINST OTHER SERVERS
 		for (String dbName : clusterConfiguration.fieldNames()) {
 
-			if (!localLogs.containsKey(dbName))
-				localLogs.put(dbName, new OOperationLog(manager.getId(), dbName));
-
 			final ODocument db = clusterConfiguration.field(dbName);
 			final Collection<ODocument> dbNodes = db.field("nodes");
 
-			boolean currentNodeInvolved = false;
-
-			// CHECK IF CURRENT NODE IS INVOLVED
-			for (ODocument node : dbNodes) {
-				final String nodeId = node.field("id");
-				if (manager.itsMe(nodeId)) {
-					currentNodeInvolved = true;
-					break;
-				}
-			}
-
-			if (currentNodeInvolved)
-				for (ODocument node : dbNodes) {
-					final String nodeId = node.field("id");
-
-					if (manager.itsMe(nodeId))
-						// DON'T OPEN A CONNECTION TO MYSELF
-						continue;
-
-					if (!nodes.containsKey(nodeId)) {
-						final ODistributedNode dNode = new ODistributedNode(this, nodeId);
-						nodes.put(nodeId, dNode);
-
-						try {
-							final ODistributedDatabaseInfo dbInfo = new ODistributedDatabaseInfo();
-							dbInfo.databaseName = dbName;
-							dbInfo.userName = replicatorUser.name;
-							dbInfo.userPassword = replicatorUser.password;
-							dbInfo.synchType = SYNCH_TYPE.valueOf(node.field("mode").toString().toUpperCase());
-							dbInfo.log = new OOperationLog(nodeId, dbName);
-
-							dNode.connectDatabase(dbInfo);
-						} catch (IOException e) {
-							// REMOVE THE NODE
-							removeDistributedNode(nodeId, e);
-						}
-					}
-				}
+			for (ODocument node : dbNodes)
+				startReplication(dbName, (String) node.field("id"), node.field("mode").toString());
 		}
 	}
 
+	public void startReplication(final String dbName, final String nodeId, final String mode) throws IOException {
+		if (manager.itsMe(nodeId)) {
+			// DON'T OPEN A CONNECTION TO MYSELF BUT START REPLICATION
+			return;
+		}
+
+		// GET THE NODE
+		final ODistributedNode dNode = getOrCreateDistributedNode(nodeId);
+		ODistributedDatabaseInfo db = dNode.getDatabase(dbName);
+		if (db == null)
+			db = dNode.createDatabaseEntry(dbName, SYNCH_TYPE.valueOf(mode.toUpperCase()), replicatorUser.name, replicatorUser.password);
+
+		if (!localLogs.containsKey(dbName))
+			// INITIALIZING OPERATION LOG
+			localLogs.put(dbName, new OOperationLog(manager.getId(), dbName));
+
+		dNode.startDatabaseReplication(db);
+	}
+
 	protected void removeDistributedNode(final String iNodeId, final IOException iCause) {
-		OLogManager.instance().warn(this, "[OReplicator] Error connecting distributed node '%s'. Remove it from the available nodes",
-				iCause, iNodeId);
+		OLogManager.instance().warn(this, "<-> NODE %s: error connecting distributed node. Remove it from the available nodes", iCause,
+				iNodeId);
 		nodes.remove(iNodeId);
 	}
 
 	/**
 	 * Distributes the request to all the configured nodes. Each node has the responsibility to bring the message early (synch-mode)
-	 * or using an asynchronous queue.
+	 * or using an asynchronous queue. The current server node is what has received the request from the client.
 	 * 
 	 * @throws IOException
 	 */
@@ -172,14 +150,20 @@ public class OReplicator {
 			final String dbName = iTransactionEntry.getRecord().getDatabase().getName();
 
 			// LOG THE OPERATION
-			final long opId = localLogs.get(dbName).appendLocalLog(iTransactionEntry.type,
-					(ORecordId) iTransactionEntry.getRecord().getIdentity());
+			final OOperationLog log = localLogs.get(dbName);
+			if (log == null)
+				// DB NOT REPLICATED: IGNORE IT
+				return;
+
+			final long opId = log.appendLocalLog(iTransactionEntry.type, (ORecordId) iTransactionEntry.getRecord().getIdentity());
 
 			// GET THE NODES INVOLVED IN THE UPDATE
 			for (ODistributedNode node : nodes.values()) {
-				final ODistributedDatabaseInfo dbEntry = node.getDatabase(dbName);
-				if (dbEntry != null)
-					node.sendRequest(opId, iTransactionEntry, dbEntry.synchType);
+				if (node.getStatus() == ODistributedNode.STATUS.ONLINE) {
+					final ODistributedDatabaseInfo dbEntry = node.getDatabase(dbName);
+					if (dbEntry != null)
+						node.sendRequest(opId, iTransactionEntry, dbEntry.synchType);
+				}
 			}
 		}
 	}
@@ -199,34 +183,72 @@ public class OReplicator {
 	/**
 	 * Returns the database configuration to send to the leader node. Example:
 	 * 
+	 * <code>
+	 * <br/>
+	 * { <br/>
+	 * &nbsp;  'demo': [ { 'node': '10.10.10.10:2480', 'firstLog': 312, 'lastLog': 21212 }, { 'node': '10.10.10.20:2480', 'lastLog':  32133} ], <br/>
+	 * &nbsp;  'test': [ { 'node': '10.10.10.10:2480', 'firstLog': 1333,  'lastLog': 3223  },  { 'node': '10.10.10.20:2480', 'lastLog':  78} ] <br/>
+	 * }
+	 * </code>
 	 * 
 	 * @return
+	 * @throws IOException
 	 */
-	public ODocument getDatabaseConfiguration() {
+	public ODocument getLocalDatabaseConfiguration() throws IOException {
 		final ODocument doc = new ODocument();
-		for (String dbName : OServerMain.server().getAvailableStorageNames().keySet()) {
-			final ODocument dbCfg = new ODocument().addOwner(doc);
-			doc.field(dbName, dbCfg);
+		for (String dbName : OServerMain.server().getAvailableStorageNames().keySet())
+			doc.field(dbName, getLocalDatabaseConfiguration(dbName));
 
-			final File dbDir = new File(OSystemVariableResolver.resolveSystemVariables(DIRECTORY_NAME + "/" + dbName));
-			if (dbDir.exists() && dbDir.isDirectory()) {
-				for (File f : dbDir.listFiles()) {
-					if (f.isFile() && f.getName().endsWith(OOperationLog.EXTENSION)) {
-						final String nodeId = f.getName().substring(0, f.getName().indexOf('.')).replace('_', '.').replace('-', ':');
+		return doc;
+	}
 
-						final ODistributedNode node = nodes.get(nodeId);
-						if (node != null) {
-							try {
-								dbCfg.field(nodeId, node.getLastOperationId(dbName));
-							} catch (IOException e) {
-							}
-						}
+	/**
+	 * Returns the previous replication configuration for a database to send to the leader node. Example:
+	 * 
+	 * <code>
+	 * <br/>
+	 * [ { 'node': '10.10.10.10:2480', 'firstLog': 0, 'lastLog': 21212 }, { 'node': '10.10.10.20:2480', 'firstLog': 2323, 'lastLog': 32133} ]
+	 * </code>
+	 * 
+	 * @return
+	 * @throws IOException
+	 */
+	public Set<ODocument> getLocalDatabaseConfiguration(final String dbName) throws IOException {
+		final Set<ODocument> set = new HashSet<ODocument>();
+
+		final File dbDir = new File(OSystemVariableResolver.resolveSystemVariables(DIRECTORY_NAME + "/" + dbName));
+		if (dbDir.exists() && dbDir.isDirectory()) {
+			for (File f : dbDir.listFiles()) {
+				if (f.isFile() && f.getName().endsWith(OOperationLog.EXTENSION)) {
+					final String nodeId = f.getName().substring(0, f.getName().indexOf('.')).replace('_', '.').replace('-', ':');
+
+					if (manager.itsMe(nodeId))
+						// JUMP MYSELF
+						continue;
+
+					final ODistributedNode node = getOrCreateDistributedNode(nodeId);
+
+					if (node.getDatabase(dbName) == null) {
+						node.registerDatabase(node.createDatabaseEntry(dbName, SYNCH_TYPE.ASYNCH,
+								manager.getReplicator().getReplicatorUser().name, manager.getReplicator().getReplicatorUser().password));
+					}
+
+					final ODocument nodeCfg = new ODocument();
+					set.add(nodeCfg);
+
+					try {
+						final long[] logRange = node.getLogRange(dbName);
+
+						nodeCfg.field("node", nodeId);
+						nodeCfg.field("firstLog", logRange[0]);
+						nodeCfg.field("lastLog", logRange[1]);
+					} catch (IOException e) {
 					}
 				}
 			}
 		}
 
-		return doc;
+		return set;
 	}
 
 	public boolean isIgnoredDocumentClass(final String ignoredDocumentClass) {
@@ -257,11 +279,43 @@ public class OReplicator {
 		return conflictResolver;
 	}
 
+	public ODistributedNode getOrCreateDistributedNode(final String nodeId) throws IOException {
+		ODistributedNode dNode = nodes.get(nodeId);
+		if (dNode == null) {
+			// CREATE IT
+			dNode = new ODistributedNode(this, nodeId);
+			nodes.put(nodeId, dNode);
+		}
+		return dNode;
+	}
+
 	public ODistributedNode getNode(final String iNodeId) {
 		return nodes.get(iNodeId);
 	}
 
+	/**
+	 * Returns the operation log by node and db name
+	 * 
+	 * @param iNodeId
+	 *          Node id
+	 * @param iDatabaseName
+	 *          Database's name
+	 * @return OOperationLog instance
+	 */
+	public OOperationLog getOperationLog(final String iNodeId, final String iDatabaseName) {
+		if (manager.itsMe(iNodeId))
+			return localLogs.get(iDatabaseName);
+
+		final ODistributedNode node = nodes.get(iNodeId);
+
+		return node != null ? node.getDatabase(iDatabaseName).log : null;
+	}
+
 	public ODistributedServerManager getManager() {
 		return manager;
+	}
+
+	public OServerUserConfiguration getReplicatorUser() {
+		return replicatorUser;
 	}
 }

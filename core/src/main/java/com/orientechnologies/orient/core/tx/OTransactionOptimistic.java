@@ -72,6 +72,9 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
 		checkTransaction();
 
 		final ORecordInternal<?> txRecord = getRecord(iRid);
+		if (txRecord == OTransactionRealAbstract.DELETED_RECORD)
+			// DELETED IN TX
+			return null;
 
 		if (txRecord != null)
 			return txRecord;
@@ -81,6 +84,9 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
 	}
 
 	public void deleteRecord(final ORecordInternal<?> iRecord, final OPERATION_MODE iMode) {
+		if (!iRecord.getIdentity().isValid())
+			return;
+
 		addRecord(iRecord, ORecordOperation.DELETED, null);
 	}
 
@@ -91,8 +97,7 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
 	private void addRecord(final ORecordInternal<?> iRecord, final byte iStatus, final String iClusterName) {
 		checkTransaction();
 
-		if ((status == OTransaction.TXSTATUS.COMMITTING || OStorage.CLUSTER_INDEX_NAME.equals(iClusterName))
-				&& database.getStorage() instanceof OStorageEmbedded) {
+		if ((status == OTransaction.TXSTATUS.COMMITTING) && database.getStorage() instanceof OStorageEmbedded) {
 			// I'M COMMITTING OR IT'S AN INDEX: BYPASS LOCAL BUFFER
 			switch (iStatus) {
 			case ORecordOperation.CREATED:
@@ -131,7 +136,7 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
 
 			if (txEntry == null) {
 				// NEW ENTRY: JUST REGISTER IT
-				txEntry = new ORecordOperation(iRecord, iStatus, iClusterName);
+				txEntry = new ORecordOperation(iRecord, iStatus);
 
 				recordEntries.put(rid, txEntry);
 			} else {

@@ -15,7 +15,12 @@
  */
 package com.orientechnologies.orient.core.db.record;
 
+import com.orientechnologies.orient.core.Orient;
+import com.orientechnologies.orient.core.exception.OSerializationException;
+import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.record.ORecordInternal;
+import com.orientechnologies.orient.core.serialization.OMemoryStream;
+import com.orientechnologies.orient.core.serialization.OSerializableStream;
 
 /**
  * Contains the information about a database operation.
@@ -23,25 +28,26 @@ import com.orientechnologies.orient.core.record.ORecordInternal;
  * @author Luca Garulli (l.garulli--at--orientechnologies.com)
  * 
  */
-public class ORecordOperation {
+public class ORecordOperation implements OSerializableStream {
 
-	public static final byte	LOADED	= 0;
-	public static final byte	UPDATED	= 1;
-	public static final byte	DELETED	= 2;
-	public static final byte	CREATED	= 3;
+	private static final long	serialVersionUID	= 1L;
 
+	public static final byte	LOADED						= 0;
+	public static final byte	UPDATED						= 1;
+	public static final byte	DELETED						= 2;
+	public static final byte	CREATED						= 3;
+
+	public long								serial;
 	public byte								type;
 	public OIdentifiable			record;
-	public String							clusterName;
 
 	public ORecordOperation() {
 	}
 
-	public ORecordOperation(final ORecordInternal<?> iRecord, final byte iStatus, final String iClusterName) {
+	public ORecordOperation(final ORecordInternal<?> iRecord, final byte iStatus) {
 		// CLONE RECORD AND CONTENT
 		this.record = iRecord;
 		this.type = iStatus;
-		this.clusterName = iClusterName;
 	}
 
 	@Override
@@ -60,12 +66,71 @@ public class ORecordOperation {
 	@Override
 	public String toString() {
 		final StringBuilder builder = new StringBuilder();
-		builder.append("OTransactionEntry [record=").append(record).append(", status=").append(type).append(", clusterName=")
-				.append(clusterName).append("]");
+		builder.append("ORecordOperation [record=").append(record).append(", type=");
+
+		switch (type) {
+		case CREATED:
+			builder.append("CREATE");
+			break;
+		case UPDATED:
+			builder.append("UPDATE");
+			break;
+		case DELETED:
+			builder.append("DELETE");
+			break;
+		case LOADED:
+			builder.append("LOADED");
+			break;
+		}
+		builder.append("]");
 		return builder.toString();
 	}
 
 	public ORecordInternal<?> getRecord() {
 		return (ORecordInternal<?>) (record != null ? record.getRecord() : null);
+	}
+
+	public byte[] toStream() throws OSerializationException {
+		try {
+			final OMemoryStream stream = new OMemoryStream();
+			stream.set(serial);
+			stream.set(type);
+			((ORecordId) record.getIdentity()).toStream(stream);
+
+			switch (type) {
+			case CREATED:
+			case UPDATED:
+				stream.set(((ORecordInternal<?>) record.getRecord()).getRecordType());
+				stream.set(((ORecordInternal<?>) record.getRecord()).toStream());
+				break;
+			}
+
+			return stream.toByteArray();
+
+		} catch (Exception e) {
+			throw new OSerializationException("Cannot serialize record operation", e);
+		}
+	}
+
+	public OSerializableStream fromStream(final byte[] iStream) throws OSerializationException {
+		try {
+			final OMemoryStream stream = new OMemoryStream(iStream);
+			serial = stream.getAsLong();
+			type = stream.getAsByte();
+			final ORecordId rid = new ORecordId().fromStream(stream);
+
+			switch (type) {
+			case CREATED:
+			case UPDATED:
+				record = Orient.instance().getRecordFactoryManager().newInstance(stream.getAsByte());
+				((ORecordInternal<?>) record).fill(rid, 0, stream.getAsByteArray(), true);
+				break;
+			}
+
+			return this;
+
+		} catch (Exception e) {
+			throw new OSerializationException("Cannot deserialize record operation", e);
+		}
 	}
 }

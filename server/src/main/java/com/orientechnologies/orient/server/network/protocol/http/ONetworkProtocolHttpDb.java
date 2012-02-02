@@ -20,13 +20,12 @@ import java.net.Socket;
 
 import com.orientechnologies.orient.core.OConstants;
 import com.orientechnologies.orient.core.config.OContextConfiguration;
-import com.orientechnologies.orient.server.OClientConnection;
 import com.orientechnologies.orient.server.OServer;
 import com.orientechnologies.orient.server.network.protocol.http.command.delete.OServerCommandDeleteClass;
-import com.orientechnologies.orient.server.network.protocol.http.command.delete.OServerCommandDeleteDatabase;
 import com.orientechnologies.orient.server.network.protocol.http.command.delete.OServerCommandDeleteDocument;
 import com.orientechnologies.orient.server.network.protocol.http.command.delete.OServerCommandDeleteIndex;
 import com.orientechnologies.orient.server.network.protocol.http.command.delete.OServerCommandDeleteProperty;
+import com.orientechnologies.orient.server.network.protocol.http.command.delete.OServerCommandDropDatabase;
 import com.orientechnologies.orient.server.network.protocol.http.command.get.OServerCommandGetClass;
 import com.orientechnologies.orient.server.network.protocol.http.command.get.OServerCommandGetCluster;
 import com.orientechnologies.orient.server.network.protocol.http.command.get.OServerCommandGetConnect;
@@ -58,11 +57,9 @@ public class ONetworkProtocolHttpDb extends ONetworkProtocolHttpAbstract {
 	private static final String	ORIENT_SERVER_DB	= "OrientDB Server v." + OConstants.getVersion();
 
 	@Override
-	public void config(final OServer iServer, final Socket iSocket, final OClientConnection iConnection,
-			final OContextConfiguration iConfiguration) throws IOException {
+	public void config(final OServer iServer, final Socket iSocket, final OContextConfiguration iConfiguration) throws IOException {
 		server = iServer;
 		setName("HTTP-DB");
-		data.serverInfo = ORIENT_SERVER_DB;
 
 		registerCommand(new OServerCommandGetConnect());
 		registerCommand(new OServerCommandGetDisconnect());
@@ -95,14 +92,15 @@ public class ONetworkProtocolHttpDb extends ONetworkProtocolHttpAbstract {
 		registerCommand(new OServerCommandPutIndex());
 
 		registerCommand(new OServerCommandDeleteClass());
-		registerCommand(new OServerCommandDeleteDatabase());
+		registerCommand(new OServerCommandDropDatabase());
 		registerCommand(new OServerCommandDeleteDocument());
 		registerCommand(new OServerCommandDeleteProperty());
 		registerCommand(new OServerCommandDeleteIndex());
 
 		registerCommand(new OServerCommandOptions());
 
-		super.config(server, iSocket, iConnection, iConfiguration);
+		super.config(server, iSocket, iConfiguration);
+		connection.data.serverInfo = ORIENT_SERVER_DB;
 	}
 
 	public String getType() {

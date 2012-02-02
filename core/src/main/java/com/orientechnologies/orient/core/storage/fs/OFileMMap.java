@@ -264,74 +264,23 @@ public class OFileMMap extends OFile {
 		}
 	}
 
-	@Override
-	public void changeSize(final int iSize) {
-		super.changeSize(iSize);
-		size = iSize;
-	}
-
 	/**
-	 * Synchronize buffered changes to the file.
+	 * Synchronizes buffered changes to the file.
 	 * 
 	 * @see OFileMMapSecure
 	 */
 	@Override
 	public void synch() {
-		headerBuffer.force();
-	}
-
-	@Override
-	protected void readHeader() {
-		headerBuffer.rewind();
-		size = headerBuffer.getInt();
-		filledUpTo = headerBuffer.getInt();
-		// for (int i = 0; i < securityCode.length; ++i)
-		// securityCode[i] = buffer.get();
-		//
-		// StringBuilder check = new StringBuilder();
-		// check.append('X');
-		// check.append('3');
-		// check.append('O');
-		// check.append('!');
-		// check.append(fileSize);
-		// check.append(filledUpTo);
-		// check.append('-');
-		// check.append('p');
-		// check.append('R');
-		// check.append('<');
-		//
-		// OIntegrityFileManager.instance().check(check.toString(),
-		// securityCode);
-	}
-
-	@Override
-	protected void writeHeader() {
-		headerBuffer.rewind();
-		headerBuffer.putInt(size);
-		headerBuffer.putInt(filledUpTo);
-		//
-		// StringBuilder check = new StringBuilder();
-		// check.append('X');
-		// check.append('3');
-		// check.append('O');
-		// check.append('!');
-		// check.append(fileSize);
-		// check.append(filledUpTo);
-		// check.append('-');
-		// check.append('p');
-		// check.append('R');
-		// check.append('<');
-		//
-		// securityCode =
-		// OIntegrityFileManager.instance().digest(check.toString());
-		// for (int i = 0; i < securityCode.length; ++i)
-		// buffer.put(securityCode[i]);
+		flushHeader();
+		OMMapManager.flushFile(this);
 	}
 
 	@Override
 	public void writeHeaderLong(final int iPosition, final long iValue) {
-		if (headerBuffer != null)
+		if (headerBuffer != null) {
 			headerBuffer.putLong(HEADER_DATA_OFFSET + iPosition, iValue);
+			setHeaderDirty();
+		}
 	}
 
 	@Override
@@ -362,7 +311,8 @@ public class OFileMMap extends OFile {
 			return;
 
 		headerBuffer.put(SOFTLY_CLOSED_OFFSET, (byte) (iValue ? 1 : 0));
-		synch();
+		setHeaderDirty();
+		flushHeader();
 	}
 
 	MappedByteBuffer map(final long iBeginOffset, final int iSize) throws IOException {
@@ -430,6 +380,38 @@ public class OFileMMap extends OFile {
 		synchronized (bufferPool) {
 			bufferPool.add(iBuffer);
 			OProfiler.getInstance().updateCounter("MMap.pooledBuffers", +1);
+		}
+	}
+
+	@Override
+	protected void init() {
+		size = headerBuffer.getInt(SIZE_OFFSET);
+		filledUpTo = headerBuffer.getInt(FILLEDUPTO_OFFSET);
+	}
+
+	@Override
+	protected void setFilledUpTo(final int iHow) {
+		if (iHow != filledUpTo) {
+			filledUpTo = iHow;
+			headerBuffer.putInt(FILLEDUPTO_OFFSET, filledUpTo);
+			setHeaderDirty();
+		}
+	}
+
+	@Override
+	public void setSize(final int iSize) throws IOException {
+		if (iSize != size) {
+			checkSize(iSize);
+			size = iSize;
+			headerBuffer.putInt(SIZE_OFFSET, size);
+			setHeaderDirty();
+		}
+	}
+
+	protected void flushHeader() {
+		if (headerDirty) {
+			headerBuffer.force();
+			headerDirty = false;
 		}
 	}
 }

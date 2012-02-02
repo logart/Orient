@@ -15,7 +15,6 @@
  */
 package com.orientechnologies.orient.core.record.impl;
 
-import java.lang.reflect.Array;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.util.ArrayList;
@@ -196,7 +195,7 @@ public class ODocumentHelper {
 		if (fieldNameLength == 0)
 			return null;
 
-		ODocument currentRecord = iRecord;
+		OIdentifiable currentRecord = iRecord;
 		Object value = null;
 
 		int beginPos = 0;
@@ -226,9 +225,8 @@ public class ODocumentHelper {
 
 				if (value == null)
 					return null;
-
-				if (value instanceof ODocument)
-					currentRecord = (ODocument) value;
+				else if (value instanceof OIdentifiable)
+					currentRecord = (OIdentifiable) value;
 
 				final int end = iFieldName.indexOf(']', nextSeparatorPos);
 				if (end == -1)
@@ -237,16 +235,19 @@ public class ODocumentHelper {
 				final String index = OStringSerializerHelper.getStringContent(iFieldName.substring(nextSeparatorPos + 1, end));
 				nextSeparatorPos = end;
 
-				if (value instanceof ODocument) {
+				if (value instanceof OIdentifiable) {
+					final ORecord<?> record = currentRecord != null && currentRecord instanceof OIdentifiable ? ((OIdentifiable) currentRecord)
+							.getRecord() : null;
+
 					final List<String> indexParts = OStringSerializerHelper.smartSplit(index, ',');
 					if (indexParts.size() == 1)
 						// SINGLE VALUE
-						value = currentRecord.field(index);
+						value = ((ODocument) record).field(index);
 					else {
 						// MULTI VALUE
 						final Object[] values = new Object[indexParts.size()];
 						for (int i = 0; i < indexParts.size(); ++i) {
-							values[i] = currentRecord.field(indexParts.get(i));
+							values[i] = ((ODocument) record).field(indexParts.get(i));
 						}
 						value = values;
 					}
@@ -265,43 +266,34 @@ public class ODocumentHelper {
 					}
 				} else if (value instanceof Collection<?> || value.getClass().isArray()) {
 					// MULTI VALUE
-					final boolean isArray = value.getClass().isArray();
-
 					final List<String> indexParts = OStringSerializerHelper.smartSplit(index, ',');
 					final List<String> indexRanges = OStringSerializerHelper.smartSplit(index, '-');
 					final List<String> indexCondition = OStringSerializerHelper.smartSplit(index, '=', ' ');
 
 					if (indexParts.size() == 1 && indexRanges.size() == 1 && indexCondition.size() == 1) {
+
 						// SINGLE VALUE
-						if (isArray)
-							value = Array.get(value, Integer.parseInt(index));
-						else
-							value = ((List<?>) value).get(Integer.parseInt(index));
+						value = OMultiValue.getValue(value, Integer.parseInt(index));
+
 					} else if (indexParts.size() > 1) {
+
 						// MULTI VALUES
-						final Object[] values;
-						values = new Object[indexParts.size()];
-						for (int i = 0; i < indexParts.size(); ++i) {
-							if (isArray)
-								values[i] = Array.get(value, Integer.parseInt(indexParts.get(i)));
-							else
-								values[i] = ((List<?>) value).get(Integer.parseInt(indexParts.get(i)));
-						}
+						final Object[] values = new Object[indexParts.size()];
+						for (int i = 0; i < indexParts.size(); ++i)
+							values[i] = OMultiValue.getValue(value, Integer.parseInt(indexParts.get(i)));
 						value = values;
+
 					} else if (indexRanges.size() > 1) {
+
 						// MULTI VALUES RANGE
-						final Object[] values;
 						final int rangeFrom = Integer.parseInt(indexRanges.get(0));
 						final int rangeTo = Integer.parseInt(indexRanges.get(1));
 
-						values = new Object[rangeTo - rangeFrom + 1];
-						for (int i = rangeFrom; i <= rangeTo; ++i) {
-							if (isArray)
-								values[i - rangeFrom] = Array.get(value, i);
-							else
-								values[i - rangeFrom] = ((List<?>) value).get(i);
-						}
+						final Object[] values = new Object[rangeTo - rangeFrom + 1];
+						for (int i = rangeFrom; i <= rangeTo; ++i)
+							values[i - rangeFrom] = OMultiValue.getValue(value, i);
 						value = values;
+
 					} else if (!indexCondition.isEmpty()) {
 						// CONDITION
 						final String conditionFieldName = indexCondition.get(0);
@@ -310,8 +302,8 @@ public class ODocumentHelper {
 						if (conditionFieldValue instanceof String)
 							conditionFieldValue = OStringSerializerHelper.getStringContent(conditionFieldValue);
 
-						final ArrayList<ODocument> values = new ArrayList<ODocument>();
-						for (Object v : (Collection<Object>) value) {
+						final List<ODocument> values = new ArrayList<ODocument>();
+						for (Object v : OMultiValue.getMultiValueIterable(value)) {
 							if (v instanceof ODocument) {
 								final ODocument doc = (ODocument) v;
 								Object fieldValue = doc.field(conditionFieldName);
@@ -328,7 +320,7 @@ public class ODocumentHelper {
 							value = null;
 						else if (values.size() == 1)
 							// RETURNS THE SINGLE ODOCUMENT
-							value = values.iterator().next();
+							value = values.get(0);
 						else
 							// RETURNS THE FILTERED COLLECTION
 							value = values;
@@ -346,8 +338,8 @@ public class ODocumentHelper {
 				}
 			}
 
-			if (value instanceof ODocument)
-				currentRecord = (ODocument) value;
+			if (value instanceof OIdentifiable)
+				currentRecord = (OIdentifiable) value;
 
 			beginPos = ++nextSeparatorPos;
 		} while (nextSeparatorPos < fieldNameLength && value != null);
@@ -385,11 +377,11 @@ public class ODocumentHelper {
 				return new String(((ORecordInternal<?>) iCurrent.getRecord()).toStream());
 
 			throw new IllegalArgumentException("Document attribute '" + iFieldName + "' not supported");
-		} else
-			// RETURN A FIELD
-			((ODocument) iCurrent.getRecord()).checkForFields();
+		}
 
-		return ((ODocument) iCurrent.getRecord())._fieldValues.get(iFieldName);
+		final ODocument doc = ((ODocument) iCurrent.getRecord());
+		doc.checkForFields();
+		return doc._fieldValues.get(iFieldName);
 	}
 
 	public static Object evaluateFunction(final Object currentValue, String iFunction) {

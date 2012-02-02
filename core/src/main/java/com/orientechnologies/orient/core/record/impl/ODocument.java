@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
@@ -66,7 +67,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 
 	protected List<WeakReference<ORecordElement>>	_owners						= null;
 
-	protected static final String[]									EMPTY_STRINGS		= new String[] {};
+	protected static final String[]								EMPTY_STRINGS			= new String[] {};
 
     protected OMetadata _metadata;
 
@@ -102,18 +103,21 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
     }
 
 	/**
-	 * Creates a new instance and binds to the specified database. New instances are not persistent until {@link #save()} is called.
-	 * 
-	 * @param iDatabase
-	 *          Database instance
+	 * Deprecated: use {@link #ODocument()} instead. ODocument instances always refer to the thread-local database and not anymore to
+	 * the passed database as parameter.
 	 */
+	@Deprecated
 	public ODocument(final ODatabaseRecord iDatabase) {
-		setup();
+		this();
 	}
 
+	/**
+	 * Deprecated: use {@link #ODocument(ORID)} instead. ODocument instances always refer to the thread-local database and not anymore
+	 * to the passed database as parameter.
+	 */
+	@Deprecated
 	public ODocument(final ODatabaseRecord iDatabase, final ORID iRID) {
 		this(iRID);
-		ODatabaseRecordThreadLocal.INSTANCE.set(iDatabase);
 	}
 
 	/**
@@ -132,9 +136,13 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 		_dirty = false;
 	}
 
+	/**
+	 * Deprecated: use {@link #ODocument(String, ORID)} instead. ODocument instances always refer to the thread-local database and not
+	 * anymore to the passed database as parameter.
+	 */
+	@Deprecated
 	public ODocument(final ODatabaseRecord iDatabase, final String iClassName, final ORID iRID) {
 		this(iClassName, iRID);
-		ODatabaseRecordThreadLocal.INSTANCE.set(iDatabase);
 	}
 
 	/**
@@ -155,10 +163,13 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 		_status = STATUS.NOT_LOADED;
 	}
 
+	/**
+	 * Deprecated: use {@link #ODocument(String)} instead. ODocument instances always refer to the thread-local database and not
+	 * anymore to the passed database as parameter.
+	 */
+	@Deprecated
 	public ODocument(final ODatabaseRecord iDatabase, final String iClassName) {
-		ODatabaseRecordThreadLocal.INSTANCE.set(iDatabase);
-		setClassName(iClassName);
-		setup();
+		this(iClassName);
 	}
 
 	/**
@@ -283,6 +294,12 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 		return cloned;
 	}
 
+	/**
+	 * Detaches all the connected records. If new records are linked to the document the detaching can't be completed and false will
+	 * be returned.
+	 * 
+	 * @return true if the record has been detached, otherwise false
+	 */
 	public boolean detach() {
 		boolean fullyDetached = true;
 
@@ -462,7 +479,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 			return null;
 
 		// OPTIMIZATION
-		if (iFieldName.charAt(0) != '@' && iFieldName.indexOf('.') == -1 && iFieldName.indexOf('[') == -1)
+		if (iFieldName.charAt(0) != '@' && OStringSerializerHelper.indexOf(iFieldName, 0, '.', '[') == -1)
 			return (RET) _fieldValues.get(iFieldName);
 
 		// NOT FOUND, PARSE THE FIELD NAME
@@ -495,6 +512,12 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 				newValue = OStringSerializerHelper.getBinaryContent(value);
 			else if ((t == OType.DATE || t == OType.DATE) && value instanceof Long)
 				newValue = (RET) new Date(((Long) value).longValue());
+			else if ((t == OType.EMBEDDEDSET || t == OType.LINKSET) && value instanceof List)
+				// CONVERT LIST TO SET
+				newValue = (RET) ODocumentHelper.convertField(this, iFieldName, Set.class, value);
+			else if ((t == OType.EMBEDDEDLIST || t == OType.LINKLIST) && value instanceof Set)
+				// CONVERT SET TO LIST
+				newValue = (RET) ODocumentHelper.convertField(this, iFieldName, List.class, value);
 
 			if (newValue != null) {
 				// VALUE CHANGED: SET THE NEW ONE

@@ -73,7 +73,7 @@ public class TransactionAtomicTest {
 		ODatabaseDocumentTx db = new ODatabaseDocumentTx(url);
 		db.open("admin", "admin");
 
-		ODocument doc = new ODocument(db, "Account");
+		ODocument doc = new ODocument("Account");
 		doc.field("version", 0);
 		doc.save();
 
@@ -126,6 +126,10 @@ public class TransactionAtomicTest {
 
 			public void onOpen(ODatabase iDatabase) {
 			}
+
+			public boolean onCorruptionRepairDatabase(ODatabase iDatabase, final String iReason, String iWhatWillbeFixed) {
+				return true;
+			}
 		});
 
 		db.commit();
@@ -138,8 +142,11 @@ public class TransactionAtomicTest {
 		ODatabaseDocumentTx db = new ODatabaseDocumentTx(url);
 		db.open("admin", "admin");
 
-		if (!db.getMetadata().getSchema().existsClass("Fruit")) {
-			OClass fruitClass = db.getMetadata().getSchema().createClass("Fruit");
+		OClass fruitClass = db.getMetadata().getSchema().getClass("Fruit");
+
+		if (fruitClass == null) {
+			fruitClass = db.getMetadata().getSchema().createClass("Fruit");
+
 			fruitClass.createProperty("name", OType.STRING);
 			fruitClass.createProperty("color", OType.STRING);
 
@@ -151,15 +158,22 @@ public class TransactionAtomicTest {
 		try {
 			db.begin();
 
-			ODocument apple = new ODocument(db, "Fruit").field("name", "Apple").field("color", "Red");
-			ODocument orange = new ODocument(db, "Fruit").field("name", "Orange").field("color", "Orange");
-			ODocument banana = new ODocument(db, "Fruit").field("name", "Banana").field("color", "Yellow");
-			ODocument kumquat = new ODocument(db, "Fruit").field("name", "Kumquat").field("color", "Orange");
+			ODocument apple = new ODocument("Fruit").field("name", "Apple").field("color", "Red");
+			ODocument orange = new ODocument("Fruit").field("name", "Orange").field("color", "Orange");
+			ODocument banana = new ODocument("Fruit").field("name", "Banana").field("color", "Yellow");
+			ODocument kumquat = new ODocument("Fruit").field("name", "Kumquat").field("color", "Orange");
 
 			apple.save();
+			Assert.assertEquals(apple.getIdentity().getClusterId(), fruitClass.getDefaultClusterId());
+
 			orange.save();
+			Assert.assertEquals(orange.getIdentity().getClusterId(), fruitClass.getDefaultClusterId());
+
 			banana.save();
+			Assert.assertEquals(banana.getIdentity().getClusterId(), fruitClass.getDefaultClusterId());
+
 			kumquat.save();
+			Assert.assertEquals(kumquat.getIdentity().getClusterId(), fruitClass.getDefaultClusterId());
 
 			db.commit();
 			Assert.assertTrue(false);

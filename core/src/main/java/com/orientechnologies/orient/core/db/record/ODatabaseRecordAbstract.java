@@ -15,13 +15,6 @@
  */
 package com.orientechnologies.orient.core.db.record;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.Orient;
@@ -31,6 +24,7 @@ import com.orientechnologies.orient.core.command.OCommandRequestInternal;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.db.ODatabase;
 import com.orientechnologies.orient.core.db.ODatabaseComplex;
+import com.orientechnologies.orient.core.db.ODatabaseListener;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.ODatabaseWrapperAbstract;
 import com.orientechnologies.orient.core.db.raw.ODatabaseRaw;
@@ -58,6 +52,9 @@ import com.orientechnologies.orient.core.serialization.serializer.record.ORecord
 import com.orientechnologies.orient.core.sql.OCommandSQL;
 import com.orientechnologies.orient.core.storage.ORawBuffer;
 import com.orientechnologies.orient.core.storage.OStorageEmbedded;
+import com.orientechnologies.orient.core.tx.OTransactionRealAbstract;
+
+import java.util.*;
 
 @SuppressWarnings("unchecked")
 public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<ODatabaseRaw> implements ODatabaseRecord {
@@ -84,7 +81,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 		databaseOwner = this;
 
 		recordType = iRecordType;
-		level1Cache = new OLevel1RecordCache(this);
+		level1Cache = new OLevel1RecordCache();
 
 		mvcc = OGlobalConfiguration.DB_MVCC.getValueAsBoolean();
 		validation = OGlobalConfiguration.DB_VALIDATION.getValueAsBoolean();
@@ -107,6 +104,21 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 
 			if (getStorage() instanceof OStorageEmbedded) {
 				user = getMetadata().getSecurity().authenticate(iUserName, iUserPassword);
+				if (user != null) {
+					final Set<ORole> roles = user.getRoles();
+					if (roles == null || roles.isEmpty() || roles.iterator().next() == null) {
+						// SEEMS CORRUPTED: INSTALL DEFAULT ROLE
+						for (ODatabaseListener l : underlying.getListeners()) {
+							if (l.onCorruptionRepairDatabase(this, "Security metadata is broken: current user '" + user.getName()
+									+ "' has no roles defined",
+									"The 'admin' user will be reinstalled with default role ('admin') and password 'admin'")) {
+								user = null;
+								user = metadata.getSecurity().repair();
+								break;
+							}
+						}
+					}
+				}
 				registerHook(new OUserTrigger());
 				registerHook(new OClassIndexManager());
 			} else
@@ -494,6 +506,10 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 
 			// SEARCH IN LOCAL TX
 			ORecordInternal<?> record = getTransaction().getRecord(iRid);
+			if (record == OTransactionRealAbstract.DELETED_RECORD)
+				// DELETED IN TX
+				return null;
+
 			if (record == null && !iIgnoreCache)
 				// SEARCH INTO THE CACHE
 				record = getLevel1Cache().findRecord(iRid);

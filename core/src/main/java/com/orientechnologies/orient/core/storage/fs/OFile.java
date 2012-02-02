@@ -44,13 +44,13 @@ import com.orientechnologies.orient.core.memory.OMemoryWatchDog;
  * <br/>
  */
 public abstract class OFile {
-	protected static final int	SOFTLY_CLOSED_OFFSET		= 8;
-
 	private FileLock						fileLock;
 
 	protected File							osFile;
 	protected RandomAccessFile	accessFile;
 	protected FileChannel				channel;
+	protected volatile boolean	dirty										= false;
+	protected volatile boolean	headerDirty							= false;
 
 	protected int								incrementSize						= DEFAULT_INCREMENT_SIZE;
 	protected int								maxSize;
@@ -62,7 +62,7 @@ public abstract class OFile {
 
 	protected static final int	HEADER_SIZE							= 1024;
 	protected static final int	HEADER_DATA_OFFSET			= 128;
-	protected static final int	DEFAULT_SIZE						= 15000000;
+	protected static final int	DEFAULT_SIZE						= 1024000;
 	protected static final int	DEFAULT_INCREMENT_SIZE	= -50;										// NEGATIVE NUMBER MEANS AS PERCENT OF CURRENT SIZE
 
 	private static final int		OPEN_RETRY_MAX					= 10;
@@ -71,21 +71,19 @@ public abstract class OFile {
 	private static final long		LOCK_WAIT_TIME					= 300;
 	private static final int		LOCK_MAX_RETRIES				= 10;
 
+	protected static final int	SIZE_OFFSET							= 0;
+	protected static final int	FILLEDUPTO_OFFSET				= 4;
+	protected static final int	SOFTLY_CLOSED_OFFSET		= 8;
+
 	public OFile(final String iFileName, final String iMode) throws IOException {
 		init(iFileName, iMode);
 	}
 
-	protected abstract void writeHeader() throws IOException;
-
-	protected abstract void readHeader() throws IOException;
+	public abstract void setSize(int iSize) throws IOException;
 
 	public abstract void writeHeaderLong(int iPosition, long iValue) throws IOException;
 
 	public abstract long readHeaderLong(int iPosition) throws IOException;
-
-	protected abstract void setSoftlyClosed(boolean b) throws IOException;
-
-	protected abstract boolean isSoftlyClosed() throws IOException;
 
 	public abstract void synch() throws IOException;
 
@@ -109,6 +107,16 @@ public abstract class OFile {
 
 	public abstract void write(long iOffset, byte[] iSourceBuffer) throws IOException;
 
+	protected abstract void setSoftlyClosed(boolean b) throws IOException;
+
+	protected abstract boolean isSoftlyClosed() throws IOException;
+
+	protected abstract void init() throws IOException;
+
+	protected abstract void setFilledUpTo(int iHow) throws IOException;
+
+	protected abstract void flushHeader() throws IOException;
+
 	public boolean open() throws IOException {
 		if (!osFile.exists() || osFile.length() == 0)
 			throw new FileNotFoundException("File: " + osFile.getAbsolutePath());
@@ -118,17 +126,16 @@ public abstract class OFile {
 		OLogManager.instance().debug(this, "Checking file integrity of " + osFile.getName() + "...");
 
 		final int fileSize = size;
-		readHeader();
+		init();
 
 		if (filledUpTo > 0 && filledUpTo > size) {
 			OLogManager
 					.instance()
 					.warn(
 							this,
-							"Invalid OFile.filledUp value (%d). Reset the file size %d to the os file size: %d. Probably the file was not closed correctly last time",
-							filledUpTo, size, fileSize);
-			size = fileSize;
-			writeHeader();
+							"Invalid filledUp value (%d) for file %s. Resetting the file size %d to the os file size: %d. Probably the file was not closed correctly last time",
+							filledUpTo, getOsFile().getAbsolutePath(), size, fileSize);
+			setSize(fileSize);
 		}
 
 		if (filledUpTo > size || filledUpTo < 0)
@@ -152,8 +159,8 @@ public abstract class OFile {
 
 		openChannel(iStartSize);
 
-		filledUpTo = 0;
-		writeHeader();
+		setFilledUpTo(0);
+		setSize(maxSize > 0 && iStartSize > maxSize ? maxSize : iStartSize);
 		setSoftlyClosed(!failCheck);
 	}
 
@@ -219,8 +226,7 @@ public abstract class OFile {
 		}
 	}
 
-	public void changeSize(final int iSize) {
-
+	protected void checkSize(final int iSize) throws IOException {
 		if (OLogManager.instance().isDebugEnabled())
 			OLogManager.instance().debug(this, "Changing file size to " + iSize + " bytes. " + toString());
 
@@ -232,17 +238,16 @@ public abstract class OFile {
 	}
 
 	/**
-	 * Cut bytes from the tail of the file reducing the filledUpTo size.
+	 * Cuts bytes from the tail of the file reducing the filledUpTo size.
 	 * 
-	 * @param iSize
+	 * @param iSizeToShrink
 	 * @throws IOException
 	 */
-	public void removeTail(int iSize) throws IOException {
-		if (filledUpTo < iSize)
-			iSize = 0;
+	public void removeTail(int iSizeToShrink) throws IOException {
+		if (filledUpTo < iSizeToShrink)
+			iSizeToShrink = 0;
 
-		filledUpTo -= iSize;
-		writeHeader();
+		setFilledUpTo(filledUpTo - iSizeToShrink);
 	}
 
 	/**
@@ -257,8 +262,7 @@ public abstract class OFile {
 
 		OLogManager.instance().debug(this, "Shrinking filled file from " + filledUpTo + " to " + iSize + " bytes. " + toString());
 
-		filledUpTo = iSize;
-		writeHeader();
+		setFilledUpTo(iSize);
 	}
 
 	public int allocateSpace(final int iSize) throws IOException {
@@ -271,22 +275,31 @@ public abstract class OFile {
 
 			// MAKE ROOM
 			int newFileSize = size;
+
+			if (newFileSize == 0)
+				// PROBABLY HAS BEEN LOST WITH HARD KILLS
+				newFileSize = DEFAULT_SIZE;
+
+			// GET THE STEP SIZE IN BYTES
 			int stepSizeInBytes = incrementSize > 0 ? incrementSize : -1 * size / 100 * incrementSize;
 
 			// FIND THE BEST SIZE TO ALLOCATE (BASED ON INCREMENT-SIZE)
 			while (newFileSize - filledUpTo <= iSize) {
-				if (stepSizeInBytes > 0 && (maxSize == 0 || newFileSize + stepSizeInBytes < maxSize))
-					newFileSize += stepSizeInBytes;
-				else
+				newFileSize += stepSizeInBytes;
+
+				if (newFileSize == 0)
+					// EMPTY FILE: ALLOCATE REQUESTED SIZE ONLY
+					newFileSize = iSize;
+				if (newFileSize > maxSize && maxSize > 0)
+					// TOO BIG: ROUND TO THE MAXIMUM FILE SIZE
 					newFileSize = maxSize;
 			}
 
-			changeSize(newFileSize);
+			setSize(newFileSize);
 		}
 
 		// THERE IS SPACE IN FILE: RETURN THE UPPER BOUND OFFSET AND UPDATE THE FILLED THRESHOLD
-		filledUpTo += iSize;
-		writeHeader();
+		setFilledUpTo(filledUpTo + iSize);
 
 		return offset;
 	}
@@ -374,7 +387,6 @@ public abstract class OFile {
 
 		if (OGlobalConfiguration.FILE_LOCK.getValueAsBoolean())
 			lock();
-		size = maxSize > 0 && iNewSize > maxSize ? maxSize : iNewSize;
 	}
 
 	public int getMaxSize() {
@@ -407,5 +419,15 @@ public abstract class OFile {
 
 	public void setFailCheck(boolean failCheck) {
 		this.failCheck = failCheck;
+	}
+
+	protected void setDirty() {
+		if (!dirty)
+			dirty = true;
+	}
+
+	protected void setHeaderDirty() {
+		if (!headerDirty)
+			headerDirty = true;
 	}
 }

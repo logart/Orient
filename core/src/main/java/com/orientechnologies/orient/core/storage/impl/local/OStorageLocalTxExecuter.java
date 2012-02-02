@@ -24,7 +24,9 @@ import com.orientechnologies.orient.core.config.OStorageTxConfiguration;
 import com.orientechnologies.orient.core.db.record.ORecordOperation;
 import com.orientechnologies.orient.core.exception.OTransactionException;
 import com.orientechnologies.orient.core.hook.ORecordHook;
+import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
+import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.OCluster;
 import com.orientechnologies.orient.core.storage.ORawBuffer;
 import com.orientechnologies.orient.core.storage.OStorage;
@@ -164,8 +166,13 @@ public class OStorageLocalTxExecuter {
 
 		final ORecordId rid = (ORecordId) txEntry.getRecord().getIdentity();
 
-		final OCluster cluster = txEntry.clusterName != null ? storage.getClusterByName(txEntry.clusterName) : storage
-				.getClusterById(rid.clusterId);
+		if (rid.clusterId == ORID.CLUSTER_ID_INVALID && txEntry.getRecord() instanceof ODocument
+				&& ((ODocument) txEntry.getRecord()).getSchemaClass() != null) {
+			// TRY TO FIX CLUSTER ID TO THE DEFAULT CLUSTER ID DEFINED IN SCHEMA CLASS
+			rid.clusterId = ((ODocument) txEntry.getRecord()).getSchemaClass().getDefaultClusterId();
+		}
+
+		final OCluster cluster = storage.getClusterById(rid.clusterId);
 
 		if (cluster.getName().equals(OStorage.CLUSTER_INDEX_NAME))
 			// AVOID TO COMMIT INDEX STUFF
