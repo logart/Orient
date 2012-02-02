@@ -1,6 +1,11 @@
 package com.orientechnologies.orient.core.serialization.serializer.binary;
 
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.metadata.schema.OType;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OBinarySerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OBooleanSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OByteSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.ODateSerializer;
@@ -12,12 +17,6 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OL
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.ONullSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OShortSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OStringSerializer;
-import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OBinarySerializer;
-
-
-import java.lang.Object;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * This class is responsible for obtaining ObjectSerializer realization, that fits for the next bytes in the stream
@@ -86,15 +85,50 @@ public class ObjectSerializerFactory {
      * Will return NULL serializer for the null objects, prevent null pointer
      *
      * @param type is the OType to obtain serializer algorithm for
-     * @param obj is the object to serialize
+     * @param obj  is the object to serialize
      * @return OBjectSerializer realization that fits OType or NULL serializer if object is null
      */
     public ObjectSerializer getObjectSerializer(final OType type, final Object obj) {
-        if(obj != null) {
+        if (obj != null) {
             return getObjectSerializer(type);
         } else {
             return serializerMap.get(NULL_TYPE);
         }
+    }
+
+    public OType getType(Object o) {
+        OType type = null;
+        if (o.getClass() == byte[].class)
+            type = OType.BINARY;
+/*        else if (ODatabaseRecordThreadLocal.INSTANCE.isDefined() && o instanceof ORecord<?>) {
+            if (type == null)
+                // DETERMINE THE FIELD TYPE
+                if (o instanceof ODocument && ((ODocument) o).hasOwners())
+                    type = OType.EMBEDDED;
+                else
+                    type = OType.LINK;
+        } */else if (o instanceof ORID)
+            type = OType.LINK;
+        else if (o instanceof Date)
+            type = OType.DATETIME;
+        else if (o instanceof String)
+            type = OType.STRING;
+        else if (o instanceof Integer)
+            type = OType.INTEGER;
+        else if (o instanceof Long)
+            type = OType.LONG;
+        else if (o instanceof Float)
+            type = OType.FLOAT;
+        else if (o instanceof Short)
+            type = OType.SHORT;
+        else if (o instanceof Byte)
+            type = OType.BYTE;
+        else if (o instanceof Double)
+            type = OType.DOUBLE;
+/*        else
+            type = OType.LINK;*/
+
+        return type;
     }
 
 
