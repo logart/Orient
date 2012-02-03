@@ -2,7 +2,9 @@ package com.orientechnologies.orient.core.serialization.serializer.binary.impl;
 
 import java.util.Calendar;
 import java.util.Date;
+import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.serialization.serializer.binary.ObjectSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.ObjectSerializerFactory;
 
 /**
  * @author ibershadskiy <a href="mailto:ibersh20@gmail.com">Ilya Bershadskiy</a>
@@ -20,18 +22,12 @@ public class ODateSerializer implements ObjectSerializer<Date> {
         calendar.set(Calendar.MINUTE, 0);
         calendar.set(Calendar.SECOND, 0);
         calendar.set(Calendar.MILLISECOND, 0);
-        ODateTimeSerializer dateTimeSerializer = new ODateTimeSerializer(); //(ODateSerializer) ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.DATE);
+        ODateTimeSerializer dateTimeSerializer = (ODateTimeSerializer) ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.DATETIME);
         dateTimeSerializer.serialize(calendar.getTime(), stream, startPosition);
-/*        OLongSerializer longSerializer = new OLongSerializer();//(OLongSerializer) ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.LONG);
-        longSerializer.serialize(calendar.getTimeInMillis(), stream, startPosition);*/
     }
 
     public Date deserialize(byte[] stream, int startPosition) {
-/*        Calendar calendar = Calendar.getInstance();
-        OLongSerializer longSerializer = new OLongSerializer();//(OLongSerializer) ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.LONG);
-        calendar.setTimeInMillis(longSerializer.deserialize(stream, startPosition));
-        return calendar.getTime();*/
-        ODateTimeSerializer dateTimeSerializer = new ODateTimeSerializer(); //(ODateSerializer) ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.DATE);
+        ODateTimeSerializer dateTimeSerializer = (ODateTimeSerializer) ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.DATETIME);
         return dateTimeSerializer.deserialize(stream, startPosition);
     }
 }
