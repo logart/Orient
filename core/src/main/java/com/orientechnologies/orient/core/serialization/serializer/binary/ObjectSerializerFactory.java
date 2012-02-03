@@ -61,7 +61,7 @@ public class ObjectSerializerFactory {
     }
 
     public ObjectSerializer getIndexSerializer() {
-        return serializerMap.get(OType.INTEGER);
+        return serializerMap.get(OType.INTEGER.getByteId());
     }
 
     /**

@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 
 /**
- *
  * @author <a href="mailto:gmandnepr@gmail.com">Evgeniy Degtiarenko</a>
  */
 public class OBinaryLazyList<T> extends AbstractList<T> {
@@ -48,7 +47,7 @@ public class OBinaryLazyList<T> extends AbstractList<T> {
         }
 
         public T get() {
-            if(sourcePosition != DIRTY && value == null){
+            if (sourcePosition != DIRTY && value == null) {
                 init();
             }
             return value;
@@ -72,7 +71,7 @@ public class OBinaryLazyList<T> extends AbstractList<T> {
             final T thisValue = get();
             final T otherValue = ((LazyEntry<T>) o).get();
 
-            if(thisValue == null){
+            if (thisValue == null) {
                 return otherValue == null;
             } else {
                 return thisValue.equals(otherValue);
@@ -87,65 +86,100 @@ public class OBinaryLazyList<T> extends AbstractList<T> {
     }
 
     private boolean isDirty;
+    private final int sourceOffset;
     private final byte[] source;
     private final ArrayList<LazyEntry<T>> data = new ArrayList<LazyEntry<T>>();
 
     public OBinaryLazyList() {
-        this(null);
+        this(null, -1);
     }
 
-    public OBinaryLazyList(byte[] source) {
+    public OBinaryLazyList(final byte[] source, final int sourceOffset) {
+        this.sourceOffset = sourceOffset;
         this.source = source;
-        if(source != null){
+        if (source != null) {
             final ObjectSerializer<Integer> indexSerializer = ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.INTEGER);
-            final int initialSize = indexSerializer.deserialize(source, 0);
-            int position = indexSerializer.getFieldSize(null);
-            for (int i=0; i<initialSize; i++){
+            final int initialSize = indexSerializer.deserialize(source, sourceOffset);
+            final int indexSize = indexSerializer.getFieldSize(null);
+            int position = sourceOffset + indexSize;
+            for (int i = 0; i < initialSize; i++) {
                 data.add(new LazyEntry<T>(indexSerializer.deserialize(source, position)));
+                position += indexSize;
             }
+            this.isDirty = false;
+        } else {
+            this.isDirty = true;
         }
     }
 
-    public void toStream(final byte[] stream, final int offset) {
-        if(isDirty){
+    public void toStream(final byte[] stream, final int streamOffset) {
+        if (isDirty) {
             final ObjectSerializer<Integer> indexSerializer = ObjectSerializerFactory.INSTANCE.getIndexSerializer();
             final int indexSize = indexSerializer.getFieldSize(null);
             final int size = data.size();
             final int[] offsets = new int[size];
             int position = 0;
-            for(int i=0; i<size; i++) {
+            for (int i = 0; i < size; i++) {
                 offsets[i] = position;
-                position += ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE +
-                        ObjectSerializerFactory.INSTANCE.getObjectSerializer((byte)0).getFieldSize(data.get(i).get());
-                        //TODO obtain serializer by type, and not trigger lazy initialization;
+                if(!data.get(i).isDirty() && i<data.size()-1){
+                    position += data.get(i+1).sourcePosition - data.get(i).sourcePosition;
+                }else{
+                    final T obj = data.get(i).get();
+                    position += ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE +
+                            ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.getTypeByClass(obj.getClass())).getFieldSize(obj);
+                }
             }
 
             final int offsetsSize = indexSize * (data.size() + 1);
-            indexSerializer.serialize(size, stream, 0);
-            position = indexSize;
-            for(int i=0; i<size; i++) {
+            indexSerializer.serialize(size, stream, streamOffset);
+            position = streamOffset + indexSize;
+            for (int i = 0; i < size; i++) {
                 indexSerializer.serialize(offsets[i], stream, position);
                 position += indexSize;
-                if(data.get(i).isDirty()){
-                    ObjectSerializerFactory.INSTANCE.getObjectSerializer((byte)0).serialize(data.get(i).get(), stream, offsetsSize+offsets[i]);
-                }else{
-    //                System.arraycopy();TODO copy from the source to new stream
+                if (!data.get(i).isDirty() && i<size-1) {
+                    final int sizeToCopy = data.get(i+1).sourcePosition - data.get(i).sourcePosition;
+                    System.arraycopy(source, 0, stream, offsetsSize + offsets[i], sizeToCopy);
+                } else {
+                    final T obj = data.get(i).get();
+                    ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.getTypeByClass(obj.getClass())).serialize(data.get(i).get(), stream, offsetsSize + offsets[i]);
                 }
             }
         } else {
-//            System.arraycopy();TODO copy all
+            //if list has no changes just copy it from the source
+            final int sizeToCopy = getStreamSize();
+            System.arraycopy(source, sourceOffset, stream, streamOffset, sizeToCopy);
         }
     }
 
     public int getStreamSize() {
         final int indexSize = ObjectSerializerFactory.INSTANCE.getIndexSerializer().getFieldSize(null);
         int size = indexSize * (data.size() + 1);
-        for(final LazyEntry<T> entry : data) {
-            size += ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE +
-                    ObjectSerializerFactory.INSTANCE.getObjectSerializer((byte)0).getFieldSize(entry.get());
-                    //TODO obtain serializer by type, and not trigger lazy initialization
+        int index = 0;
+        for (final LazyEntry<T> entry : data) {
+            if(!entry.isDirty() && index < data.size()-1){
+                size += data.get(index+1).sourcePosition - entry.sourcePosition;
+            }else{
+                T obj = entry.get();
+                size += ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.getTypeByClass(obj.getClass())).getFieldSize(obj) +
+                        ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE;
+            }
+            index++;
         }
-        return 0;
+        return size;
+    }
+
+    protected int getObjectSize(int index) {
+        final LazyEntry<T> entry = data.get(index);
+        if(!entry.isDirty() && index < data.size()-1){
+            return data.get(index+1).sourcePosition - data.get(index).sourcePosition - ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE;
+        }else{
+            T obj = entry.get();
+            return ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.getTypeByClass(obj.getClass())).getFieldSize(obj);
+        }
+    }
+
+    public boolean isDirty() {
+        return isDirty;
     }
 
     @Override
