@@ -10,7 +10,7 @@ import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 
 /**
- * Test ma sure {@link OMetadata} serialize and deserialize just right
+ * Test ma sure {@link OBinarySerializationMetadata} serialize and deserialize just right
  *
  * @author gman
  */
@@ -24,11 +24,11 @@ public class OMetadataTest {
         fields.put("fieldB",5);
         fields.put("fieldC",10);
 
-        final OMetadata original = new OMetadata(-1, 15, "documentClassName", fields);
+        final OBinarySerializationMetadata original = new OBinarySerializationMetadata(-1, 15, "documentClassName", fields);
         final byte[] stream = new byte[original.getMetaSize() + original.getDataSize()];
         original.toBytes(stream);
 
-        final OMetadata restored = OMetadata.createFromBytes(stream);
+        final OBinarySerializationMetadata restored = OBinarySerializationMetadata.createFromBytes(stream);
 
         assertEquals(restored.getDocumentClassName(), original.getDocumentClassName(), "DocumentClassName mismatch");
         assertEquals(restored.getMetaSize(), original.getMetaSize(), "MetaSize mismatch");
@@ -44,7 +44,7 @@ public class OMetadataTest {
         doc.field("fieldB", 10, OType.INTEGER);
         doc.field("fieldC", 15, OType.INTEGER);
 
-        final OMetadata metadata = OMetadata.createFromDocument(doc);
+        final OBinarySerializationMetadata metadata = OBinarySerializationMetadata.createFromDocument(doc);
 
         assertEquals(metadata.getDataSize(), 15, "Data size has been calculated wrong");//3 * (integer size + type identifier size)
         assertEquals(metadata.getDocumentClassName(), null, "Document must not have schema class");

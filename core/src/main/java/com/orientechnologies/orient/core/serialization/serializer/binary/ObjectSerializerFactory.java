@@ -61,6 +61,10 @@ public class ObjectSerializerFactory {
 
     }
 
+    public ObjectSerializer getIndexSerializer() {
+        return serializerMap.get(OType.INTEGER);
+    }
+
     /**
      * Obtain ObjectSerializer realization for the next bytes in the stream
      *

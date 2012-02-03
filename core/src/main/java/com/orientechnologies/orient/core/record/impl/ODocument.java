@@ -46,7 +46,7 @@ import com.orientechnologies.orient.core.record.ORecordAbstract;
 import com.orientechnologies.orient.core.record.ORecordSchemaAwareAbstract;
 import com.orientechnologies.orient.core.serialization.OBinaryProtocol;
 import com.orientechnologies.orient.core.serialization.serializer.OStringSerializerHelper;
-import com.orientechnologies.orient.core.serialization.serializer.binary.OMetadata;
+import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializationMetadata;
 import com.orientechnologies.orient.core.serialization.serializer.record.ORecordSerializerFactory;
 import com.orientechnologies.orient.core.serialization.serializer.record.string.ORecordSerializerSchemaAware2CSV;
 
@@ -69,7 +69,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 
 	protected static final String[]								EMPTY_STRINGS			= new String[] {};
 
-    protected OMetadata _metadata;
+    protected OBinarySerializationMetadata _metadata;
 
 	/**
 	 * Internal constructor used on unmarshalling.
@@ -96,7 +96,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
      * @param iSource is the raw stream
      * @param iOMetadata is the metadata that will be used to deserialize raw stream
      */
-    public ODocument(final byte[] iSource, final OMetadata iOMetadata) {
+    public ODocument(final byte[] iSource, final OBinarySerializationMetadata iOMetadata) {
         _source = iSource;
         _metadata = iOMetadata;
         setup();//will set record id and object serialization interface
@@ -1087,11 +1087,11 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 		return iFieldName;
 	}
 
-    public void setMetadata(final OMetadata metadata) {
+    public void setMetadata(final OBinarySerializationMetadata metadata) {
         this._metadata = metadata;
     }
 
-    public OMetadata getMetadata() {
+    public OBinarySerializationMetadata getMetadata() {
         return _metadata;
     }
 }
