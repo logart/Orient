@@ -396,27 +396,42 @@ public class HopscotchHashSetTest
       absentKeysThirteen[i] =  new ORecordId(i, 2);
     }
 
-//    ORID[] keysFourteen = new ORID[512];
-//    ORID[] absentKeysFourteen = new ORID[512];
-//
-//    final int C1 = 543;
-//    final int C2 = 544;
-//    final int C3 = 545;
+    ORID[] keysFourteen = new ORID[113];
+    ORID[] absentKeysFourteen = new ORID[113];
+
+    final int C1 = 10;
+    final int C2 = 59;
+    final int C3 = 120;
 //    final int C4 = 546;
 //    final int C5 = 547;
 //    final int C6 = 548;
 //    final int C7 = 549;
-//
-//    for (int i = 0; i < 64; i ++){
-//      keysFourteen[i] = new ORecordId((C1 - i) - 31, 31 * i);
-//    }
-//    for (int i = 64; i < 128;i ++){
-//      keysFourteen[i] = new ORecordId((C2 - i) - 31, 31 * i);
-//    }
-//    for (int i = 128; i < 192; i ++){
-//      keysFourteen[i] = new ORecordId((C3 - i) - 31, 31 * i);
-//    }
-//    for (int i = 192; i < 256; i ++){
+
+    for (int i = 0; i < 50; i ++){
+      keysFourteen[i] = new ORecordId(i, i){
+        @Override
+        public int hashCode() {
+          return 10;
+        }
+      };
+    }
+    for (int i = 50; i < 111;i ++){
+      keysFourteen[i] = new ORecordId(i, i){
+        @Override
+        public int hashCode() {
+          return 59;
+        }
+      };
+    }
+    for (int i = 111; i < 113; i ++){
+      keysFourteen[i] = new ORecordId(i, i){
+        @Override
+        public int hashCode() {
+          return 120;
+        }
+      };
+    }
+//    for (int i = 111; i < 128; i ++){
 //      keysFourteen[i] = new ORecordId((C4 - i) - 31, 31 * i);
 //    }
 //    for (int i = 256; i < 320; i ++){
@@ -428,10 +443,10 @@ public class HopscotchHashSetTest
 //    for (int i = 484; i < 512; i ++){
 //      keysFourteen[i] = new ORecordId((C7 - i) - 31, 31 * i);
 //    }
-//
-//    for (int i = 0; i < 512; i++){
-//      absentKeysFourteen[i] = new ORecordId(4096, i);
-//    }
+
+    for (int i = 0; i < 113; i++){
+      absentKeysFourteen[i] = new ORecordId(4096, i);
+    }
 
     return new Object[][] {
       {keysOne, absentKeysOne},
@@ -447,7 +462,7 @@ public class HopscotchHashSetTest
       {keysEleven, absentKeysEleven},
       {keysTwelve, absentKeysTwelve},
       {keysThirteen, absentKeysThirteen},
-//      {keysFourteen, absentKeysFourteen}
+      {keysFourteen, absentKeysFourteen}
     };
   }
 }
