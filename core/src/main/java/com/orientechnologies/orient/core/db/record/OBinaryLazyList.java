@@ -9,26 +9,34 @@ import java.util.ArrayList;
 import java.util.Iterator;
 
 /**
+ * Represent list that load its elements lazily
+ *
  * @author <a href="mailto:gmandnepr@gmail.com">Evgeniy Degtiarenko</a>
  */
 public class OBinaryLazyList<T> extends AbstractList<T> {
 
+    /**
+     * Holder for the elements. Contains its position ad size in the binary source
+     * @param <T>
+     */
     protected class LazyEntry<T> {
 
         private static final int DIRTY = -1;
         private int sourcePosition;
+        private int size;
         private T value;
 
-        public LazyEntry(int sourcePosition) {
-            this(sourcePosition, null);
+        protected LazyEntry(final int sourcePosition, final int size) {
+            this(sourcePosition, size, null);
         }
 
-        public LazyEntry(T value) {
-            this(DIRTY, value);
+        protected LazyEntry(final T value) {
+            this(DIRTY, DIRTY, value);
         }
 
-        public LazyEntry(int sourcePosition, T value) {
+        protected LazyEntry(final int sourcePosition, final int size, final T value) {
             this.sourcePosition = sourcePosition;
+            this.size = size;
             this.value = value;
         }
 
@@ -94,17 +102,26 @@ public class OBinaryLazyList<T> extends AbstractList<T> {
         this(null, -1);
     }
 
+    /**
+     * Initialize list
+     *
+     * @param source records source
+     * @param sourceOffset offset of the list in the source
+     */
     public OBinaryLazyList(final byte[] source, final int sourceOffset) {
         this.sourceOffset = sourceOffset;
         this.source = source;
         if (source != null) {
-            final ObjectSerializer<Integer> indexSerializer = ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.INTEGER);
+            final ObjectSerializer<Integer> indexSerializer = ObjectSerializerFactory.INSTANCE.getIndexSerializer();
             final int initialSize = indexSerializer.deserialize(source, sourceOffset);
             final int indexSize = indexSerializer.getFieldSize(null);
-            int position = sourceOffset + indexSize;
-            for (int i = 0; i < initialSize; i++) {
-                data.add(new LazyEntry<T>(indexSerializer.deserialize(source, position)));
-                position += indexSize;
+            int indexOffset = sourceOffset + indexSize;
+            int dataOffset = indexOffset + indexSize * initialSize;
+            for(int i=0; i<initialSize; i++){
+                final int size = indexSerializer.deserialize(source, indexOffset);
+                data.add(new LazyEntry<T>(dataOffset, size));
+                indexOffset += indexSize;
+                dataOffset += size;
             }
             this.isDirty = false;
         } else {
@@ -112,37 +129,33 @@ public class OBinaryLazyList<T> extends AbstractList<T> {
         }
     }
 
+    /**
+     * Serialize list into the stream
+     *
+     * @param stream to serialize list
+     * @param streamOffset position to start serialization from
+     */
     public void toStream(final byte[] stream, final int streamOffset) {
         if (isDirty) {
             final ObjectSerializer<Integer> indexSerializer = ObjectSerializerFactory.INSTANCE.getIndexSerializer();
             final int indexSize = indexSerializer.getFieldSize(null);
             final int size = data.size();
-            final int[] offsets = new int[size];
-            int position = 0;
-            for (int i = 0; i < size; i++) {
-                offsets[i] = position;
-                if(!data.get(i).isDirty() && i<data.size()-1){
-                    position += data.get(i+1).sourcePosition - data.get(i).sourcePosition;
-                }else{
-                    final T obj = data.get(i).get();
-                    position += ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE +
-                            ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.getTypeByClass(obj.getClass())).getFieldSize(obj);
-                }
-            }
-
-            final int offsetsSize = indexSize * (data.size() + 1);
             indexSerializer.serialize(size, stream, streamOffset);
-            position = streamOffset + indexSize;
+            int indexOffset = streamOffset + indexSize;
+            int dataOffset = indexOffset + size * indexSize;
             for (int i = 0; i < size; i++) {
-                indexSerializer.serialize(offsets[i], stream, position);
-                position += indexSize;
-                if (!data.get(i).isDirty() && i<size-1) {
-                    final int sizeToCopy = data.get(i+1).sourcePosition - data.get(i).sourcePosition;
-                    System.arraycopy(source, 0, stream, offsetsSize + offsets[i], sizeToCopy);
+                final int objSize = getObjectSize(i);
+                indexSerializer.serialize(objSize, stream, indexOffset);
+                indexOffset += indexSize;
+                if (!data.get(i).isDirty()) {
+                    System.arraycopy(source,data.get(i).sourcePosition,stream,dataOffset,data.get(i).size);
                 } else {
                     final T obj = data.get(i).get();
-                    ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.getTypeByClass(obj.getClass())).serialize(data.get(i).get(), stream, offsetsSize + offsets[i]);
+                    final OType type = OType.getTypeByClass(obj.getClass());
+                    stream[dataOffset] = type.getByteId();
+                    ObjectSerializerFactory.INSTANCE.getObjectSerializer(type).serialize(data.get(i).get(), stream, dataOffset + ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE);
                 }
+                dataOffset += objSize;
             }
         } else {
             //if list has no changes just copy it from the source
@@ -151,33 +164,42 @@ public class OBinaryLazyList<T> extends AbstractList<T> {
         }
     }
 
+    /**
+     * Calculates amount of bytes that is required to serialize this list
+     *
+     * @return required amount of bytes to serialize list
+     */
     public int getStreamSize() {
         final int indexSize = ObjectSerializerFactory.INSTANCE.getIndexSerializer().getFieldSize(null);
         int size = indexSize * (data.size() + 1);
-        int index = 0;
-        for (final LazyEntry<T> entry : data) {
-            if(!entry.isDirty() && index < data.size()-1){
-                size += data.get(index+1).sourcePosition - entry.sourcePosition;
-            }else{
-                T obj = entry.get();
-                size += ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.getTypeByClass(obj.getClass())).getFieldSize(obj) +
-                        ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE;
-            }
-            index++;
+        for(int i=0; i<data.size(); i++){
+            size += getObjectSize(i);
         }
         return size;
     }
 
-    protected int getObjectSize(int index) {
+    /**
+     * Obtains size of the object
+     *
+     * @param index of the object in the list
+     * @return
+     */
+    protected int getObjectSize(final int index) {
         final LazyEntry<T> entry = data.get(index);
-        if(!entry.isDirty() && index < data.size()-1){
-            return data.get(index+1).sourcePosition - data.get(index).sourcePosition - ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE;
+        if(!entry.isDirty()){
+            return entry.size;
         }else{
-            T obj = entry.get();
-            return ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.getTypeByClass(obj.getClass())).getFieldSize(obj);
+            final T obj = entry.get();
+            return ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE +
+                    ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.getTypeByClass(obj.getClass())).getFieldSize(obj);
         }
     }
 
+    /**
+     * Determines weather list modified or not
+     *
+     * @return {@code true} if list has been modified or {@code false} otherwise
+     */
     public boolean isDirty() {
         return isDirty;
     }
@@ -225,6 +247,7 @@ public class OBinaryLazyList<T> extends AbstractList<T> {
             }
 
             public void remove() {
+                isDirty = true;
                 iterator.remove();
             }
         };
@@ -235,6 +258,12 @@ public class OBinaryLazyList<T> extends AbstractList<T> {
         return data.get(index).get();
     }
 
+    /**
+     * Obtain mutable record for its further modification
+     *
+     * @param index of the element to return
+     * @return element for further modification
+     */
     public T getForUpdate(int index) {
         isDirty = true;
         return data.get(index).getForUpdate();
