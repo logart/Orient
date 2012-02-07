@@ -10,7 +10,7 @@ import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.in
  * @since 18.01.12
  */
 public class OStringSerializer implements ObjectSerializer<String>{
-    public int getFieldSize(String object) {
+    public int getObjectSize(String object) {
         return object.length() * 2 + OIntegerSerializer.INT_SIZE;
     }
 

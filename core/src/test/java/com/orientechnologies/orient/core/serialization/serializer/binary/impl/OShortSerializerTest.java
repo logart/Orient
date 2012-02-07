@@ -21,7 +21,7 @@ public class OShortSerializerTest {
 
     @Test
     public void testFieldSize() {
-        Assert.assertEquals(shortSerializer.getFieldSize(null), FIELD_SIZE);
+        Assert.assertEquals(shortSerializer.getObjectSize(null), FIELD_SIZE);
     }
 
     @Test

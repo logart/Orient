@@ -21,7 +21,7 @@ public class ODoubleSerializerTest {
 
     @Test
     public void testFieldSize() {
-        Assert.assertEquals(doubleSerializer.getFieldSize(null), FIELD_SIZE);
+        Assert.assertEquals(doubleSerializer.getObjectSize(null), FIELD_SIZE);
     }
 
     @Test

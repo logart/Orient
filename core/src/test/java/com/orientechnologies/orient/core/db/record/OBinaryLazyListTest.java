@@ -25,21 +25,22 @@ public class OBinaryLazyListTest {
         for(int i=0; i<SIZE; i++){
             lazyList.add(i);
         }
-        stream = new byte[lazyList.getStreamSize()+OFFSET];
-        lazyList.toStream(stream, OFFSET);
+        stream = new byte[lazyList.getBinarySize()+OFFSET];
+        lazyList.serialize(stream, OFFSET);
     }
 
     @Test
     public void testInitialization() {
 
         assertTrue(lazyList.isDirty(), "Collection must be dirty as newly created");
-        assertEquals(lazyList.getStreamSize(),
-                (SIZE+1)* ObjectSerializerFactory.INSTANCE.getIndexSerializer().getFieldSize(null) +
-                        SIZE * (ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.INTEGER).getFieldSize(null) + ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE),
+        assertEquals(lazyList.getBinarySize(),
+                (SIZE+1)* ObjectSerializerFactory.INSTANCE.getIndexSize() +
+                        SIZE * (ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.INTEGER).getObjectSize(null) + ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE),
                 "Trying to allocate wrong size"
         );
 
-        final OBinaryLazyList<Integer> restoredLazyList = new OBinaryLazyList<Integer>(stream, OFFSET);
+        final OBinaryLazyList<Integer> restoredLazyList = new OBinaryLazyList<Integer>();
+        restoredLazyList.deserialize(stream, OFFSET);
 
         assertFalse(restoredLazyList.isDirty(), "Collection must not be dirty as restored and not changed");
         assertEquals(restoredLazyList, lazyList, "Restored lazyList must be equal to original one");
@@ -48,15 +49,18 @@ public class OBinaryLazyListTest {
     @Test
     public void testSerealizationDeserializationOfCopy() {
 
-        final OBinaryLazyList<Integer> restoredLazyList = new OBinaryLazyList<Integer>(stream, OFFSET);
+        final OBinaryLazyList<Integer> restoredLazyList = new OBinaryLazyList<Integer>();
+        restoredLazyList.deserialize(stream, OFFSET);
+
         assertFalse(restoredLazyList.isDirty(), "Collection must not be dirty as restored and not changed");
         assertEquals(restoredLazyList, lazyList, "Restored lazyList must be equal to original one");
 
-        final byte[] stream2 = new byte[lazyList.getStreamSize()];
-        restoredLazyList.toStream(stream2,  0);
+        final byte[] stream2 = new byte[lazyList.getBinarySize()];
+        restoredLazyList.serialize(stream2,  0);
 
         //make sure copying is right
-        final OBinaryLazyList<Integer> secondRestoredLazyList = new OBinaryLazyList<Integer>(stream2, 0);
+        final OBinaryLazyList<Integer> secondRestoredLazyList = new OBinaryLazyList<Integer>();
+        secondRestoredLazyList.deserialize(stream2, 0);
 
         assertFalse(secondRestoredLazyList.isDirty(), "Collection must not be dirty as restored and not changed");
         assertEquals(secondRestoredLazyList, lazyList, "Restored lazyList must be equal to original one");
@@ -65,7 +69,9 @@ public class OBinaryLazyListTest {
     @Test
     public void testSerializationDeserializationWithDirtyRecords() {
 
-        final OBinaryLazyList<Integer> restoredLazyList = new OBinaryLazyList<Integer>(stream, OFFSET);
+        final OBinaryLazyList<Integer> restoredLazyList = new OBinaryLazyList<Integer>();
+        restoredLazyList.deserialize(stream, OFFSET);
+
         assertFalse(restoredLazyList.isDirty(), "Collection must not be dirty as restored and not changed");
         assertEquals(restoredLazyList, lazyList, "Restored lazyList must be equal to original one");
 
@@ -75,11 +81,13 @@ public class OBinaryLazyListTest {
 
         assertTrue(restoredLazyList.isDirty(), "Collection has changes and must be dirty");
 
-        final byte[] stream2 = new byte[lazyList.getStreamSize()];
-        restoredLazyList.toStream(stream2,  0);
+        final byte[] stream2 = new byte[lazyList.getBinarySize()];
+        restoredLazyList.serialize(stream2,  0);
 
         //make sure serialization forks fine for changed collections
-        final OBinaryLazyList<Integer> secondRestoredLazyList = new OBinaryLazyList<Integer>(stream2, 0);
+        final OBinaryLazyList<Integer> secondRestoredLazyList = new OBinaryLazyList<Integer>();
+        secondRestoredLazyList.deserialize(stream2, 0);
+
         assertFalse(secondRestoredLazyList.isDirty(), "Collection must not be dirty as restored and not changed");
         assertEquals(secondRestoredLazyList, restoredLazyList, "Restored lazyList must be equal to original one");
     }

@@ -22,7 +22,7 @@ public class ODateTimeSerializerTest {
 
     @Test
     public void testFieldSize() {
-        Assert.assertEquals(dateTimeSerializer.getFieldSize(OBJECT), FIELD_SIZE);
+        Assert.assertEquals(dateTimeSerializer.getObjectSize(OBJECT), FIELD_SIZE);
     }
 
     @Test

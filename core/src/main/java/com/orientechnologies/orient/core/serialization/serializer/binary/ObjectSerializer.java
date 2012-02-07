@@ -14,7 +14,7 @@ public interface ObjectSerializer<T> {
      * @param object is the object to measure its size
      * @return size of the serialized object
      */
-    int getFieldSize(T object);
+    int getObjectSize(T object);
 
     /**
      * Writes object to the stream starting from the startPosition

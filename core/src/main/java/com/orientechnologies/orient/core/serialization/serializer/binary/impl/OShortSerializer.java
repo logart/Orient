@@ -15,7 +15,7 @@ public class OShortSerializer implements ObjectSerializer<Short> {
      */
     public static final int SHORT_SIZE = 2;
 
-    public int getFieldSize(Short object) {
+    public int getObjectSize(Short object) {
         return SHORT_SIZE;
     }
 

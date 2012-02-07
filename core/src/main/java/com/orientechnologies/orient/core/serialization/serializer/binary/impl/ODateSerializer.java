@@ -11,7 +11,7 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.ObjectS
  * @since 20.01.12
  */
 public class ODateSerializer implements ObjectSerializer<Date> {
-    public int getFieldSize(Date object) {
+    public int getObjectSize(Date object) {
         return OLongSerializer.LONG_SIZE;
     }
 

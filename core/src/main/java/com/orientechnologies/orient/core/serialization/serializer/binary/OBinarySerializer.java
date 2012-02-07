@@ -112,7 +112,7 @@ public class OBinarySerializer implements OPartialRecordSerializer {
                     osf.getObjectSerializer(typeId).serialize(value, stream, offset + typeIdentifierSize);
                 } else {
                     final int oldOffset = oldMetadata.getMetadata().get(name);
-                    final int sizeToCopy = osf.getObjectSerializer(doc.fieldType(name)).getFieldSize(value) + typeIdentifierSize;
+                    final int sizeToCopy = osf.getObjectSerializer(oldStream[oldOffset]).getObjectSize(value) + typeIdentifierSize;
                     System.arraycopy(oldStream, oldOffset, stream, offset, sizeToCopy);
                 }
             }

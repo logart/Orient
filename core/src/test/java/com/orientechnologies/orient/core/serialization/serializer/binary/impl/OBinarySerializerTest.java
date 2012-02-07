@@ -24,7 +24,7 @@ public class OBinarySerializerTest {
 
     @Test
     public void testFieldSize() {
-        Assert.assertEquals(binarySerializer.getFieldSize(OBJECT), FIELD_SIZE);
+        Assert.assertEquals(binarySerializer.getObjectSize(OBJECT), FIELD_SIZE);
     }
 
     @Test

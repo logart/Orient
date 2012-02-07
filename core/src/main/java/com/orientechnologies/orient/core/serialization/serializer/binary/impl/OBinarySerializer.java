@@ -11,7 +11,7 @@ import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.in
  * @since 20.01.12
  */
 public class OBinarySerializer implements ObjectSerializer<byte[]>{
-    public int getFieldSize(byte[] object) {
+    public int getObjectSize(byte[] object) {
         return object.length + OIntegerSerializer.INT_SIZE;
     }
 

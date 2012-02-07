@@ -99,10 +99,10 @@ public class OBinarySerializationMetadata {
      */
     public void toBytes(final byte[] source) {
         final ObjectSerializerFactory osf = ObjectSerializerFactory.INSTANCE;
-        final ObjectSerializer<Object> indexSerializer = osf.getObjectSerializer(OType.INTEGER);
+        final ObjectSerializer indexSerializer = osf.getIndexSerializer();
 
         indexSerializer.serialize(countMetadataSize(), source, 0);
-        int position = indexSerializer.getFieldSize(null);
+        int position = osf.getIndexSize();
         //write documentClassName type identifier (string or null)
         source[position] = documentClassName != null ? OType.STRING.getByteId() : ObjectSerializerFactory.NULL_TYPE;
         position += ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE;
@@ -110,7 +110,7 @@ public class OBinarySerializationMetadata {
         if(documentClassName != null) {
             final ObjectSerializer nameSerializer = osf.getObjectSerializer(OType.STRING);
             nameSerializer.serialize(documentClassName, source, position);
-            position += nameSerializer.getFieldSize(documentClassName);
+            position += nameSerializer.getObjectSize(documentClassName);
         }
 
         //serialize hash map
@@ -143,17 +143,17 @@ public class OBinarySerializationMetadata {
      */
     public static OBinarySerializationMetadata createFromBytes(final byte[] source) {
         final ObjectSerializerFactory osf = ObjectSerializerFactory.INSTANCE;
-        final ObjectSerializer<Object> indexSerializer = osf.getObjectSerializer(OType.INTEGER);
+        final ObjectSerializer indexSerializer = osf.getIndexSerializer();
 
         final int metaSize = (Integer) indexSerializer.deserialize(source, 0);
         final int dataSize = source.length - metaSize;
-        int position = indexSerializer.getFieldSize(null);
+        int position = osf.getIndexSize();
 
         //obtain serializer for documentClassName (string or null serializer)
         final ObjectSerializer nameSerializer = osf.getObjectSerializer(source[position]);
         position += ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE;
         final String documentClassName = (String) nameSerializer.deserialize(source, position);
-        position += nameSerializer.getFieldSize(documentClassName);
+        position += nameSerializer.getObjectSize(documentClassName);
 
         final Map<String, Integer> fieldOffsets = new HashMap<String, Integer>();
         OMemoryInputStream mem = null;
@@ -199,7 +199,7 @@ public class OBinarySerializationMetadata {
             fieldsOffsets.put(field, position);
             //calculate next position
             final ObjectSerializer ser = osf.getObjectSerializer(type, value);
-            position += ser.getFieldSize(value) + typeIdentifierSize;
+            position += ser.getObjectSize(value) + typeIdentifierSize;
         }
 
         //TODO put real metadata size when it will be possible
@@ -208,9 +208,9 @@ public class OBinarySerializationMetadata {
 
     private int countMetadataSize() {
         final ObjectSerializerFactory osf = ObjectSerializerFactory.INSTANCE;
-        int size = osf.getObjectSerializer(OType.INTEGER).getFieldSize(null) +
+        int size = osf.getIndexSize() +
                 ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE +
-                osf.getObjectSerializer(OType.STRING, documentClassName).getFieldSize(documentClassName);
+                osf.getObjectSerializer(OType.STRING, documentClassName).getObjectSize(documentClassName);
 
         OMemoryStream mem = null;
         ObjectOutputStream obj = null;

@@ -15,7 +15,7 @@ public class OLongSerializer implements ObjectSerializer<Long> {
      */
     public static final int LONG_SIZE = 8;
 
-    public int getFieldSize(Long object) {
+    public int getObjectSize(Long object) {
         return LONG_SIZE;
     }
 

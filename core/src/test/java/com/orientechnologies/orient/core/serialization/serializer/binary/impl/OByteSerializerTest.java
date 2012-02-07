@@ -21,7 +21,7 @@ public class OByteSerializerTest {
 
     @Test
     public void testFieldSize() {
-        Assert.assertEquals(byteSerializer.getFieldSize(null), FIELD_SIZE);
+        Assert.assertEquals(byteSerializer.getObjectSize(null), FIELD_SIZE);
     }
 
     @Test

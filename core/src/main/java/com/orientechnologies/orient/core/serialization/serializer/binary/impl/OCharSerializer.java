@@ -12,7 +12,7 @@ public class OCharSerializer implements ObjectSerializer<Character> {
      */
     public static final int CHAR_SIZE = 2;
 
-    public int getFieldSize(Character object) {
+    public int getObjectSize(Character object) {
         return CHAR_SIZE;
     }
 

@@ -22,7 +22,7 @@ public class OCharSerializerTest {
 
     @Test
     public void testFieldSize() {
-        Assert.assertEquals(charSerializer.getFieldSize(null), FIELD_SIZE);
+        Assert.assertEquals(charSerializer.getObjectSize(null), FIELD_SIZE);
     }
 
     @Test

@@ -15,7 +15,7 @@ public class ODoubleSerializer implements ObjectSerializer <Double>{
      */
     public static final int DOUBLE_SIZE = 8;
 
-    public int getFieldSize(Double object) {
+    public int getObjectSize(Double object) {
         return DOUBLE_SIZE;
     }
 

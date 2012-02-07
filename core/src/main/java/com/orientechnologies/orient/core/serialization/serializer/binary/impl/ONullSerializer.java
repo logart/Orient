@@ -9,7 +9,7 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.ObjectS
  */
 public class ONullSerializer implements ObjectSerializer<Object> {
 
-    public int getFieldSize(final Object object) {
+    public int getObjectSize(final Object object) {
         return 0;
     }
 

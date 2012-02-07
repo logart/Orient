@@ -15,7 +15,7 @@ public class OFloatSerializer implements ObjectSerializer<Float>{
      */
     public static final int FLOAT_SIZE = 4;
 
-    public int getFieldSize(Float object) {
+    public int getObjectSize(Float object) {
         return FLOAT_SIZE;
     }
 

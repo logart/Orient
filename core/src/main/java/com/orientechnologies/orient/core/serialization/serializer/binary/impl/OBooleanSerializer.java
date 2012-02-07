@@ -12,7 +12,7 @@ public class OBooleanSerializer implements ObjectSerializer<Boolean>{
      */
     public static final int BOOLEAN_SIZE = 1;
 
-    public int getFieldSize(Boolean object) {
+    public int getObjectSize(Boolean object) {
         return BOOLEAN_SIZE;
     }
 

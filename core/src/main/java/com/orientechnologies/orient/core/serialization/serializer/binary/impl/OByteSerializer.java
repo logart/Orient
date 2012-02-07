@@ -12,7 +12,7 @@ public class OByteSerializer implements ObjectSerializer<Byte>{
      */
     public static final int BYTE_SIZE = 1;
 
-    public int getFieldSize(Byte object) {
+    public int getObjectSize(Byte object) {
         return BYTE_SIZE;
     }
 

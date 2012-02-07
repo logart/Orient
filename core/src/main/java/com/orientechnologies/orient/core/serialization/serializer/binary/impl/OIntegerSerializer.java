@@ -15,7 +15,7 @@ public class OIntegerSerializer implements ObjectSerializer<Integer>{
      */
     public static final int INT_SIZE = 4;
 
-    public int getFieldSize(Integer object) {
+    public int getObjectSize(Integer object) {
         return INT_SIZE;
     }
 

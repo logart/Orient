@@ -1,6 +1,7 @@
 package com.orientechnologies.orient.core.db.record;
 
 import com.orientechnologies.orient.core.metadata.schema.OType;
+import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializable;
 import com.orientechnologies.orient.core.serialization.serializer.binary.ObjectSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.ObjectSerializerFactory;
 
@@ -13,7 +14,7 @@ import java.util.Iterator;
  *
  * @author <a href="mailto:gmandnepr@gmail.com">Evgeniy Degtiarenko</a>
  */
-public class OBinaryLazyList<T> extends AbstractList<T> {
+public class OBinaryLazyList<T> extends AbstractList<T> implements OBinarySerializable {
 
     /**
      * Holder for the elements. Contains its position ad size in the binary source
@@ -94,27 +95,65 @@ public class OBinaryLazyList<T> extends AbstractList<T> {
     }
 
     private boolean isDirty;
-    private final int sourceOffset;
-    private final byte[] source;
+    private int sourceOffset;
+    private byte[] source;
     private final ArrayList<LazyEntry<T>> data = new ArrayList<LazyEntry<T>>();
 
+    /**
+     * Default constructor
+     */
     public OBinaryLazyList() {
-        this(null, -1);
+        this.isDirty = false;
+        this.source = null;
+        this.sourceOffset = -1;
     }
 
     /**
-     * Initialize list
+     * Serialize list into the stream
      *
-     * @param source records source
-     * @param sourceOffset offset of the list in the source
+     * @param stream to serialize list
+     * @param streamOffset position to start serialization from
      */
-    public OBinaryLazyList(final byte[] source, final int sourceOffset) {
-        this.sourceOffset = sourceOffset;
-        this.source = source;
+    public void serialize(final byte[] stream, final int streamOffset) {
+        if (isDirty) {
+            final ObjectSerializer<Integer> indexSerializer = ObjectSerializerFactory.INSTANCE.getIndexSerializer();
+            final int indexSize = ObjectSerializerFactory.INSTANCE.getIndexSize();
+            final int size = data.size();
+            indexSerializer.serialize(size, stream, streamOffset);
+            int indexOffset = streamOffset + indexSize;
+            int dataOffset = indexOffset + size * indexSize;
+            for (int i = 0; i < size; i++) {
+                final int objSize = getObjectSize(i);
+                indexSerializer.serialize(objSize, stream, indexOffset);
+                indexOffset += indexSize;
+                if (!data.get(i).isDirty()) {
+                    System.arraycopy(source,data.get(i).sourcePosition,stream,dataOffset,data.get(i).size);
+                } else {
+                    final T obj = data.get(i).get();
+                    final OType type = OType.getTypeByClass(obj.getClass());
+                    stream[dataOffset] = type.getByteId();
+                    ObjectSerializerFactory.INSTANCE.getObjectSerializer(type, obj).serialize(obj, stream, dataOffset + ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE);
+                }
+                dataOffset += objSize;
+            }
+        } else {
+            //if list has no changes just copy it from the source
+            final int sizeToCopy = getBinarySize();
+            System.arraycopy(source, sourceOffset, stream, streamOffset, sizeToCopy);
+        }
+    }
+
+    /**
+     * Deserialize from the stream
+     */
+    public void deserialize(byte[] stream, int startPosition) {
+        this.sourceOffset = startPosition;
+        this.source = stream;
+        this.data.clear();
         if (source != null) {
             final ObjectSerializer<Integer> indexSerializer = ObjectSerializerFactory.INSTANCE.getIndexSerializer();
+            final int indexSize = ObjectSerializerFactory.INSTANCE.getIndexSize();
             final int initialSize = indexSerializer.deserialize(source, sourceOffset);
-            final int indexSize = indexSerializer.getFieldSize(null);
             int indexOffset = sourceOffset + indexSize;
             int dataOffset = indexOffset + indexSize * initialSize;
             for(int i=0; i<initialSize; i++){
@@ -130,48 +169,13 @@ public class OBinaryLazyList<T> extends AbstractList<T> {
     }
 
     /**
-     * Serialize list into the stream
-     *
-     * @param stream to serialize list
-     * @param streamOffset position to start serialization from
-     */
-    public void toStream(final byte[] stream, final int streamOffset) {
-        if (isDirty) {
-            final ObjectSerializer<Integer> indexSerializer = ObjectSerializerFactory.INSTANCE.getIndexSerializer();
-            final int indexSize = indexSerializer.getFieldSize(null);
-            final int size = data.size();
-            indexSerializer.serialize(size, stream, streamOffset);
-            int indexOffset = streamOffset + indexSize;
-            int dataOffset = indexOffset + size * indexSize;
-            for (int i = 0; i < size; i++) {
-                final int objSize = getObjectSize(i);
-                indexSerializer.serialize(objSize, stream, indexOffset);
-                indexOffset += indexSize;
-                if (!data.get(i).isDirty()) {
-                    System.arraycopy(source,data.get(i).sourcePosition,stream,dataOffset,data.get(i).size);
-                } else {
-                    final T obj = data.get(i).get();
-                    final OType type = OType.getTypeByClass(obj.getClass());
-                    stream[dataOffset] = type.getByteId();
-                    ObjectSerializerFactory.INSTANCE.getObjectSerializer(type).serialize(data.get(i).get(), stream, dataOffset + ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE);
-                }
-                dataOffset += objSize;
-            }
-        } else {
-            //if list has no changes just copy it from the source
-            final int sizeToCopy = getStreamSize();
-            System.arraycopy(source, sourceOffset, stream, streamOffset, sizeToCopy);
-        }
-    }
-
-    /**
      * Calculates amount of bytes that is required to serialize this list
      *
      * @return required amount of bytes to serialize list
      */
-    public int getStreamSize() {
-        final int indexSize = ObjectSerializerFactory.INSTANCE.getIndexSerializer().getFieldSize(null);
-        int size = indexSize * (data.size() + 1);
+    public int getBinarySize() {
+        final int indexSize = ObjectSerializerFactory.INSTANCE.getIndexSize();
+        int size = indexSize * (data.size() + 1);//+1 is stands for the list size
         for(int i=0; i<data.size(); i++){
             size += getObjectSize(i);
         }
@@ -190,8 +194,9 @@ public class OBinaryLazyList<T> extends AbstractList<T> {
             return entry.size;
         }else{
             final T obj = entry.get();
+            final OType type = OType.getTypeByClass(obj.getClass());
             return ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE +
-                    ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.getTypeByClass(obj.getClass())).getFieldSize(obj);
+                    ObjectSerializerFactory.INSTANCE.getObjectSerializer(type, obj).getObjectSize(obj);
         }
     }
 

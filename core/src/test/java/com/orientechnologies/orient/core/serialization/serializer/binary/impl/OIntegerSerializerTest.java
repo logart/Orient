@@ -22,7 +22,7 @@ public class OIntegerSerializerTest {
 
     @Test
     public void testFieldSize() {
-        Assert.assertEquals(integerSerializer.getFieldSize(null), FIELD_SIZE);
+        Assert.assertEquals(integerSerializer.getObjectSize(null), FIELD_SIZE);
     }
 
     @Test

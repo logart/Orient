@@ -30,7 +30,7 @@ public class OStringSerializerTest {
 
     @Test
     public void testFieldSize() {
-        Assert.assertEquals(stringSerializer.getFieldSize(OBJECT), FIELD_SIZE);
+        Assert.assertEquals(stringSerializer.getObjectSize(OBJECT), FIELD_SIZE);
     }
 
     @Test

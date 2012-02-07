@@ -21,7 +21,7 @@ public class OFloatSerializerTest {
 
     @Test
     public void testFieldSize() {
-        Assert.assertEquals(floatSerializer.getFieldSize(null), FIELD_SIZE);
+        Assert.assertEquals(floatSerializer.getObjectSize(null), FIELD_SIZE);
     }
 
     @Test

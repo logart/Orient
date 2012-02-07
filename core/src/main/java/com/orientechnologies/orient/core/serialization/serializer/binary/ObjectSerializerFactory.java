@@ -3,8 +3,11 @@ package com.orientechnologies.orient.core.serialization.serializer.binary;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+
+import com.orientechnologies.orient.core.db.record.OBinaryLazyList;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.metadata.schema.OType;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OBinarySerializableDelegate;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OBinarySerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OBooleanSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OByteSerializer;
@@ -40,7 +43,11 @@ public class ObjectSerializerFactory {
      */
     public static final byte NULL_TYPE = -1;
 
+    private static final int INDEX_SIZE = 4;
+
     private ObjectSerializerFactory() {
+        final OBinarySerializableDelegate delegate = new OBinarySerializableDelegate();
+
         //TODO populate map with objectSerializerImplementations
         serializerMap.put(NULL_TYPE, new ONullSerializer());
 
@@ -58,10 +65,25 @@ public class ObjectSerializerFactory {
 
         serializerMap.put(OType.DATE.getByteId(), new ODateSerializer());
 
+        serializerMap.put(OType.EMBEDDEDLIST.getByteId(), delegate);
     }
 
+    /**
+     * Obtain serializer that is responsible for serializing indexes and sizes (currently is OIntegerSerializer)
+     *
+     * @return index serializer
+     */
     public ObjectSerializer getIndexSerializer() {
         return serializerMap.get(OType.INTEGER.getByteId());
+    }
+
+    /**
+     * Obtain amount of bytes that is required for storing index or size record
+     *
+     * @return size of index in bytes
+     */
+    public int getIndexSize() {
+        return INDEX_SIZE;
     }
 
     /**
@@ -76,6 +98,8 @@ public class ObjectSerializerFactory {
 
     /**
      * Obtain ObjectSerializer realization for the OType
+     * !!!!WARNING!!!!
+     * will obtain wrong serializer for the null objects
      *
      * @param type is the OType to obtain serializer algorithm for
      * @return ObjectSerializer realization that fits OType
@@ -100,40 +124,16 @@ public class ObjectSerializerFactory {
         }
     }
 
-    public OType getType(Object o) {
-        OType type = null;
-        if (o.getClass() == byte[].class)
-            type = OType.BINARY;
-/*        else if (ODatabaseRecordThreadLocal.INSTANCE.isDefined() && o instanceof ORecord<?>) {
-            if (type == null)
-                // DETERMINE THE FIELD TYPE
-                if (o instanceof ODocument && ((ODocument) o).hasOwners())
-                    type = OType.EMBEDDED;
-                else
-                    type = OType.LINK;
-        } */else if (o instanceof ORID)
-            type = OType.LINK;
-        else if (o instanceof Date)
-            type = OType.DATETIME;
-        else if (o instanceof String)
-            type = OType.STRING;
-        else if (o instanceof Integer)
-            type = OType.INTEGER;
-        else if (o instanceof Long)
-            type = OType.LONG;
-        else if (o instanceof Float)
-            type = OType.FLOAT;
-        else if (o instanceof Short)
-            type = OType.SHORT;
-        else if (o instanceof Byte)
-            type = OType.BYTE;
-        else if (o instanceof Double)
-            type = OType.DOUBLE;
-/*        else
-            type = OType.LINK;*/
-
-        return type;
+    /**
+     * Obtain implementation of theOBinary identifier by its type identifer
+     *
+     * @param typeIdentifier is the identifier of the type
+     * @return OBinarySerializable implementation
+     */
+    public OBinarySerializable getInstanceOf(final byte typeIdentifier) {
+        if(typeIdentifier == OType.EMBEDDEDLIST.getByteId()){
+            return new OBinaryLazyList();
+        }
+        return null;//TODO
     }
-
-
 }

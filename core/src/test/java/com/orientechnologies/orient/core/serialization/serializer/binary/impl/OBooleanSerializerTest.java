@@ -22,7 +22,7 @@ public class OBooleanSerializerTest {
 
     @Test
     public void testFieldSize() {
-        Assert.assertEquals(booleanSerializer.getFieldSize(null), FIELD_SIZE);
+        Assert.assertEquals(booleanSerializer.getObjectSize(null), FIELD_SIZE);
     }
 
     @Test

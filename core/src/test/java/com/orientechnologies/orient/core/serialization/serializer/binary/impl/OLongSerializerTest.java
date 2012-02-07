@@ -21,7 +21,7 @@ public class OLongSerializerTest {
 
     @Test
     public void testFieldSize() {
-        Assert.assertEquals(longSerializer.getFieldSize(null), FIELD_SIZE);
+        Assert.assertEquals(longSerializer.getObjectSize(null), FIELD_SIZE);
     }
 
     @Test
