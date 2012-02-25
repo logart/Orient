@@ -396,8 +396,8 @@ public class HopscotchHashSetTest
       absentKeysThirteen[i] =  new ORecordId(i, 2);
     }
 
-    ORID[] keysFourteen = new ORID[113];
-    ORID[] absentKeysFourteen = new ORID[113];
+    ORID[] keysFourteen = new ORID[114];
+    ORID[] absentKeysFourteen = new ORID[114];
 
     final int C1 = 10;
     final int C2 = 59;
@@ -431,9 +431,25 @@ public class HopscotchHashSetTest
         }
       };
     }
-//    for (int i = 111; i < 128; i ++){
-//      keysFourteen[i] = new ORecordId((C4 - i) - 31, 31 * i);
+
+    for (int i = 113; i < 114; i ++){
+      keysFourteen[i] = new ORecordId(i,i){
+        @Override
+        public int hashCode() {
+          return 10;
+        }
+      };
+    }
+      
+//    for (int i = 114; i < 115; i ++){
+//        keysFourteen[i] = new ORecordId(i,i){
+//            @Override
+//            public int hashCode() {
+//                return 11;
+//            }
+//        };
 //    }
+
 //    for (int i = 256; i < 320; i ++){
 //      keysFourteen[i] = new ORecordId((C5 - i) - 31, 31 * i);
 //    }
@@ -444,24 +460,24 @@ public class HopscotchHashSetTest
 //      keysFourteen[i] = new ORecordId((C7 - i) - 31, 31 * i);
 //    }
 
-    for (int i = 0; i < 113; i++){
+    for (int i = 0; i < 114; i++){
       absentKeysFourteen[i] = new ORecordId(4096, i);
     }
 
     return new Object[][] {
-      {keysOne, absentKeysOne},
-      {keysTwo, absentKeysTwo},
-      {keysThree, absentKeysThree},
-      {keysFour, absentKeysFour},
-      {keysFive, absentKeysFive},
-      {keysSix, absentKeysSix},
-      {keysSeven, absentKeysSeven},
-      {keysEight, absentKeysEight},
-      {keysNine, absentKeysNine},
-      {keysTen, absentKeysTen},
-      {keysEleven, absentKeysEleven},
-      {keysTwelve, absentKeysTwelve},
-      {keysThirteen, absentKeysThirteen},
+//      {keysOne, absentKeysOne},
+//      {keysTwo, absentKeysTwo},
+//      {keysThree, absentKeysThree},
+//      {keysFour, absentKeysFour},
+//      {keysFive, absentKeysFive},
+//      {keysSix, absentKeysSix},
+//      {keysSeven, absentKeysSeven},
+//      {keysEight, absentKeysEight},
+//      {keysNine, absentKeysNine},
+//      {keysTen, absentKeysTen},
+//      {keysEleven, absentKeysEleven},
+//      {keysTwelve, absentKeysTwelve},
+//      {keysThirteen, absentKeysThirteen},
       {keysFourteen, absentKeysFourteen}
     };
   }

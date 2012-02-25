@@ -285,7 +285,8 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
   private void moveValues(final int bucketCellIndex, final int fromCellIndex, final int toCellIndex) {
 //    assert bucketCellIndex > -1 && bucketCellIndex < cells.length;
     final Cell bucketCell = cells[bucketCellIndex];
-//    assert fromCellIndex > -1 && fromCellIndex < cells.length;
+//    assert fromCellIndex > -1;
+//    assert fromCellIndex < cells.length;
     final Cell fromCell = cells[fromCellIndex];
 //    assert toCellIndex > -1 && toCellIndex < cells.length;
     Cell toCell = cells[toCellIndex];
@@ -299,15 +300,42 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
     toCell.value = fromCell.value;
     fromCell.value = null;
 
-    bucketCell.firstPosition = toCellIndex;
+     if (bucketCell.firstPosition == fromCellIndex){
+      bucketCell.firstPosition = toCellIndex;
+//      final int tmp = toCell.nextPosition;
+      toCell.nextPosition = fromCell.nextPosition;
+      bucketCell.nextPosition = END_OF_CHAIN;
+      fromCell.nextPosition = END_OF_CHAIN;
+     }else {
+      final int lastCellIndex = findPreLastBucketCell(bucketCell.firstPosition, fromCellIndex);
+      final Cell lastCell = cells[lastCellIndex];
 
-    int tmp = bucketCell.nextPosition;
-    bucketCell.nextPosition = toCell.nextPosition;
-    toCell.nextPosition = tmp;
+      lastCell.nextPosition = toCellIndex;
 
-    if (fromCell.size == 0)
-         cells[fromCellIndex] = null;
+      toCell.nextPosition = fromCell.nextPosition;
+      fromCell.nextPosition = END_OF_CHAIN;
+    }
+
   }
+
+    private int findPreLastBucketCell(int firstCellIndex, int currentCellIndex){
+
+        if (firstCellIndex == currentCellIndex){
+            throw new IllegalStateException("bucket cell does not have previous cell");
+        }
+
+//      assert firstCellIndex > -1 && firstCellIndex < cells.length;
+      int cellIndex = firstCellIndex;
+//      assert cellIndex > -1 && cellIndex < cells.length;
+        Cell cell = cells[cellIndex];
+        while ((cell.nextPosition != currentCellIndex) && (cell.nextPosition!= END_OF_CHAIN)) {
+            cellIndex = cell.nextPosition;
+//          assert cellIndex > -1 && cellIndex < cells.length;
+            cell = cells[cellIndex];
+        }
+
+        return cellIndex;
+    }
 
   private int[] findClosestCellToMove(final int index) {
     int beginWith = index - HOPSCOTCH_DISTANCE + 1;
@@ -317,8 +345,8 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
         final Cell cell = cells[i];
 //        assert cell != null;
         if (cell.size > 0) {
-          final int closestIndex = cell.firstPosition;
-          if (closestIndex < index)
+          final int closestIndex = findClosestBucketIndex(i);
+          if ((closestIndex < index)&& (closestIndex!=-1))
             return new int[]{i, closestIndex};
         }
       }
@@ -330,8 +358,8 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
         final Cell cell = cells[i];
 //        assert cell != null;
         if (cell.size > 0) {
-          final int closestIndex = cell.firstPosition;
-          if (closestIndex < index)
+          final int closestIndex = findClosestBucketIndex(i);
+          if ((closestIndex < index)&& (closestIndex!=-1))
             return new int[]{i, closestIndex};
 
 //          if (firstPosition - cells.length < beginWith)
@@ -344,14 +372,32 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
         final Cell cell = cells[i];
 //        assert cell != null;
         if (cell.size > 0) {
-          final int closestIndex = cell.firstPosition;
-          if (closestIndex < index)
+          final int closestIndex = findClosestBucketIndex(i);
+          if ((closestIndex < index)&& (closestIndex!=-1))
             return new int[]{i, closestIndex};
         }
       }
 
       return null;
     }
+  }
+
+  private int findClosestBucketIndex(final int i) {
+    int minimalIndex = cells.length + 1;
+
+    final Cell bucketCell = cells[i];
+
+    int currentCellIndex = bucketCell.firstPosition;
+
+    while (currentCellIndex != END_OF_CHAIN){
+      if (minimalIndex > currentCellIndex){
+        minimalIndex = currentCellIndex;
+      }
+      Cell currentCell = cells[currentCellIndex];
+      currentCellIndex = currentCell.nextPosition;
+    }
+
+    return (minimalIndex == cells.length+1)? -1 : minimalIndex;
   }
 
 
