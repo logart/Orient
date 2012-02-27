@@ -302,9 +302,7 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
 
      if (bucketCell.firstPosition == fromCellIndex){
       bucketCell.firstPosition = toCellIndex;
-//      final int tmp = toCell.nextPosition;
       toCell.nextPosition = fromCell.nextPosition;
-      bucketCell.nextPosition = END_OF_CHAIN;
       fromCell.nextPosition = END_OF_CHAIN;
      }else {
       final int lastCellIndex = findPreLastBucketCell(bucketCell.firstPosition, fromCellIndex);
@@ -325,7 +323,7 @@ public class OHopscotchHashSet extends AbstractSet<ORID> {
         }
 
 //      assert firstCellIndex > -1 && firstCellIndex < cells.length;
-      int cellIndex = firstCellIndex;
+        int cellIndex = firstCellIndex;
 //      assert cellIndex > -1 && cellIndex < cells.length;
         Cell cell = cells[cellIndex];
         while ((cell.nextPosition != currentCellIndex) && (cell.nextPosition!= END_OF_CHAIN)) {
