@@ -84,7 +84,7 @@ public abstract class OStorageEmbedded extends OStorageAbstract {
 		try {
 			for (ORID id : ids) {
 				lockManager.acquireLock(Thread.currentThread(), id, iLockType);
-				lockedIds.add(id);
+				lockedIds.add(id.copy());
 			}
 			return iCallable.call();
 		} catch (RuntimeException e) {

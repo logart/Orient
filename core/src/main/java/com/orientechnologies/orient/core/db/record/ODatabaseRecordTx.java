@@ -314,7 +314,7 @@ public class ODatabaseRecordTx extends ODatabaseRecordAbstract {
 				} else {
 					List<ORID> ids = new ArrayList<ORID>();
 					for (ORecordOperation recordOperation : currentTx.getCurrentRecordEntries()) {
-						recordOperation.getRecord().getIdentity();
+						ids.add(recordOperation.getRecord().getIdentity());
 					}
 
 					getStorage().callInLock(commit, true, ids);

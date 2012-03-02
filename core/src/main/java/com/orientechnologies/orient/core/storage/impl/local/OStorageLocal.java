@@ -18,14 +18,9 @@ package com.orientechnologies.orient.core.storage.impl.local;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
+import com.orientechnologies.common.concur.lock.OLockManager;
 import com.orientechnologies.common.concur.lock.OLockManager.LOCK;
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.common.io.OFileUtils;
@@ -44,6 +39,7 @@ import com.orientechnologies.orient.core.config.OStorageLogicalClusterConfigurat
 import com.orientechnologies.orient.core.config.OStorageMemoryClusterConfiguration;
 import com.orientechnologies.orient.core.config.OStoragePhysicalClusterConfiguration;
 import com.orientechnologies.orient.core.config.OStorageSegmentConfiguration;
+import com.orientechnologies.orient.core.db.record.ORecordOperation;
 import com.orientechnologies.orient.core.exception.OConcurrentModificationException;
 import com.orientechnologies.orient.core.exception.OConfigurationException;
 import com.orientechnologies.orient.core.exception.ORecordNotFoundException;
@@ -877,8 +873,18 @@ public class OStorageLocal extends OStorageEmbedded {
 	}
 
 	public void commit(final OTransaction iTx) {
-		lock.acquireExclusiveLock();
+		List<ORID> ids = new ArrayList<ORID>();
+		for (ORecordOperation recordOperation : iTx.getCurrentRecordEntries()) {
+			ids.add(recordOperation.getRecord().getIdentity());
+		}
+
+		Collections.sort(ids);
+		final List<ORID> lockedIds = new ArrayList<ORID>(ids.size());
 		try {
+			for (ORID id : ids) {
+				lockManager.acquireLock(Thread.currentThread(), id, LOCK.EXCLUSIVE);
+				lockedIds.add(id);
+			}
 
 			try {
 				txManager.clearLogEntries(iTx);
@@ -906,7 +912,9 @@ public class OStorageLocal extends OStorageEmbedded {
 				}
 			}
 		} finally {
-			lock.releaseExclusiveLock();
+			for (ORID id : lockedIds) {
+				lockManager.releaseLock(Thread.currentThread(), id, LOCK.EXCLUSIVE);
+			}
 		}
 	}
 
