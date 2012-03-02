@@ -45,6 +45,8 @@ import com.orientechnologies.orient.core.type.tree.provider.OMVRBTreeRIDProvider
  * 
  */
 public class OGraphDatabase extends ODatabaseDocumentTx {
+	public static final String	TYPE										= "graph";
+
 	public static final String	VERTEX_CLASS_NAME				= "OGraphVertex";
 	public static final String	VERTEX_FIELD_IN					= "in";
 	public static final String	VERTEX_FIELD_IN_EDGES		= "inEdges";
@@ -479,31 +481,35 @@ public class OGraphDatabase extends ODatabaseDocumentTx {
 		return filterEdgesByProperties((OMVRBTreeRIDSet) iVertex.field(VERTEX_FIELD_IN), iProperties);
 	}
 
-	public ODocument getInVertex(final ODocument iEdge) {
-		checkEdgeClass(iEdge);
-		OIdentifiable v = iEdge.field(EDGE_FIELD_IN);
+	public ODocument getInVertex(final OIdentifiable iEdge) {
+		final ODocument e = (ODocument) iEdge.getRecord();
+
+		checkEdgeClass(e);
+		OIdentifiable v = e.field(EDGE_FIELD_IN);
 		if (v != null && v instanceof ORID) {
 			// REPLACE WITH THE DOCUMENT
 			v = v.getRecord();
-			final boolean wasDirty = iEdge.isDirty();
-			iEdge.field(EDGE_FIELD_IN, v);
+			final boolean wasDirty = e.isDirty();
+			e.field(EDGE_FIELD_IN, v);
 			if (!wasDirty)
-				iEdge.unsetDirty();
+				e.unsetDirty();
 		}
 
 		return (ODocument) v;
 	}
 
-	public ODocument getOutVertex(final ODocument iEdge) {
-		checkEdgeClass(iEdge);
-		OIdentifiable v = iEdge.field(EDGE_FIELD_OUT);
+	public ODocument getOutVertex(final OIdentifiable iEdge) {
+		final ODocument e = (ODocument) iEdge.getRecord();
+
+		checkEdgeClass(e);
+		OIdentifiable v = e.field(EDGE_FIELD_OUT);
 		if (v != null && v instanceof ORID) {
 			// REPLACE WITH THE DOCUMENT
 			v = v.getRecord();
-			final boolean wasDirty = iEdge.isDirty();
-			iEdge.field(EDGE_FIELD_OUT, v);
+			final boolean wasDirty = e.isDirty();
+			e.field(EDGE_FIELD_OUT, v);
 			if (!wasDirty)
-				iEdge.unsetDirty();
+				e.unsetDirty();
 		}
 
 		return (ODocument) v;
@@ -745,6 +751,11 @@ public class OGraphDatabase extends ODatabaseDocumentTx {
 			}
 		}
 		return good;
+	}
+
+	@Override
+	public String getType() {
+		return TYPE;
 	}
 
 	public void checkForGraphSchema() {

@@ -23,6 +23,7 @@ import java.util.Map.Entry;
 import com.orientechnologies.common.collection.OCompositeKey;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.exception.OSerializationException;
+import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.serialization.OMemoryStream;
 import com.orientechnologies.orient.core.serialization.OSerializableStream;
@@ -38,7 +39,8 @@ import com.orientechnologies.orient.core.serialization.serializer.stream.OCompos
  */
 @SuppressWarnings("serial")
 public abstract class OCommandRequestTextAbstract extends OCommandRequestAbstract implements OCommandRequestText {
-	protected String	text;
+	protected String					text;
+	protected OCommandContext	context;
 
 	protected OCommandRequestTextAbstract() {
 	}
@@ -141,7 +143,11 @@ public abstract class OCommandRequestTextAbstract extends OCommandRequestAbstrac
 				for (final Entry<Object, Object> paramEntry : parameters.entrySet())
 					if (paramEntry.getValue() instanceof OCompositeKey)
 						compositeKeyParams.put(paramEntry.getKey(), OCompositeKeySerializer.INSTANCE.toStream(paramEntry.getValue()));
-					else
+					else if (paramEntry.getValue() instanceof String) {
+						final StringBuilder builder = new StringBuilder();
+						ORecordSerializerStringAbstract.simpleValueToStream(builder, OType.STRING, paramEntry.getValue());
+						params.put(paramEntry.getKey(), builder.toString());
+					} else
 						params.put(paramEntry.getKey(), paramEntry.getValue());
 
 				buffer.set(!params.isEmpty());
@@ -166,8 +172,17 @@ public abstract class OCommandRequestTextAbstract extends OCommandRequestAbstrac
 		return buffer.toByteArray();
 	}
 
+	public OCommandContext getContext() {
+		return context;
+	}
+
+	public void setContext(final OCommandContext iContext) {
+		context = iContext;
+	}
+
 	@Override
 	public String toString() {
 		return getClass().getSimpleName() + " [text=" + text + "]";
 	}
+
 }

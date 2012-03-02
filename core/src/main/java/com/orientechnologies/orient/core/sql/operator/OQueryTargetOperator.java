@@ -18,9 +18,9 @@ package com.orientechnologies.orient.core.sql.operator;
 import java.util.Collection;
 import java.util.List;
 
+import com.orientechnologies.orient.core.command.OCommandContext;
 import com.orientechnologies.orient.core.db.ODatabaseComplex;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
-import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.sql.filter.OSQLFilterCondition;
 
 /**
@@ -41,8 +41,8 @@ public abstract class OQueryTargetOperator extends OQueryOperator {
 	 * At run-time the evaluation per record must return always true since the recordset are filtered at the begin.
 	 */
 	@Override
-	public Object evaluateRecord(final ORecordInternal<?> iRecord, final OSQLFilterCondition iCondition, final Object iLeft,
-			final Object iRight) {
+	public Object evaluateRecord(final OIdentifiable iRecord, final OSQLFilterCondition iCondition, final Object iLeft,
+			final Object iRight, OCommandContext iContext) {
 		return true;
 	}
 

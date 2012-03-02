@@ -81,6 +81,8 @@ public class OServer {
 	private ObjectName																				onServer			= new ObjectName("OrientDB:type=Server");
 	private final CountDownLatch															startupLatch	= new CountDownLatch(1);
 
+	private Random																						random				= new Random();
+
 	public OServer() throws ClassNotFoundException, MalformedObjectNameException, NullPointerException,
 			InstanceAlreadyExistsException, MBeanRegistrationException, NotCompliantMBeanException {
 		defaultSettings();
@@ -137,7 +139,6 @@ public class OServer {
 		OLogManager.instance().info(this, "OrientDB Server v" + OConstants.getVersion() + " is starting up...");
 
 		Orient.instance();
-		Orient.instance().removeShutdownHook();
 
 		loadConfiguration(iConfiguration);
 	}
@@ -165,16 +166,17 @@ public class OServer {
 
 		running = false;
 
+		shutdownHook.cancel();
+
 		OLogManager.instance().info(this, "OrientDB Server is shutdowning...");
 
 		try {
-			lock.writeLock().lock();
+			Orient.instance().shutdown();
+		} catch (Throwable e) {
+		}
 
-			// SHUTDOWN LISTENERS
-			for (OServerNetworkListener l : listeners) {
-				OLogManager.instance().info(this, "Shutdowning connection listener '" + l + "'...");
-				l.shutdown();
-			}
+		try {
+			lock.writeLock().lock();
 
 			// SHUTDOWN HANDLERS
 			for (OServerHandler h : handlers) {
@@ -185,16 +187,27 @@ public class OServer {
 				}
 			}
 
-			// PROTOCOL HANDLERS
-			protocols.clear();
 			try {
-				MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
-				mBeanServer.unregisterMBean(onProfiler);
-				mBeanServer.unregisterMBean(onServer);
-			} catch (Exception e) {
-				OLogManager.instance().error(this, "OrientDB Server v" + OConstants.ORIENT_VERSION + " unregisterMBean error.", e);
+				// PROTOCOL HANDLERS
+				protocols.clear();
+				try {
+					MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
+					mBeanServer.unregisterMBean(onProfiler);
+					mBeanServer.unregisterMBean(onServer);
+				} catch (Exception e) {
+					OLogManager.instance().error(this, "OrientDB Server v" + OConstants.ORIENT_VERSION + " unregisterMBean error.", e);
+				}
+			} catch (Throwable t) {
 			}
-			Orient.instance().shutdown();
+
+			// SHUTDOWN LISTENERS
+			for (OServerNetworkListener l : listeners) {
+				OLogManager.instance().info(this, "Shutdowning connection listener '" + l + "'...");
+				try {
+					l.shutdown();
+				} catch (Throwable e) {
+				}
+			}
 
 		} finally {
 			lock.writeLock().unlock();
@@ -443,8 +456,7 @@ public class OServer {
 
 		if (iPassword == null)
 			// AUTO GENERATE PASSWORD
-			iPassword = OSecurityManager.instance().digest2String(String.valueOf(new Random(System.currentTimeMillis()).nextLong()),
-					false);
+			iPassword = OSecurityManager.instance().digest2String(String.valueOf(random.nextLong()), false);
 
 		configuration.users[configuration.users.length - 1] = new OServerUserConfiguration(iName, iPassword, iPermissions);
 
@@ -474,8 +486,8 @@ public class OServer {
 	protected void defaultSettings() {
 		// OGlobalConfiguration.CACHE_LEVEL2_ENABLED.setValue(Boolean.FALSE);
 		// OGlobalConfiguration.CACHE_LEVEL2_SIZE.setValue(0);
-		OGlobalConfiguration.CACHE_LEVEL1_ENABLED.setValue(Boolean.FALSE);
-		OGlobalConfiguration.CACHE_LEVEL1_SIZE.setValue(0);
+		//OGlobalConfiguration.CACHE_LEVEL1_ENABLED.setValue(Boolean.FALSE);
+		//OGlobalConfiguration.CACHE_LEVEL1_SIZE.setValue(0);
 		OGlobalConfiguration.FILE_LOCK.setValue(true);
 		// OGlobalConfiguration.MVRBTREE_LAZY_UPDATES.setValue(1);
 		// OGlobalConfiguration.LAZYSET_WORK_ON_STREAM.setValue(false);

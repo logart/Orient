@@ -17,6 +17,7 @@ package com.orientechnologies.orient.core.sql.functions;
 
 import java.util.List;
 
+import com.orientechnologies.orient.core.command.OCommandContext;
 import com.orientechnologies.orient.core.command.OCommandExecutor;
 import com.orientechnologies.orient.core.command.OCommandToParse;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
@@ -55,23 +56,23 @@ public class OSQLFunctionRuntime extends OSQLFilterItemAbstract {
 	/**
 	 * Execute a function.
 	 * 
-	 * @param iRecord
+	 * @param o
 	 *          Current record
 	 * @param iRequester
 	 * @return
 	 */
-	public Object execute(final ORecordSchemaAware<?> iRecord, final OCommandExecutor iRequester) {
+	public Object execute(final OIdentifiable o, final OCommandExecutor iRequester) {
 		// RESOLVE VALUES USING THE CURRENT RECORD
 		for (int i = 0; i < configuredParameters.length; ++i) {
 			if (configuredParameters[i] instanceof OSQLFilterItemField)
-				runtimeParameters[i] = ((OSQLFilterItemField) configuredParameters[i]).getValue(iRecord);
+				runtimeParameters[i] = ((OSQLFilterItemField) configuredParameters[i]).getValue(o, null);
 			else if (configuredParameters[i] instanceof OSQLFunctionRuntime)
-				runtimeParameters[i] = ((OSQLFunctionRuntime) configuredParameters[i]).execute(iRecord, iRequester);
+				runtimeParameters[i] = ((OSQLFunctionRuntime) configuredParameters[i]).execute(o, iRequester);
 		}
 
-		final Object functionResult = function.execute(iRecord, runtimeParameters, iRequester);
+		final Object functionResult = function.execute(o, runtimeParameters, iRequester);
 
-		return transformValue(iRecord, functionResult);
+		return transformValue(o, functionResult);
 	}
 
 	public Object getResult() {
@@ -82,7 +83,7 @@ public class OSQLFunctionRuntime extends OSQLFilterItemAbstract {
 		function.setResult(iValue);
 	}
 
-	public Object getValue(final OIdentifiable iRecord) {
+	public Object getValue(final OIdentifiable iRecord, OCommandContext iContetx) {
 		return execute(iRecord != null ? (ORecordSchemaAware<?>) iRecord.getRecord() : null, null);
 	}
 
@@ -115,7 +116,7 @@ public class OSQLFunctionRuntime extends OSQLFilterItemAbstract {
 		// PARSE PARAMETERS
 		this.configuredParameters = new Object[funcParamsText.size()];
 		for (int i = 0; i < funcParamsText.size(); ++i) {
-			this.configuredParameters[i] = OSQLHelper.parseValue(null, iQueryToParse, funcParamsText.get(i));
+			this.configuredParameters[i] = OSQLHelper.parseValue(null, iQueryToParse, funcParamsText.get(i), null);
 		}
 
 		// COPY STATIC VALUES

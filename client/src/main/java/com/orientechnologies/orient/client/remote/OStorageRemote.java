@@ -49,6 +49,7 @@ import com.orientechnologies.orient.core.config.OContextConfiguration;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.config.OStorageConfiguration;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
+import com.orientechnologies.orient.core.db.document.ODatabaseDocument;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.db.record.ORecordOperation;
@@ -86,6 +87,8 @@ public class OStorageRemote extends OStorageAbstract {
 
 	public static final String								PARAM_MIN_POOL		= "minpool";
 	public static final String								PARAM_MAX_POOL		= "maxpool";
+	public static final String								PARAM_DB_TYPE			= "dbtype";
+
 	private static final String								DRIVER_NAME				= "OrientDB Java";
 
 	protected final ExecutorService						asynchExecutor;
@@ -105,6 +108,7 @@ public class OStorageRemote extends OStorageAbstract {
 	private final boolean											debug							= false;
 	private ODocument													clusterConfiguration;
 	private ORemoteServerEventListener				asynchEventListener;
+	private String														connectionDbType;
 	private String														connectionUserName;
 	private String														connectionUserPassword;
 	private Map<String, Object>								connectionOptions;
@@ -358,7 +362,8 @@ public class OStorageRemote extends OStorageAbstract {
 		} while (true);
 	}
 
-	public ORawBuffer readRecord(final ORecordId iRid, final String iFetchPlan, final ORecordCallback<ORawBuffer> iCallback) {
+	public ORawBuffer readRecord(final ORecordId iRid, final String iFetchPlan, final boolean iIgnoreCache,
+			final ORecordCallback<ORawBuffer> iCallback) {
 		checkConnection();
 
 		if (OStorageRemoteThreadLocal.INSTANCE.get().commandExecuting)
@@ -373,6 +378,8 @@ public class OStorageRemote extends OStorageAbstract {
 					network = beginRequest(OChannelBinaryProtocol.REQUEST_RECORD_LOAD);
 					network.writeRID(iRid);
 					network.writeString(iFetchPlan != null ? iFetchPlan : "");
+					if (network.getSrvProtocolVersion() >= 9)
+						network.writeByte((byte) (iIgnoreCache ? 1 : 0));
 
 				} finally {
 					endRequest(network);
@@ -780,8 +787,8 @@ public class OStorageRemote extends OStorageAbstract {
 				try {
 					network = beginRequest(OChannelBinaryProtocol.REQUEST_TX_COMMIT);
 
-					network.writeInt(((OTransaction) iTx).getId());
-					network.writeByte((byte) (((OTransaction) iTx).isUsingLog() ? 1 : 0));
+					network.writeInt(iTx.getId());
+					network.writeByte((byte) (iTx.isUsingLog() ? 1 : 0));
 
 					final List<ORecordOperation> tmpEntries = new ArrayList<ORecordOperation>();
 
@@ -962,7 +969,7 @@ public class OStorageRemote extends OStorageAbstract {
 								clustersIds.remove(entry.getKey());
 								clustersTypes.remove(entry.getKey());
 								if (configuration.clusters.size() > iClusterId)
-									configuration.clusters.set(iClusterId, null);
+									configuration.dropCluster(iClusterId);
 								break;
 							}
 						getLevel2Cache().freeCluster(iClusterId);
@@ -1119,12 +1126,15 @@ public class OStorageRemote extends OStorageAbstract {
 	protected void openRemoteDatabase() throws IOException {
 		minPool = OGlobalConfiguration.CLIENT_CHANNEL_MIN_POOL.getValueAsInteger();
 		maxPool = OGlobalConfiguration.CLIENT_CHANNEL_MAX_POOL.getValueAsInteger();
+		connectionDbType = ODatabaseDocument.TYPE;
 
 		if (connectionOptions != null && connectionOptions.size() > 0) {
 			if (connectionOptions.containsKey(PARAM_MIN_POOL))
 				minPool = Integer.parseInt(connectionOptions.get(PARAM_MIN_POOL).toString());
 			if (connectionOptions.containsKey(PARAM_MAX_POOL))
 				maxPool = Integer.parseInt(connectionOptions.get(PARAM_MAX_POOL).toString());
+			if (connectionOptions.containsKey(PARAM_DB_TYPE))
+				connectionDbType = connectionOptions.get(PARAM_DB_TYPE).toString();
 		}
 
 		setSessionId(-1);
@@ -1137,7 +1147,13 @@ public class OStorageRemote extends OStorageAbstract {
 			// @SINCE 1.0rc8
 			sendClientInfo(network);
 
-			network.writeString(name).writeString(connectionUserName).writeString(connectionUserPassword);
+			network.writeString(name);
+
+			if (network.getSrvProtocolVersion() >= 8)
+				network.writeString(connectionDbType);
+
+			network.writeString(connectionUserName);
+			network.writeString(connectionUserPassword);
 
 		} finally {
 			endRequest(network);
@@ -1425,13 +1441,11 @@ public class OStorageRemote extends OStorageAbstract {
 		if (obj == null)
 			return;
 
-		synchronized (clusterConfiguration) {
-			// UPDATE IT
-			clusterConfiguration = obj;
+		// UPDATE IT
+		clusterConfiguration = obj;
 
-			if (OLogManager.instance().isDebugEnabled())
-				OLogManager.instance().debug(this, "Received new cluster configuration: %s", clusterConfiguration.toJSON(""));
-		}
+		if (OLogManager.instance().isDebugEnabled())
+			OLogManager.instance().debug(this, "Received new cluster configuration: %s", clusterConfiguration.toJSON(""));
 	}
 
 	private void commitEntry(final OChannelBinaryClient iNetwork, final ORecordOperation txEntry) throws IOException {

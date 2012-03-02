@@ -36,11 +36,9 @@ import com.orientechnologies.orient.core.exception.OStorageException;
 import com.orientechnologies.orient.core.hook.ORecordHook;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
-import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.storage.OCluster;
 import com.orientechnologies.orient.core.storage.OPhysicalPosition;
 import com.orientechnologies.orient.core.storage.ORawBuffer;
-import com.orientechnologies.orient.core.storage.ORecordBrowsingListener;
 import com.orientechnologies.orient.core.storage.ORecordCallback;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.OStorageEmbedded;
@@ -237,7 +235,7 @@ public class OStorageMemory extends OStorageEmbedded {
 		}
 	}
 
-	public ORawBuffer readRecord(final ORecordId iRid, String iFetchPlan, ORecordCallback<ORawBuffer> iCallback) {
+	public ORawBuffer readRecord(final ORecordId iRid, String iFetchPlan, boolean iIgnoreCache, ORecordCallback<ORawBuffer> iCallback) {
 		return readRecord(getClusterById(iRid.clusterId), iRid, true);
 	}
 
@@ -517,9 +515,6 @@ public class OStorageMemory extends OStorageEmbedded {
 	public void synch() {
 	}
 
-	public void browse(final int[] iClusterId, final ORecordBrowsingListener iListener, final ORecord<?> iRecord) {
-	}
-
 	public boolean exists() {
 		lock.acquireSharedLock();
 		try {
@@ -630,7 +625,9 @@ public class OStorageMemory extends OStorageEmbedded {
 						// RECORD CHANGED: RE-STREAM IT
 						stream = txEntry.getRecord().toStream();
 
+				  txEntry.getRecord().onBeforeIdentityChanged(rid);
 					createRecord(rid, stream, txEntry.getRecord().getRecordType(), 0, null);
+					txEntry.getRecord().onAfterIdentityChanged(txEntry.getRecord());
 
 					iTx.getDatabase().callbackHooks(ORecordHook.TYPE.AFTER_CREATE, txEntry.getRecord());
 

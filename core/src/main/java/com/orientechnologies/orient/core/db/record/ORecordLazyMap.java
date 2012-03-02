@@ -37,21 +37,27 @@ import com.orientechnologies.orient.core.record.impl.ODocument;
 public class ORecordLazyMap extends OTrackedMap<OIdentifiable> implements ORecordLazyMultiValue {
 	final private byte																			recordType;
 	private ORecordMultiValueHelper.MULTIVALUE_CONTENT_TYPE	status							= MULTIVALUE_CONTENT_TYPE.EMPTY;
+	protected boolean																				marshalling					= false;
 	private boolean																					autoConvertToRecord	= true;
 
-	public ORecordLazyMap(final ORecord<?> iSourceRecord) {
+	public ORecordLazyMap(final ODocument iSourceRecord) {
 		super(iSourceRecord);
 		this.recordType = ODocument.RECORD_TYPE;
 	}
 
-	public ORecordLazyMap(final ORecord<?> iSourceRecord, final byte iRecordType) {
+	public ORecordLazyMap(final ODocument iSourceRecord, final byte iRecordType) {
 		super(iSourceRecord);
 		this.recordType = iRecordType;
+
+		if (iSourceRecord != null) {
+			if (!iSourceRecord.isLazyLoad())
+				// SET AS NON-LAZY LOAD THE COLLECTION TOO
+				autoConvertToRecord = false;
+		}
 	}
 
 	@Override
 	public boolean containsValue(final Object o) {
-		// convertLinks2Records();
 		return super.containsValue(o);
 	}
 
@@ -68,9 +74,9 @@ public class ORecordLazyMap extends OTrackedMap<OIdentifiable> implements ORecor
 
 	@Override
 	public OIdentifiable put(final Object iKey, OIdentifiable iValue) {
-		if (status == MULTIVALUE_CONTENT_TYPE.ALL_RIDS && iValue instanceof ORecord<?> && !((ORecord<?>) iValue).getIdentity().isNew())
+		if (status == MULTIVALUE_CONTENT_TYPE.ALL_RIDS && iValue instanceof ORecord<?> && !iValue.getIdentity().isNew())
 			// IT'S BETTER TO LEAVE ALL RIDS AND EXTRACT ONLY THIS ONE
-			iValue = ((ORecord<?>) iValue).getIdentity();
+			iValue = iValue.getIdentity();
 		else
 			status = ORecordMultiValueHelper.updateContentType(status, iValue);
 
@@ -114,7 +120,6 @@ public class ORecordLazyMap extends OTrackedMap<OIdentifiable> implements ORecor
 		if (status == MULTIVALUE_CONTENT_TYPE.ALL_RECORDS || !autoConvertToRecord)
 			// PRECONDITIONS
 			return;
-
 		for (Object k : keySet())
 			convertLink2Record(k);
 
@@ -147,8 +152,13 @@ public class ORecordLazyMap extends OTrackedMap<OIdentifiable> implements ORecor
 				if (((ORecord<?>) value).isDirty())
 					ODatabaseRecordThreadLocal.INSTANCE.get().save((ORecordInternal<?>) value);
 
-				// OVERWRITE
-				super.put(iKey, ((ORecord<?>) value).getIdentity());
+				marshalling = true;
+				try {
+					// OVERWRITE
+					super.put(iKey, ((ORecord<?>) value).getIdentity());
+				} finally {
+					marshalling = false;
+				}
 
 				// CONVERTED
 				return true;
@@ -162,8 +172,8 @@ public class ORecordLazyMap extends OTrackedMap<OIdentifiable> implements ORecor
 	/**
 	 * Convert the item with the received key to a record.
 	 * 
-	 * @param iIndex
-	 *          Position of the item to convert
+	 * @param iKey
+	 *          Key of the item to convert
 	 */
 	private void convertLink2Record(final Object iKey) {
 		if (status == MULTIVALUE_CONTENT_TYPE.ALL_RECORDS)
@@ -178,14 +188,32 @@ public class ORecordLazyMap extends OTrackedMap<OIdentifiable> implements ORecor
 
 		if (value != null && value instanceof ORID) {
 			final ORID rid = (ORID) value;
-
+			marshalling = true;
 			try {
-				// OVERWRITE IT
-				super.put(iKey, rid.getRecord());
-			} catch (ORecordNotFoundException e) {
-				// IGNORE THIS
+				try {
+					// OVERWRITE IT
+					super.put(iKey, rid.getRecord());
+				} catch (ORecordNotFoundException e) {
+					// IGNORE THIS
+				}
+			} finally {
+				marshalling = false;
 			}
 		}
+	}
+
+	@Override
+	public OTrackedMap<OIdentifiable> setDirty() {
+		if (!marshalling)
+			return super.setDirty();
+
+		return this;
+	}
+
+	@Override
+	protected void fireCollectionChangedEvent(final OMultiValueChangeEvent<Object, OIdentifiable> event) {
+		if (!marshalling)
+			super.fireCollectionChangedEvent(event);
 	}
 
 	public byte getRecordType() {

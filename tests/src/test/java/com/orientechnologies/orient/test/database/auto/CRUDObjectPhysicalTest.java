@@ -128,6 +128,34 @@ public class CRUDObjectPhysicalTest {
 		database.close();
 	}
 
+	@Test(dependsOnMethods = "testAutoCreateClass")
+	public void synchQueryCollectionsFetch() {
+		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+
+		database.getLevel1Cache().invalidate();
+		database.getLevel2Cache().clear();
+
+		// BROWSE ALL THE OBJECTS
+		int i = 0;
+		List<Account> result = database.query(new OSQLSynchQuery<Account>("select from Account").setFetchPlan("*:-1"));
+		for (Account a : result) {
+
+			Assert.assertEquals(a.getId(), i);
+			Assert.assertEquals(a.getName(), "Bill");
+			Assert.assertEquals(a.getSurname(), "Gates");
+			Assert.assertEquals(a.getSalary(), i + 300.1f);
+			Assert.assertEquals(a.getAddresses().size(), 1);
+			Assert.assertEquals(a.getAddresses().get(0).getCity().getName(), rome.getName());
+			Assert.assertEquals(a.getAddresses().get(0).getCity().getCountry().getName(), rome.getCountry().getName());
+
+			i++;
+		}
+
+		Assert.assertTrue(i == TOT_RECORDS);
+
+		database.close();
+	}
+
 	@Test(dependsOnMethods = "readAndBrowseDescendingAndCheckHoleUtilization")
 	public void mapEnumAndInternalObjects() {
 		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
@@ -158,7 +186,7 @@ public class CRUDObjectPhysicalTest {
 
 		int i = 0;
 		Account a;
-		for (Object o : database.browseCluster("Account")) {
+		for (Object o : database.browseCluster("Account").setFetchPlan("*:1")) {
 			a = (Account) o;
 
 			if (i % 2 == 0)
@@ -181,6 +209,7 @@ public class CRUDObjectPhysicalTest {
 		int i = 0;
 		Account a;
 		for (OObjectIteratorCluster<Account> iterator = database.browseCluster("Account"); iterator.hasNext();) {
+			iterator.setFetchPlan("*:1");
 			a = iterator.next();
 
 			if (i % 2 == 0)
@@ -218,7 +247,7 @@ public class CRUDObjectPhysicalTest {
 	public void browseLinked() {
 		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
 
-		for (Profile obj : database.browseClass(Profile.class)) {
+		for (Profile obj : database.browseClass(Profile.class).setFetchPlan("*:1")) {
 			if (obj.getNick().equals("Neo")) {
 				Assert.assertEquals(obj.getFollowers().size(), 0);
 				Assert.assertEquals(obj.getFollowings().size(), 2);
@@ -236,7 +265,7 @@ public class CRUDObjectPhysicalTest {
 		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
 
 		database.setLazyLoading(false);
-		for (Profile obj : database.browseClass(Profile.class)) {
+		for (Profile obj : database.browseClass(Profile.class).setFetchPlan("*:-1")) {
 			Assert.assertFalse(obj.getFollowings() instanceof OLazyObjectSet);
 			Assert.assertFalse(obj.getFollowers() instanceof OLazyObjectSet);
 			if (obj.getNick().equals("Neo")) {

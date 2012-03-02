@@ -74,7 +74,7 @@ public class OStorageConfiguration implements OSerializableStream {
 	 * @throws OSerializationException
 	 */
 	public OStorageConfiguration load() throws OSerializationException {
-		final byte[] record = storage.readRecord(CONFIG_RID, null, null).buffer;
+		final byte[] record = storage.readRecord(CONFIG_RID, null, false, null).buffer;
 
 		if (record == null)
 			throw new OStorageException("Cannot load database's configuration. The database seems to be corrupted.");
@@ -362,5 +362,18 @@ public class OStorageConfiguration implements OSerializableStream {
 	}
 
 	public void close() throws IOException {
+	}
+
+	public void setCluster(final OStorageClusterConfiguration config) {
+		while (config.getId() >= clusters.size())
+			clusters.add(null);
+		clusters.set(config.getId(), config);
+	}
+
+	public void dropCluster(final int iClusterId) {
+		if (iClusterId < clusters.size()) {
+			clusters.set(iClusterId, null);
+			update();
+		}
 	}
 }

@@ -24,14 +24,16 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 import com.orientechnologies.common.collection.OMultiValue;
+import com.orientechnologies.orient.core.command.OCommandContext;
 import com.orientechnologies.orient.core.config.OStorageConfiguration;
+import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
+import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.db.record.ORecordElement;
 import com.orientechnologies.orient.core.exception.OQueryParsingException;
 import com.orientechnologies.orient.core.exception.ORecordNotFoundException;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.query.OQueryRuntimeValueMulti;
-import com.orientechnologies.orient.core.record.ORecordSchemaAware;
 import com.orientechnologies.orient.core.serialization.serializer.OStringSerializerHelper;
 import com.orientechnologies.orient.core.sql.OSQLHelper;
 import com.orientechnologies.orient.core.sql.functions.OSQLFunctionRuntime;
@@ -60,11 +62,11 @@ public class OSQLFilterCondition {
 		this.right = iRight;
 	}
 
-	public Object evaluate(final ORecordSchemaAware<?> iRecord) {
-		Object l = evaluate(iRecord, left);
-		Object r = evaluate(iRecord, right);
+	public Object evaluate(final OIdentifiable o, final OCommandContext iContext) {
+		Object l = evaluate(o, left, iContext);
+		Object r = evaluate(o, right, iContext);
 
-		final Object[] convertedValues = checkForConversion(iRecord, l, r);
+		final Object[] convertedValues = checkForConversion(o, l, r);
 		if (convertedValues != null) {
 			l = convertedValues[0];
 			r = convertedValues[1];
@@ -79,7 +81,7 @@ public class OSQLFilterCondition {
 			return l;
 		}
 
-		return operator.evaluateRecord(iRecord, this, l, r);
+		return operator.evaluateRecord(o, this, l, r, iContext);
 	}
 
 	public ORID getBeginRidRange() {
@@ -102,7 +104,7 @@ public class OSQLFilterCondition {
 		return operator.getEndRidRange(left, right);
 	}
 
-	private Object[] checkForConversion(final ORecordSchemaAware<?> iRecord, final Object l, final Object r) {
+	private Object[] checkForConversion(final OIdentifiable o, final Object l, final Object r) {
 		Object[] result = null;
 
 		// DEFINED OPERATOR
@@ -138,9 +140,9 @@ public class OSQLFilterCondition {
 
 			// DATES
 			else if (r instanceof Date && !(l instanceof Collection || l instanceof Date)) {
-				result = new Object[] { getDate(iRecord, l), r };
+				result = new Object[] { getDate(l), r };
 			} else if (l instanceof Date && !(r instanceof Collection || r instanceof Date)) {
-				result = new Object[] { l, getDate(iRecord, r) };
+				result = new Object[] { l, getDate(r) };
 			}
 
 			// RIDS
@@ -182,7 +184,7 @@ public class OSQLFilterCondition {
 		return stringValue.length() > 0 ? new Float(stringValue) : new Float(0);
 	}
 
-	protected Date getDate(final ORecordSchemaAware<?> iRecord, final Object iValue) {
+	protected Date getDate(final Object iValue) {
 		if (iValue == null)
 			return null;
 
@@ -201,7 +203,7 @@ public class OSQLFilterCondition {
 			return new Date(Long.valueOf(stringValue).longValue());
 		}
 
-		final OStorageConfiguration config = iRecord.getDatabase().getStorage().getConfiguration();
+		final OStorageConfiguration config = ODatabaseRecordThreadLocal.INSTANCE.get().getStorage().getConfiguration();
 
 		SimpleDateFormat formatter = config.getDateFormatInstance();
 
@@ -218,27 +220,26 @@ public class OSQLFilterCondition {
 		}
 	}
 
-	protected Object evaluate(ORecordSchemaAware<?> iRecord, final Object iValue) {
-		if (iRecord.getInternalStatus() == ORecordElement.STATUS.NOT_LOADED) {
+	protected Object evaluate(OIdentifiable o, final Object iValue, final OCommandContext iContext) {
+		if (o.getRecord().getInternalStatus() == ORecordElement.STATUS.NOT_LOADED) {
 			try {
-				iRecord = (ORecordSchemaAware<?>) iRecord.load();
+				o = o.getRecord().load();
 			} catch (ORecordNotFoundException e) {
 				return null;
 			}
 		}
 
-		if (iValue instanceof OSQLFilterItem) {
-			return ((OSQLFilterItem) iValue).getValue(iRecord);
-		}
+		if (iValue instanceof OSQLFilterItem)
+			return ((OSQLFilterItem) iValue).getValue(o, iContext);
 
 		if (iValue instanceof OSQLFilterCondition)
 			// NESTED CONDITION: EVALUATE IT RECURSIVELY
-			return ((OSQLFilterCondition) iValue).evaluate(iRecord);
+			return ((OSQLFilterCondition) iValue).evaluate(o, iContext);
 
 		if (iValue instanceof OSQLFunctionRuntime) {
 			// STATELESS FUNCTION: EXECUTE IT
 			final OSQLFunctionRuntime f = (OSQLFunctionRuntime) iValue;
-			return f.execute(iRecord, null);
+			return f.execute(o, null);
 		}
 
 		final Iterable<?> multiValue = OMultiValue.getMultiValueIterable(iValue);
@@ -249,7 +250,7 @@ public class OSQLFilterCondition {
 
 			for (final Object value : multiValue) {
 				if (value instanceof OSQLFilterItem)
-					result.add(((OSQLFilterItem) value).getValue(iRecord));
+					result.add(((OSQLFilterItem) value).getValue(o, null));
 				else
 					result.add(value);
 			}

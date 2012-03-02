@@ -15,7 +15,6 @@
  */
 package com.orientechnologies.orient.test.database.auto;
 
-import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -141,45 +140,42 @@ public class SQLSelectTest {
 	public void querySchemaAndLike() {
 		database.open("admin", "admin");
 
-		List<ODocument> result = database.command(new OSQLSynchQuery<ODocument>("select * from cluster:profile where name like 'G%'"))
+		List<ODocument> result1 = database.command(new OSQLSynchQuery<ODocument>("select * from cluster:profile where name like 'G%'"))
 				.execute();
 
-		for (int i = 0; i < result.size(); ++i) {
-			record = result.get(i);
+		for (int i = 0; i < result1.size(); ++i) {
+			record = result1.get(i);
 
 			Assert.assertTrue(record.getClassName().equalsIgnoreCase("profile"));
 			Assert.assertTrue(record.field("name").toString().startsWith("G"));
 		}
 
-		result = database.command(new OSQLSynchQuery<ODocument>("select * from cluster:profile where name like '%G%'")).execute();
+		List<ODocument> result2 = database.command(
+				new OSQLSynchQuery<ODocument>("select * from cluster:profile where name like '%epp%'")).execute();
 
-		for (int i = 0; i < result.size(); ++i) {
-			record = result.get(i);
+		Assert.assertEquals(result1, result2);
+
+		List<ODocument> result3 = database.command(
+				new OSQLSynchQuery<ODocument>("select * from cluster:profile where name like 'Gius%pe'")).execute();
+
+		Assert.assertEquals(result1, result3);
+
+		result1 = database.command(new OSQLSynchQuery<ODocument>("select * from cluster:profile where name like '%G%'")).execute();
+
+		for (int i = 0; i < result1.size(); ++i) {
+			record = result1.get(i);
 
 			Assert.assertTrue(record.getClassName().equalsIgnoreCase("profile"));
 			Assert.assertTrue(record.field("name").toString().contains("G"));
 		}
 
-		result = database.command(new OSQLSynchQuery<ODocument>("select * from cluster:profile where name like ?")).execute("%G%");
+		result1 = database.command(new OSQLSynchQuery<ODocument>("select * from cluster:profile where name like ?")).execute("%G%");
 
-		for (int i = 0; i < result.size(); ++i) {
-			record = result.get(i);
+		for (int i = 0; i < result1.size(); ++i) {
+			record = result1.get(i);
 
 			Assert.assertTrue(record.getClassName().equalsIgnoreCase("profile"));
 			Assert.assertTrue(record.field("name").toString().contains("G"));
-		}
-
-		database.close();
-	}
-
-	@Test
-	public void queryLogicalCluster() throws ParseException {
-		database.open("admin", "admin");
-
-		List<ODocument> result = database.command(new OSQLSynchQuery<ODocument>("select * from cluster:Order")).execute();
-
-		for (int i = 0; i < result.size(); ++i) {
-			record = result.get(i);
 		}
 
 		database.close();
@@ -373,12 +369,12 @@ public class SQLSelectTest {
 
 		List<ODocument> result = database.command(
 				new OSQLSynchQuery<ODocument>(
-						"select * from cluster:animaltype where races contains (name.toLowerCase().subString(0,1) = 'e')")).execute();
+						"select * from cluster:profile where races contains (name.toLowerCase().subString(0,1) = 'e')")).execute();
 
 		for (int i = 0; i < result.size(); ++i) {
 			record = result.get(i);
 
-			Assert.assertTrue(record.getClassName().equalsIgnoreCase("animaltype"));
+			Assert.assertTrue(record.getClassName().equalsIgnoreCase("profile"));
 			Assert.assertNotNull(record.field("races"));
 
 			Collection<ODocument> races = record.field("races");
@@ -677,13 +673,13 @@ public class SQLSelectTest {
 		Assert.assertTrue(result.size() != 0);
 
 		String lastName = null;
-		boolean isNullSegment = false; // NULL VALUES AT THE END!
+		boolean isNullSegment = true; // NULL VALUES AT THE BEGINNING!
 		for (ODocument d : result) {
 			final String fieldValue = d.field("name");
-			if (fieldValue == null)
-				isNullSegment = true;
+			if (fieldValue != null)
+				isNullSegment = false;
 			else
-				Assert.assertFalse(isNullSegment);
+				Assert.assertTrue(isNullSegment);
 
 			if (lastName != null && fieldValue != null)
 				Assert.assertTrue(fieldValue.compareTo(lastName) >= 0);
@@ -1020,6 +1016,8 @@ public class SQLSelectTest {
 			}
 
 			last = resultset.get(resultset.size() - 1).getIdentity();
+
+			System.out.printf("\nIterating page %d, last record is %s", iterationCount, last);
 
 			iterationCount++;
 			resultset = database.query(query);

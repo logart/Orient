@@ -162,7 +162,7 @@ public class ODocumentHelper {
 				throw new IllegalArgumentException("Property '" + iFieldName + "' of type '" + iFieldType
 						+ "' cannot accept value of type: " + iValue.getClass());
 		} else if (Date.class.isAssignableFrom(iFieldType)) {
-			if (iValue instanceof String && iDocument.getDatabase() != null) {
+			if (iValue instanceof String && ODatabaseRecordThreadLocal.INSTANCE.isDefined()) {
 				final OStorageConfiguration config = iDocument.getDatabase().getStorage().getConfiguration();
 
 				DateFormat formatter = config.getDateFormatInstance();
@@ -362,9 +362,6 @@ public class ODocumentHelper {
 				return ((ODocument) iCurrent.getRecord()).getVersion();
 			else if (iFieldName.equalsIgnoreCase(ATTRIBUTE_CLASS))
 				return ((ODocument) iCurrent.getRecord()).getClassName();
-			else if (iFieldName.equalsIgnoreCase(ATTRIBUTE_TYPE))
-				return Orient.instance().getRecordFactoryManager()
-						.getRecordTypeName(((ORecordInternal<?>) iCurrent.getRecord()).getRecordType());
 			else if (iFieldName.equalsIgnoreCase(ATTRIBUTE_TYPE))
 				return Orient.instance().getRecordFactoryManager()
 						.getRecordTypeName(((ORecordInternal<?>) iCurrent.getRecord()).getRecordType());
@@ -635,7 +632,10 @@ public class ODocumentHelper {
 								return false;
 						}
 					}
+				} else if (myFieldValue instanceof ODocument && otherFieldValue instanceof ODocument) {
+					return hasSameContentOf((ODocument) myFieldValue, (ODocument) otherFieldValue);
 				} else {
+
 					if (!myFieldValue.equals(otherFieldValue))
 						return false;
 				}

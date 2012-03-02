@@ -31,13 +31,18 @@ import com.orientechnologies.orient.core.config.OContextConfiguration;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.db.ODatabaseComplex;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
+import com.orientechnologies.orient.core.db.document.ODatabaseDocument;
+import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.db.raw.ODatabaseRaw;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecordTx;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.exception.OSecurityAccessException;
 import com.orientechnologies.orient.core.exception.OTransactionException;
+import com.orientechnologies.orient.core.fetch.OFetchContext;
 import com.orientechnologies.orient.core.fetch.OFetchHelper;
 import com.orientechnologies.orient.core.fetch.OFetchListener;
+import com.orientechnologies.orient.core.fetch.remote.ORemoteFetchContext;
+import com.orientechnologies.orient.core.fetch.remote.ORemoteFetchListener;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.metadata.schema.OType;
@@ -68,6 +73,7 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
 	protected String						user;
 	protected String						passwd;
+	private String							dbType;
 
 	public ONetworkProtocolBinary() {
 		super("OrientDB <- BinaryClient/?");
@@ -95,7 +101,7 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 	@Override
 	protected void onBeforeRequest() throws IOException {
 		if (clientTxId > -1)
-			connection = OClientConnectionManager.instance().getConnection(clientTxId);
+			connection = OClientConnectionManager.instance().getConnection(channel.socket, clientTxId);
 		else
 			connection = OClientConnectionManager.instance().connect(channel.socket, this);
 
@@ -355,10 +361,14 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
 		final String dbURL = channel.readString();
 
+		dbType = ODatabaseDocument.TYPE;
+		if (connection.data.protocolVersion >= 8)
+			// READ DB-TYPE FROM THE CLIENT
+			dbType = channel.readString();
 		user = channel.readString();
 		passwd = channel.readString();
 
-		connection.database = openDatabase(dbURL, user, passwd);
+		connection.database = (ODatabaseDocumentTx) openDatabase(dbType, dbURL, user, passwd);
 		connection.rawDatabase = ((ODatabaseRaw) ((ODatabaseComplex<?>) connection.database.getUnderlying()).getUnderlying());
 
 		if (!(connection.database.getStorage() instanceof OStorageEmbedded) && !loadUserFromSchema(user, passwd)) {
@@ -438,7 +448,7 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
 		checkServerAccess("database.copy");
 
-		openDatabase(dbUrl, dbUser, dbPassword);
+		openDatabase(ODatabaseDocument.TYPE, dbUrl, dbUser, dbPassword);
 
 		final ODistributedServerManager manager = OServerMain.server().getHandler(ODistributedServerManager.class);
 		final ODistributedNode node = manager.getReplicator().getOrCreateDistributedNode(remoteServerName);
@@ -488,7 +498,7 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
 		checkServerAccess("database.delete");
 
-		connection.database = getDatabaseInstance(dbName, "local");
+		connection.database = getDatabaseInstance(dbName, ODatabaseDocument.TYPE, "local");
 
 		OLogManager.instance().info(this, "Dropped database '%s", connection.database.getURL());
 
@@ -512,7 +522,7 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
 		checkServerAccess("database.exists");
 
-		connection.database = getDatabaseInstance(dbName, "local");
+		connection.database = getDatabaseInstance(dbName, ODatabaseDocument.TYPE, "local");
 
 		beginResponse();
 		try {
@@ -527,11 +537,15 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 		setDataCommandInfo("Create database");
 
 		String dbName = channel.readString();
-		String storageMode = channel.readString();
+		String dbType = ODatabaseDocument.TYPE;
+		if (connection.data.protocolVersion >= 8)
+			// READ DB-TYPE FROM THE CLIENT
+			dbType = channel.readString();
+		String storageType = channel.readString();
 
 		checkServerAccess("database.create");
 		checkStorageExistence(dbName);
-		connection.database = getDatabaseInstance(dbName, storageMode);
+		connection.database = getDatabaseInstance(dbName, dbType, storageType);
 		createDatabase(connection.database, null, null);
 		connection.rawDatabase = ((ODatabaseRaw) ((ODatabaseComplex<?>) connection.database.getUnderlying()).getUnderlying());
 
@@ -702,27 +716,9 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
 							if (fetchPlan != null && iRecord instanceof ODocument) {
 								final ODocument doc = (ODocument) iRecord;
-								OFetchHelper.fetch(doc, iRecord, doc.fieldNames(), fetchPlan, null, 0, -1, new OFetchListener() {
-									@Override
-									public int size() {
-										return recordsToSend.size();
-									}
-
-									// ADD TO THE SET OF OBJECT TO
-									// SEND
-									@Override
-									public Object fetchLinked(final ODocument iRoot, final Object iUserObject, final String iFieldName,
-											final Object iLinked) {
-										if (iLinked instanceof ODocument)
-											return recordsToSend.add((ODocument) iLinked) ? iLinked : null;
-										else if (iLinked instanceof Collection<?>)
-											return recordsToSend.addAll((Collection<? extends ODocument>) iLinked) ? iLinked : null;
-										else if (iLinked instanceof Map<?, ?>)
-											return recordsToSend.addAll(((Map<String, ? extends ODocument>) iLinked).values()) ? iLinked : null;
-										else
-											throw new IllegalArgumentException("Unrecognized type while fetching records: " + iLinked);
-									}
-								});
+								final OFetchListener listener = new ORemoteFetchListener(recordsToSend);
+								final OFetchContext context = new ORemoteFetchContext();
+								OFetchHelper.fetch(doc, iRecord, fetchPlan, listener, context);
 							}
 
 						} catch (IOException e) {
@@ -891,6 +887,9 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
 		final ORecordId rid = channel.readRID();
 		final String fetchPlanString = channel.readString();
+		boolean ignoreCache = false;
+		if (connection.data.protocolVersion >= 9)
+			ignoreCache = channel.readByte() == 1;
 
 		if (rid.clusterId == 0 && rid.clusterPosition == 0) {
 			// @COMPATIBILITY 0.9.25
@@ -910,7 +909,7 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 			}
 
 		} else {
-			final ORecordInternal<?> record = connection.database.load(rid, fetchPlanString);
+			final ORecordInternal<?> record = connection.database.load(rid, fetchPlanString, ignoreCache);
 
 			beginResponse();
 			try {
@@ -930,28 +929,9 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
 							final Set<ODocument> recordsToSend = new HashSet<ODocument>();
 							final ODocument doc = (ODocument) record;
-							OFetchHelper.fetch(doc, doc, doc.fieldNames(), fetchPlan, null, 0, -1, new OFetchListener() {
-								@Override
-								public int size() {
-									return recordsToSend.size();
-								}
-
-								// ADD TO THE SET OF OBJECTS TO SEND
-								@Override
-								public Object fetchLinked(final ODocument iRoot, final Object iUserObject, final String iFieldName,
-										final Object iLinked) {
-									if (iLinked instanceof ODocument) {
-										if (((ODocument) iLinked).getIdentity().isValid())
-											return recordsToSend.add((ODocument) iLinked) ? iLinked : null;
-										return null;
-									} else if (iLinked instanceof Collection<?>)
-										return recordsToSend.addAll((Collection<? extends ODocument>) iLinked) ? iLinked : null;
-									else if (iLinked instanceof Map<?, ?>)
-										return recordsToSend.addAll(((Map<String, ? extends ODocument>) iLinked).values()) ? iLinked : null;
-									else
-										throw new IllegalArgumentException("Unrecognized type while fetching records: " + iLinked);
-								}
-							});
+							final OFetchListener listener = new ORemoteFetchListener(recordsToSend);
+							final OFetchContext context = new ORemoteFetchContext();
+							OFetchHelper.fetch(doc, doc, fetchPlan, listener, context);
 
 							// SEND RECORDS TO LOAD IN CLIENT CACHE
 							for (ODocument d : recordsToSend) {

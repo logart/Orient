@@ -17,8 +17,9 @@ package com.orientechnologies.orient.core.sql.operator;
 
 import java.util.Collection;
 
+import com.orientechnologies.orient.core.command.OCommandContext;
+import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORID;
-import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.record.ORecordSchemaAware;
 import com.orientechnologies.orient.core.sql.filter.OSQLFilterCondition;
 
@@ -36,8 +37,8 @@ public class OQueryOperatorContainsAll extends OQueryOperatorEqualityNotNulls {
 
 	@Override
 	@SuppressWarnings("unchecked")
-	protected boolean evaluateExpression(final ORecordInternal<?> iRecord, final OSQLFilterCondition iCondition, final Object iLeft,
-			final Object iRight) {
+	protected boolean evaluateExpression(final OIdentifiable iRecord, final OSQLFilterCondition iCondition, final Object iLeft,
+			final Object iRight, OCommandContext iContext) {
 		final OSQLFilterCondition condition;
 
 		if (iCondition.getLeft() instanceof OSQLFilterCondition)
@@ -81,7 +82,7 @@ public class OQueryOperatorContainsAll extends OQueryOperatorEqualityNotNulls {
 			if (condition != null) {
 				// CHECK AGAINST A CONDITION
 				for (final ORecordSchemaAware<?> o : collection) {
-					if ((Boolean) condition.evaluate(o) == Boolean.FALSE)
+					if ((Boolean) condition.evaluate(o, iContext) == Boolean.FALSE)
 						return false;
 				}
 			} else {
@@ -98,7 +99,7 @@ public class OQueryOperatorContainsAll extends OQueryOperatorEqualityNotNulls {
 
 			if (condition != null) {
 				for (final ORecordSchemaAware<?> o : collection) {
-					if ((Boolean) condition.evaluate(o) == Boolean.FALSE)
+					if ((Boolean) condition.evaluate(o, iContext) == Boolean.FALSE)
 						return false;
 				}
 			} else {
@@ -117,14 +118,13 @@ public class OQueryOperatorContainsAll extends OQueryOperatorEqualityNotNulls {
 		return OIndexReuseType.NO_INDEX;
 	}
 
+	@Override
+	public ORID getBeginRidRange(Object iLeft, Object iRight) {
+		return null;
+	}
 
-  @Override
-  public ORID getBeginRidRange(Object iLeft, Object iRight) {
-    return null;
-  }
-
-  @Override
-  public ORID getEndRidRange(Object iLeft, Object iRight) {
-    return null;
-  }
+	@Override
+	public ORID getEndRidRange(Object iLeft, Object iRight) {
+		return null;
+	}
 }

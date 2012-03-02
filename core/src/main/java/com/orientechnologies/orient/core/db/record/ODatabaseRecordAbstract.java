@@ -15,6 +15,13 @@
  */
 package com.orientechnologies.orient.core.db.record;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.Orient;
@@ -53,8 +60,6 @@ import com.orientechnologies.orient.core.sql.OCommandSQL;
 import com.orientechnologies.orient.core.storage.ORawBuffer;
 import com.orientechnologies.orient.core.storage.OStorageEmbedded;
 import com.orientechnologies.orient.core.tx.OTransactionRealAbstract;
-
-import java.util.*;
 
 @SuppressWarnings("unchecked")
 public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<ODatabaseRaw> implements ODatabaseRecord {
@@ -158,6 +163,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 			metadata.create();
 
 			user = getMetadata().getSecurity().getUser(OUser.ADMIN);
+
 		} catch (Exception e) {
 			throw new ODatabaseException("Cannot create database", e);
 		}
@@ -530,7 +536,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 				return (RET) record;
 			}
 
-			final ORawBuffer recordBuffer = underlying.read(iRid, iFetchPlan);
+			final ORawBuffer recordBuffer = underlying.read(iRid, iFetchPlan, iIgnoreCache);
 			if (recordBuffer == null)
 				return null;
 
@@ -813,7 +819,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 	}
 
 	public boolean isValidationEnabled() {
-		return validation;
+		return !getStatus().equals(STATUS.IMPORTING) && validation;
 	}
 
 	public <DB extends ODatabaseRecord> DB setValidationEnabled(final boolean iEnabled) {

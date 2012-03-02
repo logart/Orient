@@ -80,7 +80,7 @@ public abstract class ORecordSerializerCSVAbstract extends ORecordSerializerStri
 			// REMOVE BEGIN & END COLLECTIONS CHARACTERS IF IT'S A COLLECTION
 			final String value = iValue.startsWith("[") ? iValue.substring(1, iValue.length() - 1) : iValue;
 
-			return iType == OType.LINKLIST ? new ORecordLazyList(iSourceRecord).setStreamedContent(new StringBuilder(value))
+			return iType == OType.LINKLIST ? new ORecordLazyList((ODocument) iSourceRecord).setStreamedContent(new StringBuilder(value))
 					: new OMVRBTreeRIDSet(iSourceRecord).fromStream(new StringBuilder(iValue));
 		}
 
@@ -92,7 +92,7 @@ public abstract class ORecordSerializerCSVAbstract extends ORecordSerializerStri
 			String value = iValue.substring(1, iValue.length() - 1);
 
 			@SuppressWarnings("rawtypes")
-			final Map map = new ORecordLazyMap(iSourceRecord, ODocument.RECORD_TYPE);
+			final Map map = new ORecordLazyMap((ODocument) iSourceRecord, ODocument.RECORD_TYPE);
 
 			if (value.length() == 0)
 				return map;
@@ -122,7 +122,7 @@ public abstract class ORecordSerializerCSVAbstract extends ORecordSerializerStri
 			if (iValue.length() > 1) {
 				int pos = iValue.indexOf(OStringSerializerHelper.CLASS_SEPARATOR);
 				if (pos > -1)
-					iLinkedClass = ODatabaseRecordThreadLocal.INSTANCE.get().getMetadata().getSchema().getClass(iValue.substring(1, pos));
+					ODatabaseRecordThreadLocal.INSTANCE.get().getMetadata().getSchema().getClass(iValue.substring(1, pos));
 				else
 					pos = 0;
 

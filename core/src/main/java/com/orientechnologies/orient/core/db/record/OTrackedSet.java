@@ -17,7 +17,12 @@ package com.orientechnologies.orient.core.db.record;
 
 import java.io.Serializable;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Set;
+import java.util.WeakHashMap;
 
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.record.ORecord;
@@ -30,13 +35,16 @@ import com.orientechnologies.orient.core.record.ORecord;
  * 
  */
 @SuppressWarnings("serial")
-public class OTrackedSet<T> extends HashSet<T> implements ORecordElement, Serializable {
-	protected final ORecord<?>		sourceRecord;
-	private STATUS								status				= STATUS.NOT_LOADED;
-	protected final static Object	ENTRY_REMOVAL	= new Object();
+public class OTrackedSet<T> extends HashSet<T> implements ORecordElement, OTrackedMultiValue<T, T>, Serializable {
+	protected final ORecord<?>										sourceRecord;
+	private STATUS																status					= STATUS.NOT_LOADED;
+	private Set<OMultiValueChangeListener<T, T>>	changeListeners	= Collections
+																																		.newSetFromMap(new WeakHashMap<OMultiValueChangeListener<T, T>, Boolean>());
+	protected Class<?>														genericClass;
 
-	public OTrackedSet(final ORecord<?> iRecord, final Collection<? extends T> iOrigin) {
+	public OTrackedSet(final ORecord<?> iRecord, final Collection<? extends T> iOrigin, final Class<?> cls) {
 		this(iRecord);
+		genericClass = cls;
 		if (iOrigin != null && !iOrigin.isEmpty())
 			addAll(iOrigin);
 	}
@@ -47,7 +55,7 @@ public class OTrackedSet<T> extends HashSet<T> implements ORecordElement, Serial
 
 	public boolean add(final T e) {
 		if (super.add(e)) {
-			setDirty();
+			fireCollectionChangedEvent(new OMultiValueChangeEvent<T, T>(OMultiValueChangeEvent.OChangeType.ADD, e, e));
 			return true;
 		}
 		return false;
@@ -56,7 +64,7 @@ public class OTrackedSet<T> extends HashSet<T> implements ORecordElement, Serial
 	@Override
 	public boolean remove(final Object o) {
 		if (super.remove(o)) {
-			setDirty();
+			fireCollectionChangedEvent(new OMultiValueChangeEvent<T, T>(OMultiValueChangeEvent.OChangeType.REMOVE, (T) o, null, (T) o));
 			return true;
 		}
 		return false;
@@ -64,8 +72,19 @@ public class OTrackedSet<T> extends HashSet<T> implements ORecordElement, Serial
 
 	@Override
 	public void clear() {
-		setDirty();
+		final Set<T> origValues;
+		if (changeListeners.isEmpty())
+			origValues = null;
+		else
+			origValues = new HashSet<T>(this);
+
 		super.clear();
+
+		if (origValues != null) {
+			for (final T item : origValues)
+				fireCollectionChangedEvent(new OMultiValueChangeEvent<T, T>(OMultiValueChangeEvent.OChangeType.REMOVE, item, null, item));
+		} else
+			setDirty();
 	}
 
 	@SuppressWarnings("unchecked")
@@ -87,5 +106,55 @@ public class OTrackedSet<T> extends HashSet<T> implements ORecordElement, Serial
 
 	public void setInternalStatus(final STATUS iStatus) {
 		status = iStatus;
+	}
+
+	public void addChangeListener(final OMultiValueChangeListener<T, T> changeListener) {
+		changeListeners.add(changeListener);
+	}
+
+	public void removeRecordChangeListener(final OMultiValueChangeListener<T, T> changeListener) {
+		changeListeners.remove(changeListener);
+	}
+
+	public Set<T> returnOriginalState(final List<OMultiValueChangeEvent<T, T>> multiValueChangeEvents) {
+		final Set<T> reverted = new HashSet<T>(this);
+
+		final ListIterator<OMultiValueChangeEvent<T, T>> listIterator = multiValueChangeEvents.listIterator(multiValueChangeEvents
+				.size());
+
+		while (listIterator.hasPrevious()) {
+			final OMultiValueChangeEvent<T, T> event = listIterator.previous();
+			switch (event.getChangeType()) {
+			case ADD:
+				reverted.remove(event.getKey());
+				break;
+			case REMOVE:
+				reverted.add(event.getOldValue());
+				break;
+			default:
+				throw new IllegalArgumentException("Invalid change type : " + event.getChangeType());
+			}
+		}
+
+		return reverted;
+	}
+
+	protected void fireCollectionChangedEvent(final OMultiValueChangeEvent<T, T> event) {
+		if (status == STATUS.UNMARSHALLING)
+			return;
+
+		setDirty();
+		for (final OMultiValueChangeListener<T, T> changeListener : changeListeners) {
+			if (changeListener != null)
+				changeListener.onAfterRecordChanged(event);
+		}
+	}
+
+	public Class<?> getGenericClass() {
+		return genericClass;
+	}
+
+	public void setGenericClass(Class<?> genericClass) {
+		this.genericClass = genericClass;
 	}
 }

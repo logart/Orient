@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
 
-import com.orientechnologies.common.parser.OStringForwardReader;
 import com.orientechnologies.orient.core.command.OCommandOutputListener;
 import com.orientechnologies.orient.core.db.ODatabase.STATUS;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocument;
@@ -60,7 +59,6 @@ public class ODatabaseImport extends ODatabaseImpExpAbstract {
 	private Map<OPropertyImpl, String>	linkedClasses		= new HashMap<OPropertyImpl, String>();
 	private Map<OClass, String>					superClasses		= new HashMap<OClass, String>();
 	private OJSONReader									jsonReader;
-	private OStringForwardReader				reader;
 	private ORecordInternal<?>					record;
 	private List<String>								recordToDelete	= new ArrayList<String>();
 	private Map<OProperty, String>			propertyIndexes	= new HashMap<OProperty, String>();
@@ -480,7 +478,7 @@ public class ODatabaseImport extends ODatabaseImpExpAbstract {
 		return total;
 	}
 
-	private long importRecords() throws ParseException, IOException {
+	private long importRecords() throws Exception {
 		long total = 0;
 
 		jsonReader.readNext(OJSONReader.BEGIN_COLLECTION);
@@ -519,12 +517,18 @@ public class ODatabaseImport extends ODatabaseImpExpAbstract {
 		return total;
 	}
 
-	private ORID importRecord() throws IOException, ParseException {
-		final String value = jsonReader.readString(OJSONReader.END_OBJECT, true);
+	private ORID importRecord() throws Exception {
+		String value = jsonReader.readString(OJSONReader.END_OBJECT, true);
 
-		record = ORecordSerializerJSON.INSTANCE.fromString(value, record);
+		// JUMP EMPTY RECORDS
+		while (!value.isEmpty() && value.charAt(0) != '{') {
+			value = value.substring(1);
+		}
 
+		record = null;
 		try {
+			record = ORecordSerializerJSON.INSTANCE.fromString(value, record);
+
 			if (schemaImported && record.getIdentity().toString().equals(database.getStorage().getConfiguration().schemaRecordId)) {
 				// JUMP THE SCHEMA
 				return null;
@@ -583,6 +587,15 @@ public class ODatabaseImport extends ODatabaseImpExpAbstract {
 
 			if (!record.getIdentity().toString().equals(rid))
 				throw new OSchemaException("Imported record '" + record.getIdentity() + "' has rid different from the original: " + rid);
+		} catch (Exception t) {
+			if (record != null)
+				System.err.println("Error importing record " + record.getIdentity() + ". Source line " + jsonReader.getLineNumber()
+						+ ", column " + jsonReader.getColumnNumber());
+			else
+				System.err.println("Error importing record. Source line " + jsonReader.getLineNumber() + ", column "
+						+ jsonReader.getColumnNumber());
+
+			throw t;
 		} finally {
 			jsonReader.readNext(OJSONReader.NEXT_IN_ARRAY);
 		}
@@ -592,14 +605,5 @@ public class ODatabaseImport extends ODatabaseImpExpAbstract {
 
 	public void close() {
 		database.declareIntent(null);
-
-		if (reader == null)
-			return;
-
-		try {
-			reader.close();
-			reader = null;
-		} catch (IOException e) {
-		}
 	}
 }

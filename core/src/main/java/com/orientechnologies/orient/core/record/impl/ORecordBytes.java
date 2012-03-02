@@ -142,6 +142,8 @@ public class ORecordBytes extends ORecordAbstract<byte[]> {
 	}
 
 	public void toOutputStream(final OutputStream out) throws IOException {
+		checkForLoading();
+
 		if (_source.length > 0) {
 			ByteArrayInputStream in = new ByteArrayInputStream(_source);
 			while (in.available() > 0) {

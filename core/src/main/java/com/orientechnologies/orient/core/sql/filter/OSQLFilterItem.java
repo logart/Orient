@@ -15,6 +15,7 @@
  */
 package com.orientechnologies.orient.core.sql.filter;
 
+import com.orientechnologies.orient.core.command.OCommandContext;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 
 /**
@@ -25,6 +26,6 @@ import com.orientechnologies.orient.core.db.record.OIdentifiable;
  */
 public interface OSQLFilterItem {
 
-	public Object getValue(OIdentifiable iRecord);
+	public Object getValue(OIdentifiable iRecord, OCommandContext iContetx);
 
 }

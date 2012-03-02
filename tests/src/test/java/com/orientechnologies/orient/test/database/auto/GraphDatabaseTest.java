@@ -17,6 +17,7 @@ package com.orientechnologies.orient.test.database.auto;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 
 import org.testng.Assert;
 import org.testng.annotations.Parameters;
@@ -26,11 +27,13 @@ import com.orientechnologies.orient.core.db.graph.OGraphDatabase;
 import com.orientechnologies.orient.core.db.graph.OGraphDatabasePool;
 import com.orientechnologies.orient.core.db.graph.OGraphElement;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
+import com.orientechnologies.orient.core.intent.OIntentMassiveInsert;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.sql.OCommandSQL;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
+import com.orientechnologies.orient.core.tx.OTransaction;
 import com.orientechnologies.orient.core.tx.OTransaction.TXTYPE;
 
 @Test
@@ -241,6 +244,36 @@ public class GraphDatabaseTest {
 		}
 	}
 
+	public void testEdgesIterationInTX() {
+		database.open("admin", "admin");
+
+		try {
+			database.createVertexType("vertexAA");
+			database.createVertexType("vertexBB");
+			database.createEdgeType("edgeAB");
+
+			ODocument vertexA = (ODocument) database.createVertex("vertexAA").field("address", "testing").save();
+
+			for (int i = 0; i < 18; ++i) {
+				ODocument vertexB = (ODocument) database.createVertex("vertexBB").field("address", "test" + i).save();
+				database.begin(OTransaction.TXTYPE.OPTIMISTIC);
+				database.createEdge(vertexB.getIdentity(), vertexA.getIdentity(), "edgeAB").save();
+				database.commit();
+			}
+
+			List<ODocument> result = database.query(new OSQLSynchQuery<ODocument>("select * from vertexAA"));
+			for (ODocument d : result) {
+				Set<OIdentifiable> edges = database.getInEdges(d);
+				for (OIdentifiable e : edges) {
+					System.out.println("In Edge: " + e);
+				}
+			}
+		} finally {
+			database.close();
+		}
+
+	}
+
 	//
 	// @Test
 	// public void testTxDictionary() {
@@ -303,5 +336,29 @@ public class GraphDatabaseTest {
 		database.command(new OCommandSQL("delete from PublicCert")).execute();
 
 		database.close();
+	}
+
+	@Test(dependsOnMethods = "populate")
+	public void testEdgeWithRID() {
+		database.open("admin", "admin");
+
+		database.declareIntent(new OIntentMassiveInsert());
+		try {
+			ODocument a = database.createVertex().field("label", "a");
+			a.save();
+			ODocument b = database.createVertex().field("label", "b");
+			b.save();
+			ODocument c = database.createVertex().field("label", "c");
+			c.save();
+
+			database.createEdge(a.getIdentity(), b.getIdentity()).save();
+			database.createEdge(a.getIdentity(), c.getIdentity()).save();
+
+			a.reload();
+			//Assert.assertEquals(database.getOutEdges(a).size(), 2);
+
+		} finally {
+			database.close();
+		}
 	}
 }

@@ -386,7 +386,6 @@ function ODatabase(databasePath) {
 			data : content,
 			success : function(msg) {
 				this.setErrorMessage(null);
-				this.handleResponse(msg);
 			},
 			error : function(msg) {
 				this.handleResponse(null);
@@ -784,9 +783,15 @@ function ODatabase(databasePath) {
 	}
 
 	ODatabase.prototype.removeCircleReferences = function(obj, linkMap) {
-		linkMap = this.removeCircleReferencesPopulateMap(obj, linkMap);
-		this.removeCircleReferencesChangeObject(obj, linkMap);
-	}
+        linkMap = this.removeCircleReferencesPopulateMap(obj, linkMap);
+        if (obj != null && typeof obj == 'object' && !$.isArray(obj)) {
+            if (obj['@rid'] != null && obj['@rid']) {
+                var rid = this.getRidWithPound(obj['@rid']);
+                linkMap[rid] = rid;
+            }
+        }
+        this.removeCircleReferencesChangeObject(obj, linkMap);
+    }
 
 	ODatabase.prototype.removeCircleReferencesPopulateMap = function(obj,
 			linkMap) {

@@ -15,6 +15,7 @@
  */
 package com.orientechnologies.orient.core.serialization.serializer;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -83,6 +84,11 @@ public abstract class OStringSerializerHelper {
 			if (iValue instanceof Boolean)
 				return iValue;
 			return new Boolean(getStringContent(iValue));
+
+		case DECIMAL:
+			if (iValue instanceof BigDecimal)
+				return iValue;
+			return new BigDecimal(getStringContent(iValue));
 
 		case FLOAT:
 			if (iValue instanceof Float)
@@ -462,6 +468,21 @@ public abstract class OStringSerializerHelper {
 		return iBeginPosition + buffer.length();
 	}
 
+	public static int getEmbedded(final String iText, final int iBeginPosition, int iEndPosition, final StringBuilder iEmbedded) {
+		final int openPos = iText.indexOf(EMBEDDED_BEGIN, iBeginPosition);
+		if (openPos == -1 || (iEndPosition > -1 && openPos > iEndPosition))
+			return iBeginPosition;
+
+		final StringBuilder buffer = new StringBuilder();
+		parse(iText, buffer, openPos, iEndPosition, PARAMETER_EXT_SEPARATOR, true);
+		if (buffer.length() == 0)
+			return iBeginPosition;
+
+		final String t = buffer.substring(1, buffer.length() - 1).trim();
+		iEmbedded.append(t);
+		return iBeginPosition + buffer.length();
+	}
+
 	public static List<String> getParameters(final String iText) {
 		final List<String> params = new ArrayList<String>();
 		getParameters(iText, 0, -1, params);
@@ -571,7 +592,7 @@ public abstract class OStringSerializerHelper {
 		return buffer.toString();
 	}
 
-	public static OClass getRecordClassName(String iValue, OClass iLinkedClass) {
+	public static OClass getRecordClassName(final String iValue, OClass iLinkedClass) {
 		// EXTRACT THE CLASS NAME
 		int classSeparatorPos = iValue.indexOf(OStringSerializerHelper.CLASS_SEPARATOR);
 		if (classSeparatorPos > -1) {
@@ -579,8 +600,6 @@ public abstract class OStringSerializerHelper {
 			final ODatabaseRecord database = ODatabaseRecordThreadLocal.INSTANCE.get();
 			if (className != null && database != null)
 				iLinkedClass = database.getMetadata().getSchema().getClass(className);
-
-			iValue = iValue.substring(classSeparatorPos + 1);
 		}
 		return iLinkedClass;
 	}

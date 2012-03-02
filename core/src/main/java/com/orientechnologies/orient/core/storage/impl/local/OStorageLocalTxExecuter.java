@@ -95,7 +95,7 @@ public class OStorageLocalTxExecuter {
 			final ORawBuffer buffer = storage.readRecord(iClusterSegment, iRid, false);
 
 			// SAVE INTO THE LOG THE POSITION OF THE OLD RECORD JUST DELETED. IF TX FAILS AT THIS POINT AS ABOVE
-			txSegment.addLog(OTxSegment.OPERATION_UPDATE, iTxId, iRid.clusterId, iRid.clusterPosition, iRecordType, buffer.version - 1,
+			txSegment.addLog(OTxSegment.OPERATION_UPDATE, iTxId, iRid.clusterId, iRid.clusterPosition, iRecordType, buffer.version,
 					buffer.buffer);
 
 			return storage.updateRecord(iClusterSegment, iRid, iContent, iVersion, iRecordType);
@@ -166,6 +166,8 @@ public class OStorageLocalTxExecuter {
 
 		final ORecordId rid = (ORecordId) txEntry.getRecord().getIdentity();
 
+		final boolean wasNew = rid.isNew();
+
 		if (rid.clusterId == ORID.CLUSTER_ID_INVALID && txEntry.getRecord() instanceof ODocument
 				&& ((ODocument) txEntry.getRecord()).getSchemaClass() != null) {
 			// TRY TO FIX CLUSTER ID TO THE DEFAULT CLUSTER ID DEFINED IN SCHEMA CLASS
@@ -193,19 +195,29 @@ public class OStorageLocalTxExecuter {
 			// CHECK 2 TIMES TO ASSURE THAT IT'S A CREATE OR AN UPDATE BASED ON RECURSIVE TO-STREAM METHOD
 			byte[] stream = txEntry.getRecord().toStream();
 
-			if (rid.isNew()) {
+			if (wasNew) {
 				if (iTx.getDatabase().callbackHooks(ORecordHook.TYPE.BEFORE_CREATE, txEntry.getRecord()))
 					// RECORD CHANGED: RE-STREAM IT
 					stream = txEntry.getRecord().toStream();
+			} else {
+				if (iTx.getDatabase().callbackHooks(ORecordHook.TYPE.BEFORE_UPDATE, txEntry.getRecord()))
+					// RECORD CHANGED: RE-STREAM IT
+					stream = txEntry.getRecord().toStream();
+			}
 
+			if (rid.isNew()) {
+				txEntry.getRecord().onBeforeIdentityChanged(rid);
 				rid.clusterId = cluster.getId();
+			}
 
+			if (rid.isNew()) {
 				if (iUseLog)
 					rid.clusterPosition = createRecord(iTx.getId(), cluster, rid, stream, txEntry.getRecord().getRecordType());
 				else
 					rid.clusterPosition = iTx.getDatabase().getStorage()
 							.createRecord(rid, stream, txEntry.getRecord().getRecordType(), (byte) 0, null);
 
+				txEntry.getRecord().onAfterIdentityChanged(txEntry.getRecord());
 				iTx.getDatabase().callbackHooks(ORecordHook.TYPE.AFTER_CREATE, txEntry.getRecord());
 			} else {
 				if (iUseLog)

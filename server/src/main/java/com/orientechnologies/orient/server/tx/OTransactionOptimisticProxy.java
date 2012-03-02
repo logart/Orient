@@ -20,9 +20,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecordTx;
 import com.orientechnologies.orient.core.db.record.ORecordLazyList;
 import com.orientechnologies.orient.core.db.record.ORecordOperation;
+import com.orientechnologies.orient.core.exception.ORecordNotFoundException;
 import com.orientechnologies.orient.core.exception.OSerializationException;
 import com.orientechnologies.orient.core.exception.OTransactionException;
 import com.orientechnologies.orient.core.id.ORID;
@@ -60,11 +62,13 @@ public class OTransactionOptimisticProxy extends OTransactionOptimistic {
 
 				final ORecordId rid = channel.readRID();
 
-				final OTransactionEntryProxy entry = new OTransactionEntryProxy(channel.readByte());
-				entry.type = recordStatus;
-
-				switch (entry.type) {
+				final byte recordType = channel.readByte();
+				final ORecordOperation entry;
+				switch (recordStatus) {
 				case ORecordOperation.CREATED:
+					entry = new OTransactionEntryProxy(recordType);
+					entry.type = recordStatus;
+
 					entry.getRecord().fill(rid, 0, channel.readBytes(), true);
 
 					// SAVE THE RECORD TO RETRIEVE THEM FOR THE NEW RID TO SEND BACK TO THE REQUESTER
@@ -72,22 +76,43 @@ public class OTransactionOptimisticProxy extends OTransactionOptimistic {
 					break;
 
 				case ORecordOperation.UPDATED:
-					entry.getRecord().fill(rid, channel.readInt(), channel.readBytes(), true);
+					final ORecordInternal<?> newRecord = Orient.instance().getRecordFactoryManager().newInstance(recordType);
+					newRecord.fill(rid, channel.readInt(), channel.readBytes(), true);
+
+					final ORecordInternal<?> currentRecord;
+					if (newRecord.getRecordType() == ODocument.RECORD_TYPE) {
+						currentRecord = getDatabase().load(rid);
+
+						if (currentRecord == null)
+							throw new ORecordNotFoundException(rid.toString());
+
+						if(currentRecord.getRecordType() == ODocument.RECORD_TYPE )
+							((ODocument) currentRecord).merge((ODocument) newRecord, false, false);
+
+					} else
+						currentRecord = newRecord;
+					
+					currentRecord.setVersion(newRecord.getVersion());
+					
+					entry = new ORecordOperation(currentRecord, recordStatus);
 
 					// SAVE THE RECORD TO RETRIEVE THEM FOR THE NEW VERSIONS TO SEND BACK TO THE REQUESTER
-					updatedRecords.put(rid, entry.getRecord());
+					updatedRecords.put(rid, currentRecord);
 					break;
 
 				case ORecordOperation.DELETED:
+					entry = new OTransactionEntryProxy(recordType);
+					entry.type = recordStatus;
+
 					entry.getRecord().fill(rid, channel.readInt(), null, false);
 					break;
 
 				default:
-					throw new OTransactionException("Unrecognized tx command: " + entry.type);
+					throw new OTransactionException("Unrecognized tx command: " + recordStatus);
 				}
 
 				// PUT IN TEMPORARY LIST TO GET FETCHED AFTER ALL FOR CACHE
-				recordEntries.put((ORecordId) entry.getRecord().getIdentity(), entry);
+				recordEntries.put(entry.getRecord().getIdentity(), entry);
 			}
 
 			if (lastTxStatus == -1)

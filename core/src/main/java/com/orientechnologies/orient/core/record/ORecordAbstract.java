@@ -16,6 +16,9 @@
 package com.orientechnologies.orient.core.record;
 
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Set;
+import java.util.WeakHashMap;
 
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
@@ -29,15 +32,15 @@ import com.orientechnologies.orient.core.serialization.serializer.record.string.
 
 @SuppressWarnings({ "unchecked", "serial" })
 public abstract class ORecordAbstract<T> implements ORecord<T>, ORecordInternal<T> {
-	protected ORecordId										_recordId;
-	protected int													_version;
-	protected byte[]											_source;
-	protected int													_size;
-	protected transient ORecordSerializer	_recordFormat;
-	protected boolean											_pinned		= true;
-	protected boolean											_dirty		= true;
-	protected ORecordElement.STATUS				_status		= ORecordElement.STATUS.LOADED;
-	protected transient ORecordListener		_listener	= null;
+	protected ORecordId												_recordId;
+	protected int															_version;
+	protected byte[]													_source;
+	protected int															_size;
+	protected transient ORecordSerializer			_recordFormat;
+	protected Boolean													_pinned			= null;
+	protected boolean													_dirty			= true;
+	protected ORecordElement.STATUS						_status			= ORecordElement.STATUS.LOADED;
+	protected transient Set<ORecordListener>	_listeners	= null;
 
 	public ORecordAbstract() {
 	}
@@ -154,25 +157,24 @@ public abstract class ORecordAbstract<T> implements ORecord<T>, ORecordInternal<
 	}
 
 	public void onAfterIdentityChanged(final ORecord<?> iRecord) {
+		invokeListenerEvent(ORecordListener.EVENT.IDENTITY_CHANGED);
 	}
 
 	public boolean isDirty() {
 		return _dirty;
 	}
 
-	public boolean isPinned() {
+	public Boolean isPinned() {
 		return _pinned;
 	}
 
 	public ORecordAbstract<T> pin() {
-		if (!_pinned)
-			_pinned = true;
+		_pinned = Boolean.TRUE;
 		return this;
 	}
 
 	public ORecordAbstract<T> unpin() {
-		if (_pinned)
-			_pinned = false;
+		_pinned = Boolean.FALSE;
 		return this;
 	}
 
@@ -182,7 +184,7 @@ public abstract class ORecordAbstract<T> implements ORecord<T>, ORecordInternal<
 	}
 
 	public String toJSON() {
-		return toJSON("rid,version,class,type,attribSameRow");
+		return toJSON("rid,version,class,type,attribSameRow,alwaysFetchEmbedded,fetchPlan:*:0");
 	}
 
 	public String toJSON(final String iFormat) {
@@ -308,8 +310,8 @@ public abstract class ORecordAbstract<T> implements ORecord<T>, ORecordInternal<
 		if (iOther == null)
 			return 1;
 
-		if (_recordId == null && iOther.getIdentity() == null)
-			return 0;
+		if (_recordId == null)
+			return iOther.getIdentity() == null ? 0 : 1;
 
 		return _recordId.compareTo(iOther.getIdentity());
 	}
@@ -330,7 +332,7 @@ public abstract class ORecordAbstract<T> implements ORecord<T>, ORecordInternal<
 		cloned._pinned = _pinned;
 		cloned._status = _status;
 		cloned._recordFormat = _recordFormat;
-		cloned._listener = null;
+		cloned._listeners = null;
 		cloned._dirty = false;
 		return cloned;
 	}
@@ -343,8 +345,11 @@ public abstract class ORecordAbstract<T> implements ORecord<T>, ORecordInternal<
 	 * @param iListener
 	 *          ODocumentListener implementation
 	 */
-	public void setListener(final ORecordListener iListener) {
-		_listener = iListener;
+	public void addListener(final ORecordListener iListener) {
+		if (_listeners == null)
+			_listeners = Collections.newSetFromMap(new WeakHashMap<ORecordListener, Boolean>());
+
+		_listeners.add(iListener);
 	}
 
 	/**
@@ -352,16 +357,27 @@ public abstract class ORecordAbstract<T> implements ORecord<T>, ORecordInternal<
 	 * 
 	 * @see ORecordListener
 	 */
-	public void removeListener() {
-		_listener = null;
+	public void removeListener(final ORecordListener listener) {
+		if (_listeners != null) {
+			_listeners.remove(listener);
+			if (_listeners.isEmpty())
+				_listeners = null;
+		}
 	}
 
 	protected void invokeListenerEvent(final ORecordListener.EVENT iEvent) {
-		if (_listener != null)
-			_listener.onEvent(this, iEvent);
+		if (_listeners != null)
+			for (final ORecordListener listener : _listeners)
+				if (listener != null)
+					listener.onEvent(this, iEvent);
 	}
 
 	public <RET extends ORecord<T>> RET flatCopy() {
 		return (RET) copy();
+	}
+
+	protected void checkForLoading() {
+		if (_status == ORecordElement.STATUS.NOT_LOADED && ODatabaseRecordThreadLocal.INSTANCE.isDefined())
+			reload(null, true);
 	}
 }

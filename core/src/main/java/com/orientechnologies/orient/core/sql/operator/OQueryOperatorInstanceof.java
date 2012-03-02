@@ -15,6 +15,7 @@
  */
 package com.orientechnologies.orient.core.sql.operator;
 
+import com.orientechnologies.orient.core.command.OCommandContext;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.exception.OCommandExecutionException;
@@ -22,7 +23,6 @@ import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.metadata.schema.OSchema;
 import com.orientechnologies.orient.core.record.ORecord;
-import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.sql.filter.OSQLFilterCondition;
 
@@ -39,8 +39,8 @@ public class OQueryOperatorInstanceof extends OQueryOperatorEqualityNotNulls {
 	}
 
 	@Override
-	protected boolean evaluateExpression(final ORecordInternal<?> iRecord, final OSQLFilterCondition iCondition, final Object iLeft,
-			final Object iRight) {
+	protected boolean evaluateExpression(final OIdentifiable iRecord, final OSQLFilterCondition iCondition, final Object iLeft,
+			final Object iRight, OCommandContext iContext) {
 
 		final OSchema schema = ODatabaseRecordThreadLocal.INSTANCE.get().getMetadata().getSchema();
 
@@ -60,7 +60,7 @@ public class OQueryOperatorInstanceof extends OQueryOperatorEqualityNotNulls {
 			// GET THE CLASS BY NAME
 			cls = schema.getClass((String) iLeft);
 
-		return cls != null ? cls.isSubClassOf(baseClass) : null;
+		return cls != null ? cls.isSubClassOf(baseClass) : false;
 	}
 
 	@Override
