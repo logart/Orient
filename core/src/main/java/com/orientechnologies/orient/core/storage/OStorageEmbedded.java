@@ -26,6 +26,7 @@ import com.orientechnologies.orient.core.exception.OStorageException;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -79,9 +80,11 @@ public abstract class OStorageEmbedded extends OStorageAbstract {
 	public <V> V callInLock(Callable<V> iCallable, boolean iExclusiveLock, List<ORID> ids) {
 		final OLockManager.LOCK iLockType = (iExclusiveLock) ? OLockManager.LOCK.EXCLUSIVE : OLockManager.LOCK.SHARED;
 		Collections.sort(ids);
+		final List<ORID> lockedIds = new ArrayList<ORID>(ids.size());
 		try {
 			for (ORID id : ids) {
 				lockManager.acquireLock(Thread.currentThread(), id, iLockType);
+				lockedIds.add(id);
 			}
 			return iCallable.call();
 		} catch (RuntimeException e) {
@@ -89,8 +92,7 @@ public abstract class OStorageEmbedded extends OStorageAbstract {
 		} catch (Exception e) {
 			throw new OException("Error on nested call in lock", e);
 		} finally {
-			//TODO release only locked ids
-			for (ORID id : ids) {
+			for (ORID id : lockedIds) {
 				lockManager.releaseLock(Thread.currentThread(), id, iLockType);
 			}
 		}
