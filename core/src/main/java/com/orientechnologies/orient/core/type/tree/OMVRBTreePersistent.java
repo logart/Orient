@@ -493,6 +493,8 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
 	public V get(final Object iKey) {
 		for (int i = 0; i < OPTIMIZE_MAX_RETRY; ++i) {
 			try {
+				//TODO remove it. Added only for quick reproducing deadlock.
+				optimize(true);
 				return super.get(iKey);
 			} catch (OLowMemoryException e) {
 				OLogManager.instance().debug(this, "Optimization required during node search %d/%d", i, OPTIMIZE_MAX_RETRY);

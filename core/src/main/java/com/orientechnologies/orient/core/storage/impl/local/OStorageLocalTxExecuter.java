@@ -135,9 +135,9 @@ public class OStorageLocalTxExecuter {
 	public void commitAllPendingRecords(final OTransaction iTx) throws IOException {
 		// COPY ALL THE ENTRIES IN SEPARATE COLLECTION SINCE DURING THE COMMIT PHASE SOME NEW ENTRIES COULD BE CREATED AND
 		// CONCURRENT-EXCEPTION MAY OCCURS
-		final List<ORecordOperation> tmpEntries = new ArrayList<ORecordOperation>();
 
 		while (iTx.getCurrentRecordEntries().iterator().hasNext()) {
+			final List<ORecordOperation> tmpEntries = new ArrayList<ORecordOperation>();
 			for (ORecordOperation txEntry : iTx.getCurrentRecordEntries())
 				tmpEntries.add(txEntry);
 

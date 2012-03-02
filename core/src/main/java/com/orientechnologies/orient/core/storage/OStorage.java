@@ -17,6 +17,7 @@ package com.orientechnologies.orient.core.storage;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -25,6 +26,7 @@ import com.orientechnologies.common.concur.resource.OSharedContainer;
 import com.orientechnologies.orient.core.cache.OLevel2RecordCache;
 import com.orientechnologies.orient.core.command.OCommandRequestText;
 import com.orientechnologies.orient.core.config.OStorageConfiguration;
+import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.tx.OTransaction;
 
@@ -176,7 +178,7 @@ public interface OStorage extends OSharedContainer {
 	 * Returns a pair of long values telling the begin and end positions of data in the requested cluster. Useful to know the range of
 	 * the records.
 	 * 
-	 * @param iCurrentClusterId
+	 * @param currentClusterId
 	 *          Cluster id
 	 */
 	public long[] getClusterDataRange(int currentClusterId);
@@ -184,4 +186,14 @@ public interface OStorage extends OSharedContainer {
 	public void renameCluster(String iOldName, String iNewName);
 
 	public <V> V callInLock(Callable<V> iCallable, boolean iExclusiveLock);
+
+	/**
+	 * TODO
+	 * @param iCallable
+	 * @param iExclusiveLock
+	 * @param ids
+	 * @param <V>
+	 * @return
+	 */
+	public <V> V callInLock(Callable<V> iCallable, boolean iExclusiveLock, List<ORID> ids);
 }

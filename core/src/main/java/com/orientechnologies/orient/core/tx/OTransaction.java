@@ -35,6 +35,10 @@ public interface OTransaction {
 		INVALID, BEGUN, COMMITTING, ROLLBACKING
 	}
 
+	public enum ISOLATION_LEVEL {
+		READ_UNCOMMITTED, READ_COMMITTED
+	}
+
 	public void begin();
 
 	public void commit();
@@ -90,6 +94,8 @@ public interface OTransaction {
 	public void setUsingLog(boolean useLog);
 
 	public void close();
+
+	public ISOLATION_LEVEL getIsolationLevel();
 
 	/**
 	 * When commit in transaction is performed all new records will change their identity, but index values will contain staile links,

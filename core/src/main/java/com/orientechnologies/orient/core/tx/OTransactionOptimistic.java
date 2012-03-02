@@ -205,4 +205,8 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
 	public void setUsingLog(final boolean useLog) {
 		this.usingLog = useLog;
 	}
+
+	public ISOLATION_LEVEL getIsolationLevel() {
+		return isolation_level;
+	}
 }

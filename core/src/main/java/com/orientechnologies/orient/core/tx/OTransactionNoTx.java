@@ -53,6 +53,10 @@ public class OTransactionNoTx extends OTransactionAbstract {
 	public void close() {
 	}
 
+	public ISOLATION_LEVEL getIsolationLevel() {
+		return ISOLATION_LEVEL.READ_UNCOMMITTED;
+	}
+
 	public ORecordInternal<?> loadRecord(final ORID iRid, final ORecordInternal<?> iRecord, final String iFetchPlan) {
 		if (iRid.isNew())
 			return null;

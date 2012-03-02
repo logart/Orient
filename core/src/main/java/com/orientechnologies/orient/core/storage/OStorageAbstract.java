@@ -15,6 +15,7 @@
  */
 package com.orientechnologies.orient.core.storage;
 
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -28,6 +29,7 @@ import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.cache.OLevel2RecordCache;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.config.OStorageConfiguration;
+import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.serialization.serializer.OStringSerializerHelper;
 
 public abstract class OStorageAbstract extends OSharedContainerImpl implements OStorage {
@@ -186,5 +188,24 @@ public abstract class OStorageAbstract extends OSharedContainerImpl implements O
 	@Override
 	public String toString() {
 		return url != null ? url : "?";
+	}
+
+	public <V> V callInLock(Callable<V> iCallable, boolean iExclusiveLock, List<ORID> ids) {
+		if (iExclusiveLock)
+			lock.acquireExclusiveLock();
+		else
+			lock.acquireSharedLock();
+		try {
+			return iCallable.call();
+		} catch (RuntimeException e) {
+			throw e;
+		} catch (Exception e) {
+			throw new OException("Error on nested call in lock", e);
+		} finally {
+			if (iExclusiveLock)
+				lock.releaseExclusiveLock();
+			else
+				lock.releaseSharedLock();
+		}
 	}
 }

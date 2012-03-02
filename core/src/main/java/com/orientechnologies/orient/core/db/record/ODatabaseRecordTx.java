@@ -16,6 +16,7 @@
 package com.orientechnologies.orient.core.db.record;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -273,7 +274,8 @@ public class ODatabaseRecordTx extends ODatabaseRecordAbstract {
 			// LOCK INVOLVED INDEXES
 			List<OIndexMVRBTreeAbstract<?>> lockedIndexes = null;
 			try {
-				if (involvedIndexes != null)
+				if (involvedIndexes != null) {
+					Collections.sort(involvedIndexes);
 					for (String indexName : involvedIndexes) {
 						final OIndexMVRBTreeAbstract<?> index = (OIndexMVRBTreeAbstract<?>) getMetadata().getIndexManager().getIndexInternal(
 								indexName);
@@ -283,8 +285,9 @@ public class ODatabaseRecordTx extends ODatabaseRecordAbstract {
 						index.acquireExclusiveLock();
 						lockedIndexes.add(index);
 					}
+				}
 
-				getStorage().callInLock(new Callable<Void>() {
+				final Callable<Void> commit = new Callable<Void>() {
 
 					public Void call() throws Exception {
 						getStorage().commit(currentTx);
@@ -304,7 +307,18 @@ public class ODatabaseRecordTx extends ODatabaseRecordAbstract {
 						return null;
 					}
 
-				}, true);
+				};
+				
+				if (currentTx.getIsolationLevel() == OTransaction.ISOLATION_LEVEL.READ_COMMITTED) {
+					getStorage().callInLock(commit, true);
+				} else {
+					List<ORID> ids = new ArrayList<ORID>();
+					for (ORecordOperation recordOperation : currentTx.getCurrentRecordEntries()) {
+						recordOperation.getRecord().getIdentity();
+					}
+
+					getStorage().callInLock(commit, true, ids);
+				}
 
 			} finally {
 				// RELEASE INDEX LOCKS IF ANY

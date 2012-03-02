@@ -42,6 +42,7 @@ public abstract class OTransactionRealAbstract extends OTransactionAbstract {
 	protected Map<OIdentifiable, List<OTransactionRecordIndexOperation>> recordIndexOperations = new TreeMap<OIdentifiable, List<OTransactionRecordIndexOperation>>();
 	protected int																		id;
 	protected int																		newObjectCounter	= -2;
+	protected ISOLATION_LEVEL isolation_level = ISOLATION_LEVEL.READ_UNCOMMITTED;
 
 	/**
 	 * USE THIS AS RESPONSE TO REPORT A DELETED RECORD IN TX

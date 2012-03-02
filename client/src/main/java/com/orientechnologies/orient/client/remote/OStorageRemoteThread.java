@@ -17,6 +17,7 @@ package com.orientechnologies.orient.client.remote;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -27,6 +28,7 @@ import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.cache.OLevel2RecordCache;
 import com.orientechnologies.orient.core.command.OCommandRequestText;
 import com.orientechnologies.orient.core.config.OStorageConfiguration;
+import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.OCluster;
@@ -342,6 +344,10 @@ public class OStorageRemoteThread implements OStorage {
 
 	public <V> V callInLock(final Callable<V> iCallable, final boolean iExclusiveLock) {
 		return delegate.callInLock(iCallable, iExclusiveLock);
+	}
+
+	public <V> V callInLock(final Callable<V> iCallable, final boolean iExclusiveLock, List<ORID> ids) {
+		return delegate.callInLock(iCallable, iExclusiveLock, ids);
 	}
 
 	public ORemoteServerEventListener getRemoteServerEventListener() {

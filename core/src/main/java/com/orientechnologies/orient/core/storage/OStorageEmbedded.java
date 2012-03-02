@@ -15,6 +15,7 @@
  */
 package com.orientechnologies.orient.core.storage;
 
+import com.orientechnologies.common.concur.lock.OLockManager;
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.orient.core.command.OCommandExecutor;
 import com.orientechnologies.orient.core.command.OCommandManager;
@@ -22,7 +23,12 @@ import com.orientechnologies.orient.core.command.OCommandRequestText;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.exception.OCommandExecutionException;
 import com.orientechnologies.orient.core.exception.OStorageException;
+import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.Callable;
 
 /**
  * Interface for embedded storage.
@@ -68,5 +74,25 @@ public abstract class OStorageEmbedded extends OStorageAbstract {
 	protected void checkOpeness() {
 		if (status != STATUS.OPEN)
 			throw new OStorageException("Storage " + name + " is not opened.");
+	}
+
+	public <V> V callInLock(Callable<V> iCallable, boolean iExclusiveLock, List<ORID> ids) {
+		final OLockManager.LOCK iLockType = (iExclusiveLock) ? OLockManager.LOCK.EXCLUSIVE : OLockManager.LOCK.SHARED;
+		Collections.sort(ids);
+		try {
+			for (ORID id : ids) {
+				lockManager.acquireLock(Thread.currentThread(), id, iLockType);
+			}
+			return iCallable.call();
+		} catch (RuntimeException e) {
+			throw e;
+		} catch (Exception e) {
+			throw new OException("Error on nested call in lock", e);
+		} finally {
+			//TODO release only locked ids
+			for (ORID id : ids) {
+				lockManager.releaseLock(Thread.currentThread(), id, iLockType);
+			}
+		}
 	}
 }
