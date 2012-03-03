@@ -123,9 +123,10 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 		while (current != null && current.getUnderlying() instanceof ODatabaseComplex<?> && !(current instanceof ODatabaseDocumentTx))
 			current = current.getUnderlying();
 
-		for (ODocument d : ((ODatabaseDocumentTx) current).browseClass(name, true)) {
-			d.validate();
-		}
+		if (current != null)
+			for (ODocument d : ((ODatabaseDocumentTx) current).browseClass(name, true)) {
+				d.validate();
+			}
 	}
 
 	public OClass getSuperClass() {
@@ -313,13 +314,16 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 			throw new OSchemaException("Property '" + iPropertyName + "' not found in class " + name + "'");
 	}
 
-	public OProperty addProperty(final String iPropertyName, final OType iType, final OType iLinkedType, final OClass iLinkedClass) {
+	protected OProperty addProperty(final String iPropertyName, final OType iType, final OType iLinkedType, final OClass iLinkedClass) {
 		getDatabase().checkSecurity(ODatabaseSecurityResources.SCHEMA, ORole.PERMISSION_UPDATE);
 
 		final String lowerName = iPropertyName.toLowerCase();
 
 		if (properties.containsKey(lowerName))
 			throw new OSchemaException("Class " + name + " already has property '" + iPropertyName + "'");
+
+		if (iType == null)
+			throw new OSchemaException("Property type not defined.");
 
 		final StringBuilder cmd = new StringBuilder("create property ");
 		// CLASS.PROPERTY NAME
@@ -832,7 +836,7 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 			final OProperty propertyToIndex = properties.get(fieldName.toLowerCase());
 			final OType propertyType = propertyToIndex.getType();
 			if (propertyType.equals(OType.EMBEDDEDLIST) || propertyType.equals(OType.EMBEDDEDSET) || propertyType.equals(OType.LINKSET)
-					|| propertyType.equals(OType.LINKSET) || propertyType.equals(OType.EMBEDDEDMAP) || propertyType.equals(OType.LINKMAP))
+					|| propertyType.equals(OType.LINKLIST) || propertyType.equals(OType.EMBEDDEDMAP) || propertyType.equals(OType.LINKMAP))
 				throw new OIndexException("Collections are not supported in composite indexes");
 
 			final OPropertyIndexDefinition propertyIndex = new OPropertyIndexDefinition(name, propertyToIndex.getName(), propertyType);
@@ -858,7 +862,7 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 				indexType = OType.STRING;
 			else {
 				if (propertyToIndexType == OType.LINKMAP)
-					throw new OIndexException( "LINK types indexing are not supported." );
+					throw new OIndexException("LINK types indexing are not supported.");
 				else {
 					indexType = propertyToIndex.getLinkedType();
 					if (indexType == null)
@@ -872,7 +876,7 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 		} else if (propertyToIndexType.equals(OType.EMBEDDEDLIST) || propertyToIndexType.equals(OType.EMBEDDEDSET)
 				|| propertyToIndexType.equals(OType.LINKLIST) || propertyToIndexType.equals(OType.LINKSET)) {
 			if (propertyToIndexType.equals(OType.LINKLIST) || propertyToIndexType.equals(OType.LINKSET))
-        throw new OIndexException( "LINK types indexing are not supported." );
+				throw new OIndexException("LINK types indexing are not supported.");
 			else {
 				indexType = propertyToIndex.getLinkedType();
 				if (indexType == null)

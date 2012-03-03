@@ -23,16 +23,10 @@ import java.util.Map.Entry;
 import java.util.concurrent.Callable;
 
 import com.orientechnologies.common.log.OLogManager;
-import com.orientechnologies.orient.core.db.ODatabase;
 import com.orientechnologies.orient.core.db.ODatabaseListener;
 import com.orientechnologies.orient.core.exception.OTransactionException;
 import com.orientechnologies.orient.core.id.ORID;
-import com.orientechnologies.orient.core.index.OClassIndexManager;
-import com.orientechnologies.orient.core.index.OIndex;
-import com.orientechnologies.orient.core.index.OIndexMVRBTreeAbstract;
 import com.orientechnologies.orient.core.record.ORecordInternal;
-import com.orientechnologies.orient.core.record.impl.ODocument;
-import com.orientechnologies.orient.core.storage.OStorageEmbedded;
 import com.orientechnologies.orient.core.tx.OTransaction;
 import com.orientechnologies.orient.core.tx.OTransaction.TXSTATUS;
 import com.orientechnologies.orient.core.tx.OTransaction.TXTYPE;
@@ -50,24 +44,6 @@ public class ODatabaseRecordTx extends ODatabaseRecordAbstract {
 	public ODatabaseRecordTx(final String iURL, final byte iRecordType) {
 		super(iURL, iRecordType);
 		init();
-	}
-
-	@Override
-	public <DB extends ODatabase> DB open(String iUserName, String iUserPassword) {
-		final DB  db  = super.open(iUserName, iUserPassword);
-		if(getStorage() instanceof OStorageEmbedded)
-			currentTx.addRecordListener(new OClassIndexManager());
-
-		return db;
-	}
-
-	@Override
-	public <DB extends ODatabase> DB create() {
-		final DB db = super.create();
-		if(getStorage() instanceof OStorageEmbedded)
-			currentTx.addRecordListener(new OClassIndexManager());
-
-		return 	db;
 	}
 
 	public ODatabaseRecord begin() {
@@ -95,7 +71,6 @@ public class ODatabaseRecordTx extends ODatabaseRecordAbstract {
 
 		case OPTIMISTIC:
 			currentTx = new OTransactionOptimistic(this);
-			currentTx.addRecordListener(new OClassIndexManager());
 			break;
 
 		case PESSIMISTIC:
@@ -264,73 +239,6 @@ public class ODatabaseRecordTx extends ODatabaseRecordAbstract {
 	public void executeRollback(final OTransaction iTransaction) {
 	}
 
-	@SuppressWarnings("rawtypes")
-	public void executeCommit() {
-		if (!(getStorage() instanceof OStorageEmbedded))
-			getStorage().commit(currentTx);
-		else {
-			final List<String> involvedIndexes = currentTx.getInvolvedIndexes();
-
-			// LOCK INVOLVED INDEXES
-			List<OIndexMVRBTreeAbstract<?>> lockedIndexes = null;
-			try {
-				if (involvedIndexes != null) {
-					Collections.sort(involvedIndexes);
-					for (String indexName : involvedIndexes) {
-						final OIndexMVRBTreeAbstract<?> index = (OIndexMVRBTreeAbstract<?>) getMetadata().getIndexManager().getIndexInternal(
-								indexName);
-						if (lockedIndexes == null)
-							lockedIndexes = new ArrayList<OIndexMVRBTreeAbstract<?>>();
-
-						index.acquireExclusiveLock();
-						lockedIndexes.add(index);
-					}
-				}
-
-				final Callable<Void> commit = new Callable<Void>() {
-
-					public Void call() throws Exception {
-						getStorage().commit(currentTx);
-
-						// COMMIT INDEX CHANGES
-						final ODocument indexEntries = currentTx.getIndexChanges();
-						if (indexEntries != null) {
-							final Map<String, ODocument> indexChanges = indexEntries.field("indexChanges");
-							if(indexChanges == null)
-								return null;
-
-							for (Entry<String, ODocument> indexEntry : indexChanges.entrySet()) {
-								final OIndex<?> index = getMetadata().getIndexManager().getIndexInternal(indexEntry.getKey());
-								index.commit(indexEntry.getValue());
-							}
-						}
-						return null;
-					}
-
-				};
-				
-				if (currentTx.getIsolationLevel() == OTransaction.ISOLATION_LEVEL.READ_COMMITTED) {
-					getStorage().callInLock(commit, true);
-				} else {
-					List<ORID> ids = new ArrayList<ORID>();
-					for (ORecordOperation recordOperation : currentTx.getCurrentRecordEntries()) {
-						ids.add(recordOperation.getRecord().getIdentity());
-					}
-
-					getStorage().callInLock(commit, true, ids);
-				}
-
-			} finally {
-				// RELEASE INDEX LOCKS IF ANY
-				if (lockedIndexes != null)
-					// DON'T USE GENERICS TO AVOID OpenJDK CRASH :-(
-					for (OIndexMVRBTreeAbstract index : lockedIndexes) {
-						index.releaseExclusiveLock();
-					}
-			}
-		}
-	}
-
 	protected void checkTransaction() {
 		if (currentTx == null || currentTx.getStatus() == TXSTATUS.INVALID)
 			throw new OTransactionException("Transaction not started");
@@ -362,8 +270,5 @@ public class ODatabaseRecordTx extends ODatabaseRecordAbstract {
 	public void setDefaultTransactionMode() {
 		if (!(currentTx instanceof OTransactionNoTx))
 			currentTx = new OTransactionNoTx(this);
-		
-		if(getStorage() instanceof OStorageEmbedded)
-			currentTx.addRecordListener(new OClassIndexManager());
 	}
 }

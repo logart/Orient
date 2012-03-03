@@ -362,7 +362,8 @@ public class OStorageRemote extends OStorageAbstract {
 		} while (true);
 	}
 
-	public ORawBuffer readRecord(final ORecordId iRid, final String iFetchPlan, final ORecordCallback<ORawBuffer> iCallback) {
+	public ORawBuffer readRecord(final ORecordId iRid, final String iFetchPlan, final boolean iIgnoreCache,
+			final ORecordCallback<ORawBuffer> iCallback) {
 		checkConnection();
 
 		if (OStorageRemoteThreadLocal.INSTANCE.get().commandExecuting)
@@ -377,6 +378,8 @@ public class OStorageRemote extends OStorageAbstract {
 					network = beginRequest(OChannelBinaryProtocol.REQUEST_RECORD_LOAD);
 					network.writeRID(iRid);
 					network.writeString(iFetchPlan != null ? iFetchPlan : "");
+					if (network.getSrvProtocolVersion() >= 9)
+						network.writeByte((byte) (iIgnoreCache ? 1 : 0));
 
 				} finally {
 					endRequest(network);
@@ -782,8 +785,13 @@ public class OStorageRemote extends OStorageAbstract {
 			try {
 				OChannelBinaryClient network = null;
 				try {
-					//serialize all records before commit to gather all index changes and check unique index entries.
+					network = beginRequest(OChannelBinaryProtocol.REQUEST_TX_COMMIT);
+
+					network.writeInt(iTx.getId());
+					network.writeByte((byte) (iTx.isUsingLog() ? 1 : 0));
+
 					final List<ORecordOperation> tmpEntries = new ArrayList<ORecordOperation>();
+
 					while (iTx.getCurrentRecordEntries().iterator().hasNext()) {
 						for (ORecordOperation txEntry : iTx.getCurrentRecordEntries())
 							tmpEntries.add(txEntry);
@@ -792,17 +800,8 @@ public class OStorageRemote extends OStorageAbstract {
 
 						if (tmpEntries.size() > 0)
 							for (ORecordOperation txEntry : tmpEntries)
-								txEntry.getRecord().toStream();
-					}
-
-
-					network = beginRequest(OChannelBinaryProtocol.REQUEST_TX_COMMIT);
-
-					network.writeInt(iTx.getId());
-					network.writeByte((byte) (iTx.isUsingLog() ? 1 : 0));
-
-					for(ORecordOperation txEntry : iTx.getAllRecordEntries()) {
 								commitEntry(network, txEntry);
+
 					}
 
 					// END OF RECORD ENTRIES
@@ -1442,13 +1441,11 @@ public class OStorageRemote extends OStorageAbstract {
 		if (obj == null)
 			return;
 
-		synchronized (clusterConfiguration) {
-			// UPDATE IT
-			clusterConfiguration = obj;
+		// UPDATE IT
+		clusterConfiguration = obj;
 
-			if (OLogManager.instance().isDebugEnabled())
-				OLogManager.instance().debug(this, "Received new cluster configuration: %s", clusterConfiguration.toJSON(""));
-		}
+		if (OLogManager.instance().isDebugEnabled())
+			OLogManager.instance().debug(this, "Received new cluster configuration: %s", clusterConfiguration.toJSON(""));
 	}
 
 	private void commitEntry(final OChannelBinaryClient iNetwork, final ORecordOperation txEntry) throws IOException {

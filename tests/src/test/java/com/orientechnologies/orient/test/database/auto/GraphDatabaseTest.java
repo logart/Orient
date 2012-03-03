@@ -27,6 +27,7 @@ import com.orientechnologies.orient.core.db.graph.OGraphDatabase;
 import com.orientechnologies.orient.core.db.graph.OGraphDatabasePool;
 import com.orientechnologies.orient.core.db.graph.OGraphElement;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
+import com.orientechnologies.orient.core.intent.OIntentMassiveInsert;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.impl.ODocument;
@@ -336,55 +337,69 @@ public class GraphDatabaseTest {
 
 		database.close();
 	}
-	//
-	// @Test
-	// public void testSomething() throws Exception {
-	// database.open("admin", "admin");
-	//
-	// if (database.getVertexType("Foo") != null)
-	// database.createVertexType("Foo");
-	// if (database.getVertexType("Bletch") != null)
-	// database.createVertexType("Bletch");
-	// if (database.getVertexType("Bar") != null)
-	// database.createEdgeType("Bar");
-	//
-	// try {
-	// // Step 1
-	// // Create a foo
-	// ODocument foo1 = (ODocument) database.createVertex("Foo").field("address", "testing").save();
-	//
-	// // Step 2 create a bunch of foos and connect them to THE foo
-	// for (int i = 0; i < 18; ++i) {
-	// database.begin(TXTYPE.OPTIMISTIC);
-	//
-	// try {
-	// ODocument foo = (ODocument) database.createVertex("Bletch").field("address", "test" + i).save();
-	//
-	// database.createEdge(foo.getIdentity(), foo1.getIdentity(), "Bar").save();
-	// database.commit();
-	// } catch (Exception e) {
-	// e.printStackTrace();
-	// database.rollback();
-	// }
-	// }
-	//
-	// // just show what is there
-	// List<ODocument> result = database.query(new OSQLSynchQuery<ODocument>("select * from Foo"));
-	//
-	// // Step 3
-	// for (ODocument d : result) {
-	// System.out.println("Vertex: " + d);
-	//
-	// // Step 4
-	// Set<OIdentifiable> result1 = database.getInEdges(d);
-	//
-	// for (OIdentifiable e : result1) {
-	// System.out.println("In Edge: " + e);
-	// }
-	// }
-	//
-	// } finally {
-	// database.close();
-	// }
-	// }
+
+	@Test(dependsOnMethods = "populate")
+	public void testEdgeWithRID() {
+		database.open("admin", "admin");
+
+		database.declareIntent(new OIntentMassiveInsert());
+		try {
+			ODocument a = database.createVertex().field("label", "a");
+			a.save();
+			ODocument b = database.createVertex().field("label", "b");
+			b.save();
+			ODocument c = database.createVertex().field("label", "c");
+			c.save();
+
+			database.createEdge(a.getIdentity(), b.getIdentity()).save();
+			database.createEdge(a.getIdentity(), c.getIdentity()).save();
+
+			a.reload();
+			// Assert.assertEquals(database.getOutEdges(a).size(), 2);
+
+		} finally {
+			database.close();
+		}
+	}
+
+	@Test(dependsOnMethods = "populate")
+	public void testBlaaa() {
+		database.open("admin", "admin");
+
+		try {
+			// add source
+			ODocument sourceDoc = database.createVertex();
+			sourceDoc.field("name", "MyTest", OType.STRING);
+			sourceDoc.save();
+
+			// add first office
+			ODocument office1Doc = database.createVertex();
+			office1Doc.field("name", "office1", OType.STRING);
+			office1Doc.save();
+
+			List<ODocument> source1 = database.query(new OSQLSynchQuery<ODocument>("select * from V where name = 'MyTest'"));
+			for (int i = 0; i < source1.size(); i++)
+				database.createEdge(source1.get(i), office1Doc).field("label", "office", OType.STRING).save();
+
+			String query11 = "select out[label='office'].size() from V where name = 'MyTest'";
+			List<ODocument> officesDoc11 = database.query(new OSQLSynchQuery<ODocument>(query11));
+			System.out.println(officesDoc11);
+
+			// add second office
+			ODocument office2Doc = database.createVertex();
+			office2Doc.field("name", "office2", OType.STRING);
+			office2Doc.save();
+
+			List<ODocument> source2 = database.query(new OSQLSynchQuery<ODocument>("select * from V where name = 'MyTest'"));
+			for (int i = 0; i < source2.size(); i++)
+				database.createEdge(source2.get(i), office2Doc).field("label", "office", OType.STRING).save();
+
+			String query21 = "select out[label='office'].size() from V where name = 'MyTest'";
+			List<ODocument> officesDoc21 = database.query(new OSQLSynchQuery<ODocument>(query21));
+			System.out.println(officesDoc21);
+
+		} finally {
+			database.close();
+		}
+	}
 }

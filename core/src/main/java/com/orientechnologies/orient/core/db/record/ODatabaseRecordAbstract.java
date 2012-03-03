@@ -15,6 +15,13 @@
  */
 package com.orientechnologies.orient.core.db.record;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.Orient;
@@ -27,7 +34,6 @@ import com.orientechnologies.orient.core.db.ODatabaseComplex;
 import com.orientechnologies.orient.core.db.ODatabaseListener;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.ODatabaseWrapperAbstract;
-import com.orientechnologies.orient.core.db.ODatabase.STATUS;
 import com.orientechnologies.orient.core.db.raw.ODatabaseRaw;
 import com.orientechnologies.orient.core.dictionary.ODictionary;
 import com.orientechnologies.orient.core.exception.ODatabaseException;
@@ -54,8 +60,6 @@ import com.orientechnologies.orient.core.sql.OCommandSQL;
 import com.orientechnologies.orient.core.storage.ORawBuffer;
 import com.orientechnologies.orient.core.storage.OStorageEmbedded;
 import com.orientechnologies.orient.core.tx.OTransactionRealAbstract;
-
-import java.util.*;
 
 @SuppressWarnings("unchecked")
 public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<ODatabaseRaw> implements ODatabaseRecord {
@@ -121,6 +125,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 					}
 				}
 				registerHook(new OUserTrigger());
+				registerHook(new OClassIndexManager());
 			} else
 				// CREATE DUMMY USER
 				user = new OUser(iUserName, OUser.encryptPassword(iUserPassword)).addRole(new ORole("passthrough", null,
@@ -150,6 +155,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 
 			if (getStorage() instanceof OStorageEmbedded) {
 				registerHook(new OUserTrigger());
+				registerHook(new OClassIndexManager());
 			}
 
 			// CREATE THE DEFAULT SCHEMA WITH DEFAULT USER
@@ -157,6 +163,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 			metadata.create();
 
 			user = getMetadata().getSecurity().getUser(OUser.ADMIN);
+
 		} catch (Exception e) {
 			throw new ODatabaseException("Cannot create database", e);
 		}
@@ -529,7 +536,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 				return (RET) record;
 			}
 
-			final ORawBuffer recordBuffer = underlying.read(iRid, iFetchPlan);
+			final ORawBuffer recordBuffer = underlying.read(iRid, iFetchPlan, iIgnoreCache);
 			if (recordBuffer == null)
 				return null;
 

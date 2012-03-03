@@ -37,6 +37,7 @@ import com.orientechnologies.orient.core.tx.OTxListener;
 public class OStorageLocalTxExecuter {
 	private final OStorageLocal	storage;
 	private final OTxSegment		txSegment;
+	private OTransaction				currentTransaction;
 
 	public OStorageLocalTxExecuter(final OStorageLocal iStorage, final OStorageTxConfiguration iConfig) throws IOException {
 		storage = iStorage;
@@ -59,7 +60,7 @@ public class OStorageLocalTxExecuter {
 	}
 
 	protected long createRecord(final int iTxId, final OCluster iClusterSegment, final ORecordId iRid, final byte[] iContent,
-			final byte iRecordType) throws IOException {
+			final byte iRecordType) {
 		iRid.clusterPosition = -1;
 
 		try {
@@ -108,7 +109,7 @@ public class OStorageLocalTxExecuter {
 		return -1;
 	}
 
-	protected void deleteRecord(final int iTxId, final OCluster iClusterSegment, final long iPosition, final int iVersion) {
+	protected boolean deleteRecord(final int iTxId, final OCluster iClusterSegment, final long iPosition, final int iVersion) {
 		try {
 			final ORecordId rid = new ORecordId(iClusterSegment.getId(), iPosition);
 
@@ -119,13 +120,14 @@ public class OStorageLocalTxExecuter {
 			txSegment.addLog(OTxSegment.OPERATION_DELETE, iTxId, iClusterSegment.getId(), iPosition, buffer.recordType, buffer.version,
 					buffer.buffer);
 
-			storage.deleteRecord(iClusterSegment, rid, iVersion);
+			return storage.deleteRecord(iClusterSegment, rid, iVersion);
 
 		} catch (IOException e) {
 
 			OLogManager.instance().error(this, "Error on deleting entry #" + iPosition + " in log segment: " + iClusterSegment, e,
 					OTransactionException.class);
 		}
+		return false;
 	}
 
 	public OTxSegment getTxSegment() {
@@ -133,25 +135,30 @@ public class OStorageLocalTxExecuter {
 	}
 
 	public void commitAllPendingRecords(final OTransaction iTx) throws IOException {
-		// COPY ALL THE ENTRIES IN SEPARATE COLLECTION SINCE DURING THE COMMIT PHASE SOME NEW ENTRIES COULD BE CREATED AND
-		// CONCURRENT-EXCEPTION MAY OCCURS
-
-		while (iTx.getCurrentRecordEntries().iterator().hasNext()) {
+		currentTransaction = iTx;
+		try {
+			// COPY ALL THE ENTRIES IN SEPARATE COLLECTION SINCE DURING THE COMMIT PHASE SOME NEW ENTRIES COULD BE CREATED AND
+			// CONCURRENT-EXCEPTION MAY OCCURS
 			final List<ORecordOperation> tmpEntries = new ArrayList<ORecordOperation>();
-			for (ORecordOperation txEntry : iTx.getCurrentRecordEntries())
-				tmpEntries.add(txEntry);
 
-			iTx.clearRecordEntries();
+			while (iTx.getCurrentRecordEntries().iterator().hasNext()) {
+				for (ORecordOperation txEntry : iTx.getCurrentRecordEntries())
+					tmpEntries.add(txEntry);
 
-			if (!tmpEntries.isEmpty()) {
-				for (ORecordOperation txEntry : tmpEntries)
-					// COMMIT ALL THE SINGLE ENTRIES ONE BY ONE
-					commitEntry(iTx, txEntry, iTx.isUsingLog());
+				iTx.clearRecordEntries();
+
+				if (!tmpEntries.isEmpty()) {
+					for (ORecordOperation txEntry : tmpEntries)
+						// COMMIT ALL THE SINGLE ENTRIES ONE BY ONE
+						commitEntry(iTx, txEntry, iTx.isUsingLog());
+				}
 			}
-		}
 
-		// UPDATE THE CACHE ONLY IF THE ITERATOR ALLOWS IT
-		OTransactionAbstract.updateCacheFromEntries(storage, iTx, iTx.getAllRecordEntries(), true);
+			// UPDATE THE CACHE ONLY IF THE ITERATOR ALLOWS IT
+			OTransactionAbstract.updateCacheFromEntries(storage, iTx, iTx.getAllRecordEntries(), true);
+		} finally {
+			currentTransaction = null;
+		}
 	}
 
 	public void clearLogEntries(final OTransaction iTx) throws IOException {
@@ -211,7 +218,6 @@ public class OStorageLocalTxExecuter {
 			}
 
 			if (rid.isNew()) {
-				ORID prevRid = new ORecordId(rid);
 				if (iUseLog)
 					rid.clusterPosition = createRecord(iTx.getId(), cluster, rid, stream, txEntry.getRecord().getRecordType());
 				else
@@ -220,7 +226,6 @@ public class OStorageLocalTxExecuter {
 
 				txEntry.getRecord().onAfterIdentityChanged(txEntry.getRecord());
 				iTx.getDatabase().callbackHooks(ORecordHook.TYPE.AFTER_CREATE, txEntry.getRecord());
-				iTx.updateIndexIdentityAfterCommit(prevRid, rid);
 			} else {
 				if (iUseLog)
 					txEntry.getRecord()
@@ -274,5 +279,13 @@ public class OStorageLocalTxExecuter {
 
 		if (txEntry.getRecord() instanceof OTxListener)
 			((OTxListener) txEntry.getRecord()).onEvent(txEntry, OTxListener.EVENT.AFTER_COMMIT);
+	}
+
+	public boolean isCommitting() {
+		return currentTransaction != null;
+	}
+
+	public OTransaction getCurrentTransaction() {
+		return currentTransaction;
 	}
 }
