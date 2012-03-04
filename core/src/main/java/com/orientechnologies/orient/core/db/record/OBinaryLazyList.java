@@ -20,6 +20,7 @@ public class OBinaryLazyList<T> extends AbstractList<T> implements OBinarySerial
 
     /**
      * Holder for the elements. Contains its position ad size in the binary source
+     *
      * @param <T>
      */
     protected class LazyEntry<T> {
@@ -110,10 +111,14 @@ public class OBinaryLazyList<T> extends AbstractList<T> implements OBinarySerial
         }
     }
 
-    protected STATUS status;
-    protected boolean isDirty;
+    private STATUS status;
+    /**
+     * List owner
+     */
+    private ORecord<?> sourceRecord;
     private int sourceOffset;
     private byte[] source;
+    private boolean hasChanges;
     protected final ArrayList<LazyEntry<T>> data = new ArrayList<LazyEntry<T>>();
 
     /**
@@ -121,20 +126,30 @@ public class OBinaryLazyList<T> extends AbstractList<T> implements OBinarySerial
      */
     public OBinaryLazyList() {
         this.status = STATUS.NOT_LOADED;
-        this.isDirty = true;
+        this.sourceRecord = null;
         this.source = null;
         this.sourceOffset = -1;
+        this.hasChanges = true;
+    }
+
+    /**
+     * Setter for the list owner. Assumed that this will be called on deserialization hook
+     *
+     * @param sourceRecord list owner
+     */
+    public void setSourceRecord(ORecord<?> sourceRecord) {
+        this.sourceRecord = sourceRecord;
     }
 
     /**
      * Serialize list into the stream
      *
-     * @param stream to serialize list
+     * @param stream       to serialize list
      * @param streamOffset position to start serialization from
      */
     public void serialize(final byte[] stream, final int streamOffset) {
         this.status = STATUS.MARSHALLING;
-        if (isDirty) {
+        if (hasChanges) {
             final ObjectSerializer<Integer> indexSerializer = ObjectSerializerFactory.INSTANCE.getIndexSerializer();
             final int indexSize = ObjectSerializerFactory.INSTANCE.getIndexSize();
             final int size = data.size();
@@ -146,7 +161,7 @@ public class OBinaryLazyList<T> extends AbstractList<T> implements OBinarySerial
                 indexSerializer.serialize(objSize, stream, indexOffset);
                 indexOffset += indexSize;
                 if (!data.get(i).isDirty()) {
-                    System.arraycopy(source,data.get(i).sourcePosition,stream,dataOffset,data.get(i).size);
+                    System.arraycopy(source, data.get(i).sourcePosition, stream, dataOffset, data.get(i).size);
                 } else {
                     final T obj = data.get(i).get();
                     final OType type = OType.getTypeByClass(obj.getClass());
@@ -161,6 +176,7 @@ public class OBinaryLazyList<T> extends AbstractList<T> implements OBinarySerial
             System.arraycopy(source, sourceOffset, stream, streamOffset, sizeToCopy);
         }
         this.status = STATUS.LOADED;
+        this.hasChanges = false;
     }
 
     /**
@@ -177,17 +193,15 @@ public class OBinaryLazyList<T> extends AbstractList<T> implements OBinarySerial
             final int initialSize = indexSerializer.deserialize(source, sourceOffset);
             int indexOffset = sourceOffset + indexSize;
             int dataOffset = indexOffset + indexSize * initialSize;
-            for(int i=0; i<initialSize; i++){
+            for (int i = 0; i < initialSize; i++) {
                 final int size = indexSerializer.deserialize(source, indexOffset);
                 data.add(createEntry(dataOffset, size));
                 indexOffset += indexSize;
                 dataOffset += size;
             }
-            this.isDirty = false;
-        } else {
-            this.isDirty = true;
         }
         this.status = STATUS.LOADED;
+        this.hasChanges = false;
     }
 
     /**
@@ -198,7 +212,7 @@ public class OBinaryLazyList<T> extends AbstractList<T> implements OBinarySerial
     public int getBinarySize() {
         final int indexSize = ObjectSerializerFactory.INSTANCE.getIndexSize();
         int size = indexSize * (data.size() + 1);//+1 is stands for the list size
-        for(int i=0; i<data.size(); i++){
+        for (int i = 0; i < data.size(); i++) {
             size += getObjectSize(i);
         }
         return size;
@@ -212,23 +226,14 @@ public class OBinaryLazyList<T> extends AbstractList<T> implements OBinarySerial
      */
     protected int getObjectSize(final int index) {
         final LazyEntry<T> entry = data.get(index);
-        if(!entry.isDirty()){
+        if (!entry.isDirty()) {
             return entry.size;
-        }else{
+        } else {
             final T obj = entry.get();
             final OType type = OType.getTypeByClass(obj.getClass());
             return ObjectSerializerFactory.TYPE_IDENTIFIER_SIZE +
                     ObjectSerializerFactory.INSTANCE.getObjectSerializer(type, obj).getObjectSize(obj);
         }
-    }
-
-    /**
-     * Determines weather list modified or not
-     *
-     * @return {@code true} if list has been modified or {@code false} otherwise
-     */
-    public boolean isDirty() {
-        return isDirty;
     }
 
     @Override
@@ -312,8 +317,29 @@ public class OBinaryLazyList<T> extends AbstractList<T> implements OBinarySerial
 
     @Override
     public <RET> RET setDirty() {
-        isDirty = true;
+        if (status != STATUS.UNMARSHALLING && sourceRecord != null && !sourceRecord.isDirty()) {
+            sourceRecord.setDirty();
+        }
+        hasChanges = true;
         return (RET) this;
+    }
+
+    /**
+     * Determines weather source record modified or not
+     *
+     * @return {@code true} if source record has been modified or {@code false} otherwise
+     */
+    public boolean isDirty() {
+        return sourceRecord == null || sourceRecord.isDirty();
+    }
+
+    /**
+     * Determine weather list modified or not
+     *
+     * @return {@code true} if list has been modified or {@code false} otherwise
+     */
+    public boolean hasChanges() {
+        return hasChanges;
     }
 
     @Override
@@ -325,11 +351,11 @@ public class OBinaryLazyList<T> extends AbstractList<T> implements OBinarySerial
     public void onAfterIdentityChanged(ORecord<?> iRecord) {
         //do nothing
     }
-    
+
     protected LazyEntry<T> createEntry(int sourcePosition, int size) {
         return new LazyEntry<T>(sourcePosition, size);
     }
-    
+
     protected LazyEntry<T> createEntry(T value) {
         return new LazyEntry<T>(value);
     }
