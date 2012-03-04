@@ -35,7 +35,13 @@ import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.OStorageEmbedded;
 
 public class OTransactionOptimistic extends OTransactionRealAbstract {
-	private List<ORID> lockedRids = new ArrayList<ORID>();
+	private ThreadLocal<List<ORID>> lockedRids = new ThreadLocal<List<ORID>>(){
+		@Override
+		protected List<ORID> initialValue() {
+			return new ArrayList<ORID>();
+		}
+	};
+
 	private boolean								usingLog;
 	private static AtomicInteger	txSerial	= new AtomicInteger();
 
@@ -84,7 +90,7 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
 
 				for (final ORID ridToLock : ids) {
 					storageEmbedded.lockRecord(ridToLock, true);
-					lockedRids.add(ridToLock);
+					lockedRids.get().add(ridToLock);
 				}
 
 				final List<String> involvedIndexes = getInvolvedIndexes();
@@ -119,10 +125,10 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
 						index.releaseExclusiveLock();
 					}
 
-				for (final ORID rid : lockedRids)
+				for (final ORID rid : lockedRids.get())
 					storageEmbedded.unlockRecord(rid, true);
 
-				lockedRids.clear();
+				lockedRids.get().clear();
 			}
 		}
 	}
@@ -180,7 +186,7 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
 
 			final ORID rid = iRecord.getIdentity();
 			((OStorageEmbedded)database.getStorage()).lockRecord(rid, true);
-			lockedRids.add(rid);
+			lockedRids.get().add(rid);
 
 			switch (iStatus) {
 			case ORecordOperation.CREATED:
