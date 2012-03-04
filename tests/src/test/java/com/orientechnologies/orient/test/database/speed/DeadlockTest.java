@@ -26,9 +26,9 @@ import java.util.concurrent.*;
 @Test
 public class DeadlockTest {
 
-	public static final int READER_COUNT = 1;
-	public static final int WRITER_COUNT = 1;
-	public static final int DOC_COUNT = 10000;
+	public static final int READER_COUNT = 20;
+	public static final int WRITER_COUNT = 20;
+	public static final int DOC_COUNT = 1500;
 	public static final String DATABASE_URL = "local:concurrentTest";
 //	public static final String DATABASE_URL = "remote:localhost/concurrentTest";
 
@@ -41,6 +41,7 @@ public class DeadlockTest {
 		OGlobalConfiguration.MVRBTREE_ENTRYPOINTS.setValue(1);
 		OGlobalConfiguration.MVRBTREE_OPTIMIZE_ENTRYPOINTS_FACTOR.setValue(1.);
 		OGlobalConfiguration.MVRBTREE_TIMEOUT.setValue(0);
+		OGlobalConfiguration.STORAGE_RECORD_LOCK_TIMEOUT.setValue(-1);
 
 		final ODatabaseDocumentTx database = new ODatabaseDocumentTx(DATABASE_URL);
 		if (database.exists()) {
@@ -86,7 +87,7 @@ public class DeadlockTest {
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
-					for (int i = 0; i < 10000; i++) {
+					for (int i = 0; i < 1000; i++) {
 						database.begin();
 						final int key = r.nextInt(DOC_COUNT);
 						carIndex.get(key);
@@ -111,7 +112,7 @@ public class DeadlockTest {
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
-					for (int i = 0; i < 10000; i++) {
+					for (int i = 0; i < 1000; i++) {
 						try {
 							database.begin();
 							final ODocument car = database.load(identities.get(r.nextInt(DOC_COUNT)));
