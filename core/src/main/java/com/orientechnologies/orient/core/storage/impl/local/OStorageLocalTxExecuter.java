@@ -16,8 +16,6 @@
 package com.orientechnologies.orient.core.storage.impl.local;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.config.OStorageTxConfiguration;
@@ -37,7 +35,7 @@ import com.orientechnologies.orient.core.tx.OTxListener;
 public class OStorageLocalTxExecuter {
 	private final OStorageLocal	storage;
 	private final OTxSegment		txSegment;
-	private OTransaction				currentTransaction;
+	private final ThreadLocal<OTransaction>	currentTransaction = new ThreadLocal<OTransaction>();
 
 	public OStorageLocalTxExecuter(final OStorageLocal iStorage, final OStorageTxConfiguration iConfig) throws IOException {
 		storage = iStorage;
@@ -134,30 +132,17 @@ public class OStorageLocalTxExecuter {
 		return txSegment;
 	}
 
-	public void commitAllPendingRecords(final OTransaction iTx) throws IOException {
-		currentTransaction = iTx;
+	public void commitAllRecords(final OTransaction iTx) throws IOException {
+		currentTransaction.set(iTx);
 		try {
-			// COPY ALL THE ENTRIES IN SEPARATE COLLECTION SINCE DURING THE COMMIT PHASE SOME NEW ENTRIES COULD BE CREATED AND
-			// CONCURRENT-EXCEPTION MAY OCCURS
-			final List<ORecordOperation> tmpEntries = new ArrayList<ORecordOperation>();
-
-			while (iTx.getCurrentRecordEntries().iterator().hasNext()) {
-				for (ORecordOperation txEntry : iTx.getCurrentRecordEntries())
-					tmpEntries.add(txEntry);
-
-				iTx.clearRecordEntries();
-
-				if (!tmpEntries.isEmpty()) {
-					for (ORecordOperation txEntry : tmpEntries)
-						// COMMIT ALL THE SINGLE ENTRIES ONE BY ONE
-						commitEntry(iTx, txEntry, iTx.isUsingLog());
-				}
+			for (final ORecordOperation txEntry : iTx.getAllRecordEntries()) {
+				commitEntry(iTx, txEntry, iTx.isUsingLog());
 			}
 
 			// UPDATE THE CACHE ONLY IF THE ITERATOR ALLOWS IT
 			OTransactionAbstract.updateCacheFromEntries(storage, iTx, iTx.getAllRecordEntries(), true);
 		} finally {
-			currentTransaction = null;
+			currentTransaction.set(null);
 		}
 	}
 
@@ -282,10 +267,10 @@ public class OStorageLocalTxExecuter {
 	}
 
 	public boolean isCommitting() {
-		return currentTransaction != null;
+		return currentTransaction.get() != null;
 	}
 
 	public OTransaction getCurrentTransaction() {
-		return currentTransaction;
+		return currentTransaction.get();
 	}
 }

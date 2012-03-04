@@ -17,7 +17,6 @@ package com.orientechnologies.orient.core.storage;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -26,14 +25,13 @@ import com.orientechnologies.common.concur.resource.OSharedContainer;
 import com.orientechnologies.orient.core.cache.OLevel2RecordCache;
 import com.orientechnologies.orient.core.command.OCommandRequestText;
 import com.orientechnologies.orient.core.config.OStorageConfiguration;
-import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.tx.OTransaction;
 
 /**
  * This is the gateway interface between the Database side and the storage. Provided implementations are: Local, Remote and Memory.
  * 
- * @see OStorageLocal, OStorageMemory
+ * @see com.orientechnologies.orient.core.storage.impl.local.OStorageLocal , OStorageMemory
  * @author Luca Garulli
  * 
  */
@@ -187,13 +185,4 @@ public interface OStorage extends OSharedContainer {
 
 	public <V> V callInLock(Callable<V> iCallable, boolean iExclusiveLock);
 
-	/**
-	 * TODO
-	 * @param iCallable
-	 * @param iExclusiveLock
-	 * @param ids
-	 * @param <V>
-	 * @return
-	 */
-	public <V> V callInLock(Callable<V> iCallable, boolean iExclusiveLock, List<ORID> ids);
 }

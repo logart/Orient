@@ -346,10 +346,6 @@ public class OStorageRemoteThread implements OStorage {
 		return delegate.callInLock(iCallable, iExclusiveLock);
 	}
 
-	public <V> V callInLock(final Callable<V> iCallable, final boolean iExclusiveLock, List<ORID> ids) {
-		return delegate.callInLock(iCallable, iExclusiveLock, ids);
-	}
-
 	public ORemoteServerEventListener getRemoteServerEventListener() {
 		return delegate.getAsynchEventListener();
 	}

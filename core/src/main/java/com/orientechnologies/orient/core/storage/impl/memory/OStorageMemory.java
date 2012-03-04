@@ -483,21 +483,9 @@ public class OStorageMemory extends OStorageEmbedded {
 	public void commit(final OTransaction iTx) {
 		lock.acquireExclusiveLock();
 		try {
-
-			final List<ORecordOperation> tmpEntries = new ArrayList<ORecordOperation>();
-
-			while (iTx.getCurrentRecordEntries().iterator().hasNext()) {
-				for (ORecordOperation txEntry : iTx.getCurrentRecordEntries())
-					tmpEntries.add(txEntry);
-
-				iTx.clearRecordEntries();
-
-				for (ORecordOperation txEntry : tmpEntries)
-					// COMMIT ALL THE SINGLE ENTRIES ONE BY ONE
-					commitEntry(iTx, txEntry);
-
-				tmpEntries.clear();
-			}
+			for (ORecordOperation txEntry : iTx.getAllRecordEntries())
+				// COMMIT ALL THE SINGLE ENTRIES ONE BY ONE
+				commitEntry(iTx, txEntry);
 
 			// UPDATE THE CACHE ONLY IF THE ITERATOR ALLOWS IT
 			OTransactionAbstract.updateCacheFromEntries(this, iTx, iTx.getAllRecordEntries(), true);

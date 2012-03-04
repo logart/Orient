@@ -20,7 +20,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.*;
 
-import com.orientechnologies.common.concur.lock.OLockManager;
 import com.orientechnologies.common.concur.lock.OLockManager.LOCK;
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.common.io.OFileUtils;
@@ -39,7 +38,6 @@ import com.orientechnologies.orient.core.config.OStorageLogicalClusterConfigurat
 import com.orientechnologies.orient.core.config.OStorageMemoryClusterConfiguration;
 import com.orientechnologies.orient.core.config.OStoragePhysicalClusterConfiguration;
 import com.orientechnologies.orient.core.config.OStorageSegmentConfiguration;
-import com.orientechnologies.orient.core.db.record.ORecordOperation;
 import com.orientechnologies.orient.core.exception.OConcurrentModificationException;
 import com.orientechnologies.orient.core.exception.OConfigurationException;
 import com.orientechnologies.orient.core.exception.ORecordNotFoundException;
@@ -892,22 +890,9 @@ public class OStorageLocal extends OStorageEmbedded {
 	}
 
 	public void commit(final OTransaction iTx) {
-		List<ORID> ids = new ArrayList<ORID>();
-		for (ORecordOperation recordOperation : iTx.getCurrentRecordEntries()) {
-			ids.add(recordOperation.getRecord().getIdentity());
-		}
-
-		Collections.sort(ids);
-		final List<ORID> lockedIds = new ArrayList<ORID>(ids.size());
-		try {
-			for (ORID id : ids) {
-				lockManager.acquireLock(Thread.currentThread(), id, LOCK.EXCLUSIVE);
-				lockedIds.add(id);
-			}
-
 			try {
 				txManager.clearLogEntries(iTx);
-				txManager.commitAllPendingRecords(iTx);
+				txManager.commitAllRecords(iTx);
 
 				incrementVersion();
 				if (OGlobalConfiguration.TX_COMMIT_SYNCH.getValueAsBoolean())
@@ -930,11 +915,6 @@ public class OStorageLocal extends OStorageEmbedded {
 					OLogManager.instance().error(this, "Clear tx log entries failed", e);
 				}
 			}
-		} finally {
-			for (ORID id : lockedIds) {
-				lockManager.releaseLock(Thread.currentThread(), id, LOCK.EXCLUSIVE);
-			}
-		}
 	}
 
 	public void rollback(final OTransaction iTx) {

@@ -26,15 +26,10 @@ import com.orientechnologies.orient.core.exception.OStorageException;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.Callable;
-
 /**
  * Interface for embedded storage.
  * 
- * @see OStorageLocal, OStorageMemory
+ * @see com.orientechnologies.orient.core.storage.impl.local.OStorageLocal , OStorageMemory
  * @author Luca Garulli
  * 
  */
@@ -77,24 +72,13 @@ public abstract class OStorageEmbedded extends OStorageAbstract {
 			throw new OStorageException("Storage " + name + " is not opened.");
 	}
 
-	public <V> V callInLock(Callable<V> iCallable, boolean iExclusiveLock, List<ORID> ids) {
-		final OLockManager.LOCK iLockType = (iExclusiveLock) ? OLockManager.LOCK.EXCLUSIVE : OLockManager.LOCK.SHARED;
-		Collections.sort(ids);
-		final List<ORID> lockedIds = new ArrayList<ORID>(ids.size());
-		try {
-			for (ORID id : ids) {
-				lockManager.acquireLock(Thread.currentThread(), id, iLockType);
-				lockedIds.add(id.copy());
-			}
-			return iCallable.call();
-		} catch (RuntimeException e) {
-			throw e;
-		} catch (Exception e) {
-			throw new OException("Error on nested call in lock", e);
-		} finally {
-			for (ORID id : lockedIds) {
-				lockManager.releaseLock(Thread.currentThread(), id, iLockType);
-			}
-		}
+	public void lockRecord(ORID rid, boolean exclusiveLock) {
+		final OLockManager.LOCK lockType = (exclusiveLock) ? OLockManager.LOCK.EXCLUSIVE : OLockManager.LOCK.SHARED;
+		lockManager.acquireLock(Thread.currentThread(), rid, lockType);
+	}
+
+	public void unlockRecord(ORID rid, boolean exclusiveLock) {
+		final OLockManager.LOCK lockType = (exclusiveLock) ? OLockManager.LOCK.EXCLUSIVE : OLockManager.LOCK.SHARED;
+		lockManager.releaseLock(Thread.currentThread(), rid, lockType);
 	}
 }
