@@ -14,9 +14,11 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OB
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.ODateSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.ODateTimeSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.ODoubleSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OEmbeddedSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OFloatSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLongSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OMapSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.ONullSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OShortSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OStringSerializer;
@@ -29,6 +31,7 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OS
 public class ObjectSerializerFactory {
 
     private final Map<Byte, ObjectSerializer<?>> serializerMap = new HashMap<Byte, ObjectSerializer<?>>();
+    private final ObjectSerializer<Integer> indexSerializer;
 
     /**
      * Instance of the factory
@@ -66,6 +69,11 @@ public class ObjectSerializerFactory {
         serializerMap.put(OType.DATE.getByteId(), new ODateSerializer());
 
         serializerMap.put(OType.EMBEDDEDLIST.getByteId(), delegate);
+        serializerMap.put(OType.EMBEDDEDMAP.getByteId(), new OMapSerializer());
+
+        serializerMap.put(OType.EMBEDDED.getByteId(), new OEmbeddedSerializer());
+
+        indexSerializer = new OIntegerSerializer();
     }
 
     /**
@@ -73,8 +81,8 @@ public class ObjectSerializerFactory {
      *
      * @return index serializer
      */
-    public ObjectSerializer getIndexSerializer() {
-        return serializerMap.get(OType.INTEGER.getByteId());
+    public ObjectSerializer<Integer> getIndexSerializer() {
+        return indexSerializer;
     }
 
     /**
@@ -104,6 +112,7 @@ public class ObjectSerializerFactory {
      * @param type is the OType to obtain serializer algorithm for
      * @return ObjectSerializer realization that fits OType
      */
+    @Deprecated
     public ObjectSerializer getObjectSerializer(final OType type) {
         return serializerMap.get(type.getByteId());
     }
@@ -124,8 +133,16 @@ public class ObjectSerializerFactory {
         }
     }
 
+    public byte getSerializerId(final OType type, final Object obj) {
+        if (obj != null) {
+            return type.getByteId();
+        } else {
+            return NULL_TYPE;
+        }
+    }
+
     /**
-     * Obtain implementation of theOBinary identifier by its type identifer
+     * Obtain implementation of the object to be deserilized by given serializer`s id
      *
      * @param typeIdentifier is the identifier of the type
      * @return OBinarySerializable implementation
