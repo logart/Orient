@@ -34,7 +34,7 @@ import com.orientechnologies.orient.core.tx.OTransaction;
  * Record structure:<br/>
  * <code>
  * +-----------------------------------------------------------------------------------------+--------------------+<br/>
- * | .................... FIXED SIZE AREA = 24 bytes ....................................... | VARIABLE SIZE AREA |<br/>
+ * | .................... FIXED SIZE AREA = 25 bytes ....................................... | VARIABLE SIZE AREA |<br/>
  * +--------+--------+---------+------------+----------------+--------+--------+-------------+--------------------+<br/>
  * | STATUS | OPERAT | TX ID . | CLUSTER ID | CLUSTER OFFSET | TYPE . |VERSION | RECORD SIZE | RECORD CONTENT ... |<br/>
  * | 1 byte | 1 byte | 4 bytes | 2 bytes .. | 8 bytes ...... | 1 byte |4 bytes | 4 bytes ... | ? bytes .......... |<br/>

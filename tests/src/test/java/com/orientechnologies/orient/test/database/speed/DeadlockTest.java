@@ -49,12 +49,6 @@ public class DeadlockTest {
 		}
 		database.create();
 
-//		if (ODatabaseHelper.existsDatabase(database)) {
-//			ODatabaseHelper.deleteDatabase(database);
-//		}
-//		ODatabaseHelper.createDatabase(database, DATABASE_URL);
-//		database.open("admin", "admin");
-
 		final OSchema schema = database.getMetadata().getSchema();
 		carClass = schema.createClass("Car");
 		carClass.createProperty("prise", OType.INTEGER).createIndex(OClass.INDEX_TYPE.NOTUNIQUE);
@@ -75,6 +69,7 @@ public class DeadlockTest {
 		final CountDownLatch latch = new CountDownLatch(READER_COUNT + WRITER_COUNT);
 
 		for (int i = 0; i < READER_COUNT; i++) {
+			final int num = i;
 			Runnable reader = new Runnable() {
 				Random r = new Random();
 
@@ -87,12 +82,13 @@ public class DeadlockTest {
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
-					for (int i = 0; i < 1000; i++) {
-						database.begin();
+					for (int i = 0; i < 1000000; i++) {
+						//database.begin();
 						final int key = r.nextInt(DOC_COUNT);
 						carIndex.get(key);
-						database.commit();
-						System.out.println("Reader: " + i);
+						//database.commit();
+						if(i % 1000 == 0)
+							System.out.println("Reader " + num + " : " + i);
 					}
 					database.close();
 				}
@@ -101,6 +97,7 @@ public class DeadlockTest {
 		}
 
 		for (int i = 0; i < WRITER_COUNT; i++) {
+			final int num = i;
 			Runnable writer = new Runnable() {
 				Random r = new Random();
 
@@ -112,18 +109,19 @@ public class DeadlockTest {
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
-					for (int i = 0; i < 1000; i++) {
+					for (int i = 0; i < 1000000; i++) {
 						try {
-							database.begin();
+							//database.begin();
 							final ODocument car = database.load(identities.get(r.nextInt(DOC_COUNT)));
 							car.field("prise", r.nextInt(DOC_COUNT));
 							car.save();
-							database.commit();
+							//database.commit();
 						} catch (OConcurrentModificationException e) {
 							database.rollback();
 							i--;
 						}
-						System.out.println("Writer: " + i);
+						if(i % 1000 == 0)
+							System.out.println("Writer " + num + " : " + i);
 					}
 
 					database.close();

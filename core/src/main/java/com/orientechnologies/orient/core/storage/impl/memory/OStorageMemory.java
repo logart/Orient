@@ -243,17 +243,16 @@ public class OStorageMemory extends OStorageEmbedded {
 	protected ORawBuffer readRecord(final OCluster iClusterSegment, final ORecordId iRid, final boolean iAtomicLock) {
 		final long timer = OProfiler.getInstance().startChrono();
 
-		lock.acquireSharedLock();
+		lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.SHARED);
 		try {
-			lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.SHARED);
-
-			final long lastPos = iClusterSegment.getLastEntryPosition();
-
-			if (iRid.clusterPosition > lastPos)
-				throw new ORecordNotFoundException("Record " + iRid + " is outside cluster size. Valid range for cluster '"
-						+ iClusterSegment.getName() + "' is 0-" + lastPos);
-
+			lock.acquireSharedLock();
 			try {
+				final long lastPos = iClusterSegment.getLastEntryPosition();
+
+				if (iRid.clusterPosition > lastPos)
+					throw new ORecordNotFoundException("Record " + iRid + " is outside cluster size. Valid range for cluster '"
+									+ iClusterSegment.getName() + "' is 0-" + lastPos);
+
 				final OPhysicalPosition ppos = iClusterSegment.getPhysicalPosition(iRid.clusterPosition, new OPhysicalPosition());
 
 				if (ppos == null)
@@ -262,13 +261,12 @@ public class OStorageMemory extends OStorageEmbedded {
 				return new ORawBuffer(data.readRecord(ppos.dataChunkPosition), ppos.version, ppos.type);
 
 			} finally {
-				lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.SHARED);
+				lock.releaseSharedLock();
 			}
 		} catch (IOException e) {
 			throw new OStorageException("Error on read record in cluster: " + iClusterSegment.getId(), e);
-
 		} finally {
-			lock.releaseSharedLock();
+			lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.SHARED);
 			OProfiler.getInstance().stopChrono("OStorageMemory.readRecord", timer);
 		}
 	}
@@ -279,10 +277,9 @@ public class OStorageMemory extends OStorageEmbedded {
 
 		final OCluster cluster = getClusterById(iRid.clusterId);
 
-		lock.acquireSharedLock();
+		lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
 		try {
-
-			lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
+			lock.acquireSharedLock();
 			try {
 
 				final OPhysicalPosition ppos = cluster.getPhysicalPosition(iRid.clusterPosition, new OPhysicalPosition());
@@ -309,13 +306,12 @@ public class OStorageMemory extends OStorageEmbedded {
 				return ppos.version;
 
 			} finally {
-				lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
+				lock.releaseSharedLock();
 			}
 		} catch (IOException e) {
 			throw new OStorageException("Error on update record " + iRid, e);
-
 		} finally {
-			lock.releaseSharedLock();
+			lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
 			OProfiler.getInstance().stopChrono("OStorageMemory.updateRecord", timer);
 		}
 	}
@@ -325,10 +321,9 @@ public class OStorageMemory extends OStorageEmbedded {
 
 		final OCluster cluster = getClusterById(iRid.clusterId);
 
-		lock.acquireSharedLock();
+		lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
 		try {
-
-			lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
+			lock.acquireSharedLock();
 			try {
 
 				final OPhysicalPosition ppos = cluster.getPhysicalPosition(iRid.clusterPosition, new OPhysicalPosition());
@@ -350,14 +345,13 @@ public class OStorageMemory extends OStorageEmbedded {
 				return true;
 
 			} finally {
-				lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
+				lock.releaseSharedLock();
 			}
 
 		} catch (IOException e) {
 			throw new OStorageException("Error on delete record " + iRid, e);
-
 		} finally {
-			lock.releaseSharedLock();
+			lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
 			OProfiler.getInstance().stopChrono("OStorageMemory.deleteRecord", timer);
 		}
 	}

@@ -19,6 +19,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import com.orientechnologies.common.concur.lock.OLockManager.LOCK;
 import com.orientechnologies.common.exception.OException;
@@ -1285,16 +1286,16 @@ public class OStorageLocal extends OStorageEmbedded {
 		// NOT FOUND: SEARCH IT IN THE STORAGE
 		final long timer = OProfiler.getInstance().startChrono();
 
-		// GET LOCK ONLY IF IT'S IN ATOMIC-MODE (SEE THE PARAMETER iAtomicLock)
-		// USUALLY BROWSING OPERATIONS (QUERY) AVOID ATOMIC LOCKING
-		// TO IMPROVE PERFORMANCES BY LOCKING THE ENTIRE CLUSTER FROM THE
-		// OUTSIDE.
-		if (iAtomicLock)
-			lock.acquireSharedLock();
-
+		lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.SHARED);
 		try {
 
-			lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.SHARED);
+			// GET LOCK ONLY IF IT'S IN ATOMIC-MODE (SEE THE PARAMETER iAtomicLock)
+			// USUALLY BROWSING OPERATIONS (QUERY) AVOID ATOMIC LOCKING
+			// TO IMPROVE PERFORMANCES BY LOCKING THE ENTIRE CLUSTER FROM THE
+			// OUTSIDE.
+			if (iAtomicLock)
+				lock.acquireSharedLock();
+
 			try {
 
 				final long lastPos = iClusterSegment.getLastEntryPosition();
@@ -1316,76 +1317,78 @@ public class OStorageLocal extends OStorageEmbedded {
 				return new ORawBuffer(data.getRecord(ppos.dataChunkPosition), ppos.version, ppos.type);
 
 			} finally {
-				lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.SHARED);
+				if (iAtomicLock)
+					lock.releaseSharedLock();
 			}
-
 		} catch (IOException e) {
-
 			OLogManager.instance().error(this, "Error on reading record " + iRid + " (cluster: " + iClusterSegment + ")", e);
 			return null;
-
 		} finally {
-			if (iAtomicLock)
-				lock.releaseSharedLock();
-
+			lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.SHARED);
 			OProfiler.getInstance().stopChrono(PROFILER_READ_RECORD, timer);
 		}
 	}
 
 	protected int updateRecord(final OCluster iClusterSegment, final ORecordId iRid, final byte[] iContent, final int iVersion,
-			final byte iRecordType) {
+														 final byte iRecordType) {
 		if (iClusterSegment == null)
 			throw new OStorageException("Cluster not defined for record: " + iRid);
 
 		final long timer = OProfiler.getInstance().startChrono();
 
-		lock.acquireSharedLock();
-
+		OPhysicalPosition ppos;
+		lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
 		try {
-			lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
+			lock.acquireSharedLock();
 			try {
-				final OPhysicalPosition ppos = iClusterSegment.getPhysicalPosition(iRid.clusterPosition, new OPhysicalPosition());
+				ppos = iClusterSegment.getPhysicalPosition(iRid.clusterPosition, new OPhysicalPosition());
 				if (!checkForRecordValidity(ppos))
 					// DELETED
 					return -1;
 
 				// VERSION CONTROL CHECK
 				switch (iVersion) {
-				// DOCUMENT UPDATE, NO VERSION CONTROL
-				case -1:
-					++ppos.version;
-					iClusterSegment.updateVersion(iRid.clusterPosition, ppos.version);
-					break;
-
-				// DOCUMENT UPDATE, NO VERSION CONTROL, NO VERSION UPDATE
-				case -2:
-					break;
-
-				default:
-					// MVCC CONTROL AND RECORD UPDATE OR WRONG VERSION VALUE
-					if (iVersion > -1) {
-						// MVCC TRANSACTION: CHECK IF VERSION IS THE SAME
-						if (iVersion != ppos.version)
-							throw new OConcurrentModificationException(
-									"Cannot update record "
-											+ iRid
-											+ " in storage '"
-											+ name
-											+ "' because the version is not the latest. Probably you are updating an old record or it has been modified by another user (db=v"
-											+ ppos.version + " your=v" + iVersion + ")", iRid, ppos.version, iVersion);
+					// DOCUMENT UPDATE, NO VERSION CONTROL
+					case -1:
 						++ppos.version;
 						iClusterSegment.updateVersion(iRid.clusterPosition, ppos.version);
-					} else {
-						// DOCUMENT ROLLBACKED
-						ppos.version = iVersion - Integer.MIN_VALUE;
-						iClusterSegment.updateVersion(iRid.clusterPosition, ppos.version);
-					}
+						break;
+
+					// DOCUMENT UPDATE, NO VERSION CONTROL, NO VERSION UPDATE
+					case -2:
+						break;
+
+					default:
+						// MVCC CONTROL AND RECORD UPDATE OR WRONG VERSION VALUE
+						if (iVersion > -1) {
+							// MVCC TRANSACTION: CHECK IF VERSION IS THE SAME
+							if (iVersion != ppos.version)
+								throw new OConcurrentModificationException(
+												"Cannot update record "
+																+ iRid
+																+ " in storage '"
+																+ name
+																+ "' because the version is not the latest. Probably you are updating an old record or it has been modified by another user (db=v"
+																+ ppos.version + " your=v" + iVersion + ")", iRid, ppos.version, iVersion);
+							++ppos.version;
+							iClusterSegment.updateVersion(iRid.clusterPosition, ppos.version);
+						} else {
+							// DOCUMENT ROLLBACKED
+							ppos.version = iVersion - Integer.MIN_VALUE;
+							iClusterSegment.updateVersion(iRid.clusterPosition, ppos.version);
+						}
 
 				}
 
 				if (ppos.type != iRecordType)
 					iClusterSegment.updateRecordType(iRid.clusterPosition, iRecordType);
+			} finally {
+				lock.releaseSharedLock();
+			}
 
+			lock.acquireExclusiveLock();
+			try {
+				ppos = iClusterSegment.getPhysicalPosition(iRid.clusterPosition, new OPhysicalPosition());
 				final long newDataSegmentOffset;
 				if (ppos.dataChunkPosition == -1)
 					// WAS EMPTY FIRST TIME, CREATE IT NOW
@@ -1397,22 +1400,18 @@ public class OStorageLocal extends OStorageEmbedded {
 				if (newDataSegmentOffset != ppos.dataChunkPosition)
 					// UPDATE DATA SEGMENT OFFSET WITH THE NEW PHYSICAL POSITION
 					iClusterSegment.setPhysicalPosition(iRid.clusterPosition, ppos.dataSegmentId, newDataSegmentOffset, iRecordType,
-							ppos.version);
+									ppos.version);
 
 				incrementVersion();
 
 				return ppos.version;
-
 			} finally {
-				lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
+				lock.releaseExclusiveLock();
 			}
 		} catch (IOException e) {
-
 			OLogManager.instance().error(this, "Error on updating record " + iRid + " (cluster: " + iClusterSegment + ")", e);
-
 		} finally {
-			lock.releaseSharedLock();
-
+			lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
 			OProfiler.getInstance().stopChrono(PROFILER_UPDATE_RECORD, timer);
 		}
 
@@ -1422,10 +1421,9 @@ public class OStorageLocal extends OStorageEmbedded {
 	protected boolean deleteRecord(final OCluster iClusterSegment, final ORecordId iRid, final int iVersion) {
 		final long timer = OProfiler.getInstance().startChrono();
 
-		lock.acquireExclusiveLock();
+		lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
 		try {
-
-			lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
+			lock.acquireExclusiveLock();
 			try {
 
 				final OPhysicalPosition ppos = iClusterSegment.getPhysicalPosition(iRid.clusterPosition, new OPhysicalPosition());
@@ -1437,12 +1435,12 @@ public class OStorageLocal extends OStorageEmbedded {
 				// MVCC TRANSACTION: CHECK IF VERSION IS THE SAME
 				if (iVersion > -1 && ppos.version != iVersion)
 					throw new OConcurrentModificationException(
-							"Cannot delete the record "
-									+ iRid
-									+ " in storage '"
-									+ name
-									+ "' because the version is not the latest. Probably you are deleting an old record or it has been modified by another user (db=v"
-									+ ppos.version + " your=v" + iVersion + ")", iRid, ppos.version, iVersion);
+									"Cannot delete the record "
+													+ iRid
+													+ " in storage '"
+													+ name
+													+ "' because the version is not the latest. Probably you are deleting an old record or it has been modified by another user (db=v"
+													+ ppos.version + " your=v" + iVersion + ")", iRid, ppos.version, iVersion);
 
 				if (ppos.dataChunkPosition > -1)
 					getDataSegment(ppos.dataSegmentId).deleteRecord(ppos.dataChunkPosition);
@@ -1454,15 +1452,14 @@ public class OStorageLocal extends OStorageEmbedded {
 				return true;
 
 			} finally {
-				lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
+				lock.releaseExclusiveLock();
 			}
 		} catch (IOException e) {
 
 			OLogManager.instance().error(this, "Error on deleting record " + iRid + "( cluster: " + iClusterSegment + ")", e);
 
 		} finally {
-			lock.releaseExclusiveLock();
-
+			lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
 			OProfiler.getInstance().stopChrono(PROFILER_DELETE_RECORD, timer);
 		}
 
