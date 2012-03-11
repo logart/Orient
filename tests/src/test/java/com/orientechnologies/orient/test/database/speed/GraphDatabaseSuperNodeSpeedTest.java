@@ -14,17 +14,17 @@ import com.orientechnologies.orient.core.record.impl.ODocument;
 
 public class GraphDatabaseSuperNodeSpeedTest {
 
-	private static final String	DEFAULT_DB_URL			= "local:database/graphtest";
+	private static final String	DEFAULT_DB_URL			= "local:C:/temp/databases/graphtest";
 	private static final String	DEFAULT_DB_USER			= "admin";
 	private static final String	DEFAULT_DB_PASSWORD	= "admin";
-	private static final int		MAX									= 1000000;
+	private static final int		MAX									= 28;
 	private OGraphDatabase			database;
 
 	@BeforeClass
 	public void setUpClass() {
 		database = new OGraphDatabase(DEFAULT_DB_URL);
 		if (database.exists())
-			database.delete();
+			database.drop();
 
 		database.create();
 		database.close();
@@ -55,6 +55,10 @@ public class GraphDatabaseSuperNodeSpeedTest {
 				begin = System.currentTimeMillis();
 			}
 		}
+		System.out.println("Edge count (Original instance): " + ((Set<?>) v.field("out")).size());
+
+		ODocument x = database.load(v.getIdentity());
+		System.out.println("Edge count (Loaded instance): " + ((Set<?>) x.field("out")).size());
 
 		long now = System.currentTimeMillis();
 		System.out.printf("\nInsertion completed in %dms. DB edges %d, DB vertices %d", now - insertBegin, database.countEdges(),
