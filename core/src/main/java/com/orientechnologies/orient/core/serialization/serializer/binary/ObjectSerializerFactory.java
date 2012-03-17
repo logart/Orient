@@ -1,11 +1,9 @@
 package com.orientechnologies.orient.core.serialization.serializer.binary;
 
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
 import com.orientechnologies.orient.core.db.record.OBinaryLazyList;
-import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OBinarySerializableDelegate;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OBinarySerializer;
@@ -112,7 +110,6 @@ public class ObjectSerializerFactory {
      * @param type is the OType to obtain serializer algorithm for
      * @return ObjectSerializer realization that fits OType
      */
-    @Deprecated
     public ObjectSerializer getObjectSerializer(final OType type) {
         return serializerMap.get(type.getByteId());
     }

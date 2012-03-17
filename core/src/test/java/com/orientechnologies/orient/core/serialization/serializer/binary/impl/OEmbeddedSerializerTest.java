@@ -8,28 +8,25 @@ import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
-import static org.testng.Assert.assertTrue;
 
 /**
- * Created by IntelliJ IDEA.
- * User: gman
- * Date: 04.03.12
- * Time: 21:07
- * To change this template use File | Settings | File Templates.
+ * @author <a href="mailto:gmandnepr@gmail.com">Evgeniy Degtiarenko</a>
  */
 public class OEmbeddedSerializerTest {
 
     private ObjectSerializer<ODocument> serializer = ObjectSerializerFactory.INSTANCE.getObjectSerializer(OType.EMBEDDED);
-    private byte[] stream = new byte[10*1024];
 
     @Test
     public void testDocumentSerializationWithoutClass() {
-        final int initialOffset = 10;
 
         final ODocument original = new ODocument();
         original.field("id", Integer.valueOf(10));
         original.field("name", "myObjectName");
-        
+
+        final int initialOffset = 10;
+        final int objectSize = serializer.getObjectSize(original);
+        final byte[] stream = new byte[initialOffset + objectSize];
+
         serializer.serialize(original, stream, initialOffset);
 
         final ODocument restored = serializer.deserialize(stream, initialOffset);
