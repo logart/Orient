@@ -162,7 +162,7 @@ public class OClusterNetworkProtocol extends OBinaryNetworkProtocolAbstract impl
 
 			if (remainTheLeader)
 				// ABORT THE CONNECTION & THREAD
-				shutdown();
+				sendShutdown();
 			else {
 				// OK TO BE A PEER
 				setName("OrientDB <- Distributed Leader");
@@ -249,13 +249,13 @@ public class OClusterNetworkProtocol extends OBinaryNetworkProtocolAbstract impl
 			// END OF NODES
 			channel.writeByte((byte) 0);
 
-//			OLogManager.instance().info(this, "<-> DB %s: Synchronization completed from node %s, starting inverse replication...",
-//					dbName, remoteNodeId);
-//
-//			// START REPLICATION BACK
-//			manager.getReplicator().startReplication(dbName, remoteNodeId, SYNCH_TYPE.ASYNCH.toString());
-//
-//			OLogManager.instance().info(this, "<-> DB %s: Reverse synchronization completed to node %s", dbName, remoteNodeId);
+			OLogManager.instance().info(this, "<-> DB %s: Synchronization completed from node %s, starting inverse replication...",
+					dbName, remoteNodeId);
+
+			// START REPLICATION BACK
+			manager.getReplicator().startReplication(dbName, remoteNodeId, SYNCH_TYPE.ASYNCH.toString());
+
+			OLogManager.instance().info(this, "<-> DB %s: Reverse synchronization completed to node %s", dbName, remoteNodeId);
 
 			break;
 		}

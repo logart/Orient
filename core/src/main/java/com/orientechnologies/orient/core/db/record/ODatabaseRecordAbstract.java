@@ -132,6 +132,10 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 						ORole.ALLOW_MODES.ALLOW_ALL_BUT));
 
 			checkSecurity(ODatabaseSecurityResources.DATABASE, ORole.PERMISSION_READ);
+
+			if (!metadata.getSchema().existsClass("ORIDs"))
+				// @COMPATIBILITY 1.0RC9
+				metadata.getSchema().createClass("ORIDs");
 		} catch (OException e) {
 			close();
 			throw e;
@@ -163,6 +167,10 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 			metadata.create();
 
 			user = getMetadata().getSecurity().getUser(OUser.ADMIN);
+
+			if (!metadata.getSchema().existsClass("ORIDs"))
+				// @COMPATIBILITY 1.0RC9
+				metadata.getSchema().createClass("ORIDs");
 
 		} catch (Exception e) {
 			throw new ODatabaseException("Cannot create database", e);
@@ -788,11 +796,11 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 		if (!OHookThreadLocal.INSTANCE.push(id))
 			return false;
 
-		final ORecord<?> rec = id.getRecord();
-		if (rec == null)
-			return false;
-
 		try {
+			final ORecord<?> rec = id.getRecord();
+			if (rec == null)
+				return false;
+
 			boolean recordChanged = false;
 			for (ORecordHook hook : hooks)
 				if (hook.onTrigger(iType, rec))

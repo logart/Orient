@@ -74,7 +74,7 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
 	private final Listener													watchDog;
 
 	public OIndexMVRBTreeAbstract(final String iType) {
-		super(true, OGlobalConfiguration.MVRBTREE_TIMEOUT.getValueAsInteger());
+		super(true, OGlobalConfiguration.MVRBTREE_TIMEOUT.getValueAsInteger(), true);
 
 		type = iType;
 		watchDog = new Listener() {
@@ -113,7 +113,7 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
 					clustersToIndex.add(iDatabase.getClusterNameById(id));
 
 			final OStreamSerializer keySerializer;
-			if (indexDefinition instanceof OCompositeIndexDefinition)
+			if (indexDefinition != null && indexDefinition.getTypes().length > 1)
 				keySerializer = OCompositeKeySerializer.INSTANCE;
 			else
 				keySerializer = OStreamSerializerLiteral.INSTANCE;

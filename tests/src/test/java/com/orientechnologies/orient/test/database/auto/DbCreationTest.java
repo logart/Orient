@@ -31,6 +31,7 @@ import com.orientechnologies.orient.core.db.document.ODatabaseDocumentPool;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.db.object.ODatabaseObjectTx;
 import com.orientechnologies.orient.core.engine.memory.OEngineMemory;
+import com.orientechnologies.orient.core.exception.OStorageException;
 import com.orientechnologies.orient.core.metadata.security.ORole;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 
@@ -53,9 +54,9 @@ public class DbCreationTest {
 			database = new ODatabaseObjectTx(url);
 			database.setProperty("security", Boolean.FALSE);
 
-			ODatabaseHelper.deleteDatabase(database);
+			ODatabaseHelper.dropDatabase(database, "server");
 			ODatabaseHelper.createDatabase(database, url);
-			ODatabaseHelper.deleteDatabase(database);
+			ODatabaseHelper.dropDatabase(database, "server");
 		}
 	}
 
@@ -125,12 +126,16 @@ public class DbCreationTest {
 
 		ODatabaseDocumentTx db = new ODatabaseDocumentTx(u);
 
-		ODatabaseHelper.deleteDatabase(db);
+		try {
+			ODatabaseHelper.dropDatabase(db);
+		} catch (OStorageException e) {
+			Assert.assertTrue(e.getCause().getMessage().equals("Database with name 'sub/subTest' doesn't exits."));
+		}
 		ODatabaseHelper.createDatabase(db, u);
 		db.open("admin", "admin");
 		db.close();
 
-		ODatabaseHelper.deleteDatabase(db);
+		ODatabaseHelper.dropDatabase(db);
 	}
 
 	@Test(dependsOnMethods = { "testChangeLocale" })
@@ -147,19 +152,28 @@ public class DbCreationTest {
 
 		ODatabaseDocumentTx db = new ODatabaseDocumentTx(u);
 
-		ODatabaseHelper.deleteDatabase(db);
+		try {
+			ODatabaseHelper.dropDatabase(db);
+		} catch (OStorageException e) {
+			Assert.assertTrue(e.getCause().getMessage().equals("Database with name 'sub/subTest' doesn't exits."));
+		}
 		ODatabaseHelper.createDatabase(db, u);
 
 		db = ODatabaseDocumentPool.global().acquire(u, "admin", "admin");
 		db.close();
 
-		ODatabaseHelper.deleteDatabase(db);
+		ODatabaseHelper.dropDatabase(db);
 	}
 
 	@Test
 	public void testCreateAndConnectionPool() throws IOException {
 		ODatabaseDocument db = new ODatabaseDocumentTx(url);
-		ODatabaseHelper.deleteDatabase(db);
+		try {
+			ODatabaseHelper.dropDatabase(db);
+		} catch (OStorageException e) {
+			Assert.assertTrue(e.getCause().getMessage().startsWith("Database with name '"));
+			Assert.assertTrue(e.getCause().getMessage().endsWith("'doesn't exits."));
+		}
 		ODatabaseHelper.createDatabase(db, url);
 		db.close();
 		// Get connection from pool
@@ -168,7 +182,7 @@ public class DbCreationTest {
 
 		// Destroy db in the back of the pool
 		db = new ODatabaseDocumentTx(url);
-		ODatabaseHelper.deleteDatabase(db);
+		ODatabaseHelper.dropDatabase(db);
 
 		// Re-create it so that the db exists for the pool
 		db = new ODatabaseDocumentTx(url);

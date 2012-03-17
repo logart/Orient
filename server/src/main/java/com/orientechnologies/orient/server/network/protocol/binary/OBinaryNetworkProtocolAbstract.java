@@ -125,10 +125,10 @@ public abstract class OBinaryNetworkProtocolAbstract extends ONetworkProtocol {
 			onAfterRequest();
 
 		} catch (EOFException e) {
-			handleConnectionError(e);
+			handleConnectionError(channel, e);
 			sendShutdown();
 		} catch (SocketException e) {
-			handleConnectionError(e);
+			handleConnectionError(channel, e);
 			sendShutdown();
 		} catch (OException e) {
 			sendError(clientTxId, e);
@@ -139,19 +139,12 @@ public abstract class OBinaryNetworkProtocolAbstract extends ONetworkProtocol {
 			sendError(clientTxId, t);
 		} finally {
 
-			try {
-				channel.flush();
-			} catch (Throwable t) {
-				OLogManager.instance().debug(this, "Error on sendind data over the network", t);
-			}
-
 			OSerializationThreadLocal.INSTANCE.get().clear();
 		}
 	}
 
 	@Override
 	public void shutdown() {
-		sendShutdown();
 		channel.close();
 	}
 
@@ -190,7 +183,7 @@ public abstract class OBinaryNetworkProtocolAbstract extends ONetworkProtocol {
 			}
 			channel.writeByte((byte) 0);
 
-			// channel.clearInput();
+			channel.flush();
 
 		} finally {
 			channel.releaseExclusiveLock();
@@ -390,6 +383,10 @@ public abstract class OBinaryNetworkProtocolAbstract extends ONetworkProtocol {
 		return currentRecord.getVersion();
 	}
 
-	protected void handleConnectionError(final Throwable e) {
+	protected void handleConnectionError(final OChannelBinaryServer channel, final Throwable e) {
+		try {
+			channel.flush();
+		} catch (IOException e1) {
+		}
 	}
 }

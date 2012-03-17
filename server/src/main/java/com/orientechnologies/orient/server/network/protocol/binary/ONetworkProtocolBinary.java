@@ -37,6 +37,7 @@ import com.orientechnologies.orient.core.db.raw.ODatabaseRaw;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecordTx;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.exception.OSecurityAccessException;
+import com.orientechnologies.orient.core.exception.OStorageException;
 import com.orientechnologies.orient.core.exception.OTransactionException;
 import com.orientechnologies.orient.core.fetch.OFetchContext;
 import com.orientechnologies.orient.core.fetch.OFetchHelper;
@@ -58,6 +59,7 @@ import com.orientechnologies.orient.core.storage.OCluster;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.OStorageEmbedded;
 import com.orientechnologies.orient.enterprise.channel.binary.OChannelBinaryProtocol;
+import com.orientechnologies.orient.enterprise.channel.binary.OChannelBinaryServer;
 import com.orientechnologies.orient.server.OClientConnection;
 import com.orientechnologies.orient.server.OClientConnectionManager;
 import com.orientechnologies.orient.server.OServer;
@@ -100,10 +102,19 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
 	@Override
 	protected void onBeforeRequest() throws IOException {
-		if (clientTxId > -1)
-			connection = OClientConnectionManager.instance().getConnection(channel.socket, clientTxId);
-		else
+		connection = OClientConnectionManager.instance().getConnection(channel.socket, clientTxId);
+
+		if (clientTxId < 0) {
+			short protocolId = 0;
+
+			if (connection != null)
+				protocolId = connection.data.protocolVersion;
+
 			connection = OClientConnectionManager.instance().connect(channel.socket, this);
+
+			if (connection != null)
+				connection.data.protocolVersion = protocolId;
+		}
 
 		if (connection != null) {
 			ODatabaseRecordThreadLocal.INSTANCE.set(connection.database);
@@ -448,7 +459,7 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
 		checkServerAccess("database.copy");
 
-		openDatabase(ODatabaseDocument.TYPE, dbUrl, dbUser, dbPassword);
+		connection.database = (ODatabaseDocumentTx) openDatabase(ODatabaseDocument.TYPE, dbUrl, dbUser, dbPassword);
 
 		final ODistributedServerManager manager = OServerMain.server().getHandler(ODistributedServerManager.class);
 		final ODistributedNode node = manager.getReplicator().getOrCreateDistributedNode(remoteServerName);
@@ -500,13 +511,14 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
 		connection.database = getDatabaseInstance(dbName, ODatabaseDocument.TYPE, "local");
 
-		OLogManager.instance().info(this, "Dropped database '%s", connection.database.getURL());
+		if (connection.database.exists()) {
+			OLogManager.instance().info(this, "Dropped database '%s", connection.database.getURL());
 
-		connection.database.drop();
-		connection.close();
-
-		if (OClientConnectionManager.instance().disconnect(connection.id))
-			sendShutdown();
+			connection.database.drop();
+			connection.close();
+		} else {
+			throw new OStorageException("Database with name '" + dbName + "' doesn't exits.");
+		}
 
 		beginResponse();
 		try {
@@ -560,19 +572,9 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 	protected void closeDatabase() throws IOException {
 		setDataCommandInfo("Close Database");
 
-		if (connection != null) {
-			connection.close();
-
+		if (connection != null)
 			if (OClientConnectionManager.instance().disconnect(connection.id))
 				sendShutdown();
-		}
-
-		beginResponse();
-		try {
-			sendOk(clientTxId);
-		} finally {
-			endResponse();
-		}
 	}
 
 	protected void configList() throws IOException {
@@ -1000,9 +1002,6 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
 		OServerHandlerHelper.invokeHandlerCallbackOnClientDisconnection(connection);
 
-		if (connection.database != null)
-			connection.database.close();
-
 		OClientConnectionManager.instance().disconnect(connection);
 	}
 
@@ -1037,7 +1036,9 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 			throw new OSecurityAccessException("You need to authenticate before to execute the requested operation");
 	}
 
-	protected void handleConnectionError(final Throwable e) {
+	@Override
+	protected void handleConnectionError(final OChannelBinaryServer iChannel, final Throwable e) {
+		super.handleConnectionError(channel, e);
 		OServerHandlerHelper.invokeHandlerCallbackOnClientError(connection, e);
 	}
 

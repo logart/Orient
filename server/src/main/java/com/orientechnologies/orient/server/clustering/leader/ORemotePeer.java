@@ -125,8 +125,7 @@ public class ORemotePeer extends ORemoteNodeAbstract {
 			return false;
 
 		configuration.setValue(OGlobalConfiguration.NETWORK_SOCKET_TIMEOUT, iNetworkTimeout);
-		OLogManager.instance()
-				.debug(this, "Sending heartbeat message to distributed server node %s:%d...", networkAddress, networkPort);
+		OLogManager.instance().debug(this, "Sending heartbeat message to %s:%d...", networkAddress, networkPort);
 
 		try {
 			channel.beginRequest();
@@ -137,14 +136,12 @@ public class ORemotePeer extends ORemoteNodeAbstract {
 				channel.endRequest();
 			}
 
-			try {
-				channel.beginResponse(sessionId);
-			} finally {
-				channel.endResponse();
-			}
+			OLogManager.instance().debug(this, "Waiting for the heartbeat response from %s:%d...", networkAddress, networkPort);
 
-			OLogManager.instance().debug(this, "Received heartbeat ACK from distributed server node %s:%d...", networkAddress,
-					networkPort);
+			channel.beginResponse(sessionId, 2000);
+			channel.endResponse();
+
+			OLogManager.instance().debug(this, "Received heartbeat ACK from %s:%d...", networkAddress, networkPort);
 
 		} catch (Exception e) {
 			OLogManager.instance().debug(this, "Error on sending heartbeat to server node", e, toString());

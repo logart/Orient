@@ -135,18 +135,8 @@ function ODocumentView(name, component, doc, options) {
 		if (this.doc != null)
 			fieldValue = this.doc['@class'];
 
-		classes = "<select id='doc__class'>";
-		for (cls in databaseInfo['classes']) {
-			classes += "<option";
-			if (databaseInfo['classes'][cls].name == fieldValue) {
-				currentClass = databaseInfo['classes'][cls];
-				classes += " selected = 'yes'";
-			}
-			classes += ">" + databaseInfo['classes'][cls].name + "</option>";
-		}
-		classes += "</select>";
-
-		component += "<label>@class</label>" + classes;
+		component += "<label>@class</label>"
+				+ generateClassSelect("doc__class", fieldValue);
 
 		if (this.doc != null)
 			fieldValue = this.doc['@rid'].substring(1);
@@ -180,6 +170,8 @@ function ODocumentView(name, component, doc, options) {
 		// BEGIN FIELDS
 		component += "<div class='span12 noborder' id='" + this.componentId
 				+ "_fields'>";
+
+		var currentClass = orientServer.getClass(this.doc["@class"]);
 
 		var fieldValue;
 		this.fieldNum = 0;

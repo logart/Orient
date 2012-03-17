@@ -257,10 +257,7 @@ public class OServerAdmin {
 
 		} catch (Exception e) {
 			OLogManager.instance().exception("Cannot delete the remote storage: " + storage.getName(), e, OStorageException.class);
-			storage.close(true);
 		}
-
-		storage.setSessionId(-1);
 
 		for (OStorage s : Orient.instance().getStorages()) {
 			if (s.getURL().startsWith(getURL())) {
@@ -345,9 +342,9 @@ public class OServerAdmin {
 		try {
 			final OChannelBinaryClient network = storage.beginRequest(OChannelBinaryProtocol.REQUEST_CONFIG_GET);
 			network.writeString(iConfig.getKey());
-			storage.beginResponse(network);
 
 			try {
+				storage.beginResponse(network);
 				return network.readString();
 			} finally {
 				storage.endResponse(network);
