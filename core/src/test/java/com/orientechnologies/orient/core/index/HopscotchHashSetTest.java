@@ -396,8 +396,8 @@ public class HopscotchHashSetTest
       absentKeysThirteen[i] =  new ORecordId(i, 2);
     }
 
-    ORID[] keysFourteen = new ORID[115];
-    ORID[] absentKeysFourteen = new ORID[115];
+    ORID[] keysFourteen = new ORID[116];
+    ORID[] absentKeysFourteen = new ORID[116];
 
     for (int i = 0; i < 50; i ++){
       keysFourteen[i] = new ORecordId(i, i){
@@ -442,6 +442,14 @@ public class HopscotchHashSetTest
         };
     }
 
+    for (int i = 115; i < 116; i ++){
+        keysFourteen[i] = new ORecordId(i, i){
+            @Override
+            public int hashCode() {
+                return 120;
+            }
+        };
+    }
 //    for (int i = 256; i < 320; i ++){
 //      keysFourteen[i] = new ORecordId((C5 - i) - 31, 31 * i);
 //    }
@@ -452,7 +460,7 @@ public class HopscotchHashSetTest
 //      keysFourteen[i] = new ORecordId((C7 - i) - 31, 31 * i);
 //    }
 
-    for (int i = 0; i < 115; i++){
+    for (int i = 0; i < 116; i++){
       absentKeysFourteen[i] = new ORecordId(4096, i);
     }
 
