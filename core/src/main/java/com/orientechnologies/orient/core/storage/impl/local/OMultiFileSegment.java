@@ -61,7 +61,7 @@ public class OMultiFileSegment extends OSegment {
 		if (iConfig.infoFiles.length == 0) {
 			// EMPTY FILE: CREATE THE FIRST FILE BY DEFAULT
 			files = new OFile[1];
-			files[0] = OFileFactory.create(type,
+			files[0] = OFileFactory.instance().create(type,
 					iStorage.getVariableParser().resolveVariables(storage.getStoragePath() + "/" + name + "." + 0 + fileExtension),
 					iStorage.getMode());
 			perFileMaxSize = fileMaxSize;
@@ -71,7 +71,7 @@ public class OMultiFileSegment extends OSegment {
 		} else {
 			files = new OFile[iConfig.infoFiles.length];
 			for (int i = 0; i < files.length; ++i) {
-				files[i] = OFileFactory.create(type, iStorage.getVariableParser().resolveVariables(iConfig.infoFiles[i].path),
+				files[i] = OFileFactory.instance().create(type, iStorage.getVariableParser().resolveVariables(iConfig.infoFiles[i].path),
 						iStorage.getMode());
 				perFileMaxSize = fileMaxSize;
 
@@ -86,10 +86,8 @@ public class OMultiFileSegment extends OSegment {
 		for (OFile file : files)
 			if (!file.open()) {
 				// LAST TIME THE FILE WAS NOT CLOSED IN SOFT WAY
-				OLogManager.instance().warn(
-						this,
-						"Segment file " + OFileUtils.getPath(file.getOsFile().getName())
-								+ " was not closed correctly last time. Checking segments...");
+				OLogManager.instance().warn(this,
+						"Segment file " + OFileUtils.getPath(file.getName()) + " was not closed correctly last time. Checking segments...");
 				OLogManager.instance().warn(this, "OK");
 			}
 	}
@@ -287,7 +285,7 @@ public class OMultiFileSegment extends OSegment {
 	private OFile createNewFile() throws IOException {
 		final int num = files.length - 1;
 
-		final OFile file = OFileFactory.create(type, storage.getStoragePath() + "/" + name + "." + num + fileExtension,
+		final OFile file = OFileFactory.instance().create(type, storage.getStoragePath() + "/" + name + "." + num + fileExtension,
 				storage.getMode());
 		file.setMaxSize((int) OFileUtils.getSizeAsNumber(config.root.fileTemplate.fileMaxSize));
 		file.create(fileStartSize);
@@ -305,7 +303,7 @@ public class OMultiFileSegment extends OSegment {
 		config.infoFiles = newConfigFiles;
 
 		// CREATE A NEW ENTRY FOR THE NEW FILE
-		String fileNameToStore = storage.getVariableParser().convertPathToRelative(OFileUtils.getPath(file.getOsFile().getPath()));
+		String fileNameToStore = storage.getVariableParser().convertPathToRelative(OFileUtils.getPath(file.getPath()));
 
 		final OStorageSegmentConfiguration template = config.root.fileTemplate;
 

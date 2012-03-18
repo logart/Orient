@@ -31,6 +31,7 @@ import com.orientechnologies.orient.core.command.OCommandRequestInternal;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.db.ODatabase;
 import com.orientechnologies.orient.core.db.ODatabaseComplex;
+import com.orientechnologies.orient.core.db.ODatabaseListener;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.ODatabaseWrapperAbstract;
 import com.orientechnologies.orient.core.db.raw.ODatabaseRaw;
@@ -58,6 +59,7 @@ import com.orientechnologies.orient.core.serialization.serializer.record.ORecord
 import com.orientechnologies.orient.core.sql.OCommandSQL;
 import com.orientechnologies.orient.core.storage.ORawBuffer;
 import com.orientechnologies.orient.core.storage.OStorageEmbedded;
+import com.orientechnologies.orient.core.tx.OTransactionRealAbstract;
 
 @SuppressWarnings("unchecked")
 public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<ODatabaseRaw> implements ODatabaseRecord {
@@ -84,7 +86,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 		databaseOwner = this;
 
 		recordType = iRecordType;
-		level1Cache = new OLevel1RecordCache(this);
+		level1Cache = new OLevel1RecordCache();
 
 		mvcc = OGlobalConfiguration.DB_MVCC.getValueAsBoolean();
 		validation = OGlobalConfiguration.DB_VALIDATION.getValueAsBoolean();
@@ -107,6 +109,21 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 
 			if (getStorage() instanceof OStorageEmbedded) {
 				user = getMetadata().getSecurity().authenticate(iUserName, iUserPassword);
+				if (user != null) {
+					final Set<ORole> roles = user.getRoles();
+					if (roles == null || roles.isEmpty() || roles.iterator().next() == null) {
+						// SEEMS CORRUPTED: INSTALL DEFAULT ROLE
+						for (ODatabaseListener l : underlying.getListeners()) {
+							if (l.onCorruptionRepairDatabase(this, "Security metadata is broken: current user '" + user.getName()
+									+ "' has no roles defined",
+									"The 'admin' user will be reinstalled with default role ('admin') and password 'admin'")) {
+								user = null;
+								user = metadata.getSecurity().repair();
+								break;
+							}
+						}
+					}
+				}
 				registerHook(new OUserTrigger());
 				registerHook(new OClassIndexManager());
 			} else
@@ -115,6 +132,10 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 						ORole.ALLOW_MODES.ALLOW_ALL_BUT));
 
 			checkSecurity(ODatabaseSecurityResources.DATABASE, ORole.PERMISSION_READ);
+
+			if (!metadata.getSchema().existsClass("ORIDs"))
+				// @COMPATIBILITY 1.0RC9
+				metadata.getSchema().createClass("ORIDs");
 		} catch (OException e) {
 			close();
 			throw e;
@@ -146,6 +167,11 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 			metadata.create();
 
 			user = getMetadata().getSecurity().getUser(OUser.ADMIN);
+
+			if (!metadata.getSchema().existsClass("ORIDs"))
+				// @COMPATIBILITY 1.0RC9
+				metadata.getSchema().createClass("ORIDs");
+
 		} catch (Exception e) {
 			throw new ODatabaseException("Cannot create database", e);
 		}
@@ -230,26 +256,66 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 	}
 
 	/**
-	 * Update the record without checking the version.
+	 * Updates the record without checking the version.
 	 */
 	public ODatabaseRecord save(final ORecordInternal<?> iContent) {
-		executeSaveRecord(iContent, null, iContent.getVersion(), iContent.getRecordType());
+		executeSaveRecord(iContent, null, iContent.getVersion(), iContent.getRecordType(), OPERATION_MODE.SYNCHRONOUS);
 		return this;
 	}
 
 	/**
-	 * Update the record in the requested cluster without checking the version.
+	 * Updates the record without checking the version.
+	 */
+	public ODatabaseRecord save(final ORecordInternal<?> iContent, final OPERATION_MODE iMode) {
+		executeSaveRecord(iContent, null, iContent.getVersion(), iContent.getRecordType(), iMode);
+		return this;
+	}
+
+	/**
+	 * Updates the record in the requested cluster without checking the version.
 	 */
 	public ODatabaseRecord save(final ORecordInternal<?> iContent, final String iClusterName) {
-		executeSaveRecord(iContent, iClusterName, iContent.getVersion(), iContent.getRecordType());
+		executeSaveRecord(iContent, iClusterName, iContent.getVersion(), iContent.getRecordType(), OPERATION_MODE.SYNCHRONOUS);
 		return this;
 	}
 
 	/**
-	 * Delete the record without checking the version.
+	 * Updates the record in the requested cluster without checking the version.
+	 */
+	public ODatabaseRecord save(final ORecordInternal<?> iContent, final String iClusterName, final OPERATION_MODE iMode) {
+		executeSaveRecord(iContent, iClusterName, iContent.getVersion(), iContent.getRecordType(), iMode);
+		return this;
+	}
+
+	/**
+	 * Deletes the record without checking the version.
+	 */
+	public ODatabaseRecord delete(final ORID iRecord) {
+		executeDeleteRecord(iRecord, -1, true, OPERATION_MODE.SYNCHRONOUS);
+		return this;
+	}
+
+	/**
+	 * Deletes the record without checking the version.
+	 */
+	public ODatabaseRecord delete(final ORID iRecord, final OPERATION_MODE iMode) {
+		executeDeleteRecord(iRecord, -1, true, iMode);
+		return this;
+	}
+
+	/**
+	 * Deletes the record without checking the version.
 	 */
 	public ODatabaseRecord delete(final ORecordInternal<?> iRecord) {
-		executeDeleteRecord(iRecord, -1);
+		executeDeleteRecord(iRecord, -1, true, OPERATION_MODE.SYNCHRONOUS);
+		return this;
+	}
+
+	/**
+	 * Deletes the record without checking the version.
+	 */
+	public ODatabaseRecord delete(final ORecordInternal<?> iRecord, final OPERATION_MODE iMode) {
+		executeDeleteRecord(iRecord, -1, true, iMode);
 		return this;
 	}
 
@@ -454,6 +520,10 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 
 			// SEARCH IN LOCAL TX
 			ORecordInternal<?> record = getTransaction().getRecord(iRid);
+			if (record == OTransactionRealAbstract.DELETED_RECORD)
+				// DELETED IN TX
+				return null;
+
 			if (record == null && !iIgnoreCache)
 				// SEARCH INTO THE CACHE
 				record = getLevel1Cache().findRecord(iRid);
@@ -474,7 +544,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 				return (RET) record;
 			}
 
-			final ORawBuffer recordBuffer = underlying.read(iRid, iFetchPlan);
+			final ORawBuffer recordBuffer = underlying.read(iRid, iFetchPlan, iIgnoreCache);
 			if (recordBuffer == null)
 				return null;
 
@@ -506,7 +576,8 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 		return null;
 	}
 
-	public void executeSaveRecord(final ORecordInternal<?> iRecord, String iClusterName, final int iVersion, final byte iRecordType) {
+	public void executeSaveRecord(final ORecordInternal<?> iRecord, String iClusterName, final int iVersion, final byte iRecordType,
+			final OPERATION_MODE iMode) {
 		checkOpeness();
 
 		if (!iRecord.isDirty())
@@ -567,7 +638,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 			final int realVersion = iVersion == -1 || !mvcc ? -1 : iRecord.getVersion();
 
 			// SAVE IT
-			final long result = underlying.save(rid, stream, realVersion, iRecord.getRecordType());
+			final long result = underlying.save(rid, stream, realVersion, iRecord.getRecordType(), iMode.ordinal());
 
 			if (isNew) {
 				// UPDATE INFORMATION: CLUSTER ID+POSITION
@@ -597,7 +668,8 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 		}
 	}
 
-	public void executeDeleteRecord(final OIdentifiable iRecord, final int iVersion) {
+	public void executeDeleteRecord(final OIdentifiable iRecord, final int iVersion, final boolean iRequired,
+			final OPERATION_MODE iMode) {
 		checkOpeness();
 		final ORecordId rid = (ORecordId) iRecord.getIdentity();
 
@@ -615,7 +687,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 		try {
 			callbackHooks(TYPE.BEFORE_DELETE, iRecord);
 
-			underlying.delete(rid, iVersion);
+			underlying.delete(rid, iVersion, iRequired, (byte) iMode.ordinal());
 
 			callbackHooks(TYPE.AFTER_DELETE, iRecord);
 
@@ -716,23 +788,27 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 	 * Callback the registeted hooks if any.
 	 * 
 	 * @param iType
-	 * @param iRecord
+	 * @param id
 	 *          Record received in the callback
 	 * @return True if the input record is changed, otherwise false
 	 */
-	public boolean callbackHooks(final TYPE iType, final OIdentifiable iRecord) {
-		if (!OHookThreadLocal.INSTANCE.push(iRecord))
+	public boolean callbackHooks(final TYPE iType, final OIdentifiable id) {
+		if (!OHookThreadLocal.INSTANCE.push(id))
 			return false;
 
 		try {
+			final ORecord<?> rec = id.getRecord();
+			if (rec == null)
+				return false;
+
 			boolean recordChanged = false;
 			for (ORecordHook hook : hooks)
-				if (hook.onTrigger(iType, (ORecord<?>) iRecord))
+				if (hook.onTrigger(iType, rec))
 					recordChanged = true;
 			return recordChanged;
 
 		} finally {
-			OHookThreadLocal.INSTANCE.pop(iRecord);
+			OHookThreadLocal.INSTANCE.pop(id);
 		}
 	}
 
@@ -751,7 +827,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 	}
 
 	public boolean isValidationEnabled() {
-		return validation;
+		return !getStatus().equals(STATUS.IMPORTING) && validation;
 	}
 
 	public <DB extends ODatabaseRecord> DB setValidationEnabled(final boolean iEnabled) {

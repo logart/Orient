@@ -20,13 +20,17 @@ import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
+import com.orientechnologies.orient.core.record.ORecord;
+import com.orientechnologies.orient.core.record.ORecordListener;
 import com.orientechnologies.orient.core.record.impl.ORecordBytesLazy;
 import com.orientechnologies.orient.core.serialization.OMemoryStream;
 import com.orientechnologies.orient.core.serialization.OSerializableStream;
 import com.orientechnologies.orient.core.storage.ORawBuffer;
 import com.orientechnologies.orient.core.storage.OStorage;
 
-public abstract class OMVRBTreeEntryDataProviderAbstract<K, V> implements OMVRBTreeEntryDataProvider<K, V>, OSerializableStream {
+import java.lang.ref.WeakReference;
+
+public abstract class OMVRBTreeEntryDataProviderAbstract<K, V> implements OMVRBTreeEntryDataProvider<K, V>, OSerializableStream, ORecordListener {
 	private static final long												serialVersionUID	= 1L;
 
 	protected final OMVRBTreeProviderAbstract<K, V>	treeDataProvider;
@@ -40,6 +44,7 @@ public abstract class OMVRBTreeEntryDataProviderAbstract<K, V> implements OMVRBT
 	protected boolean																color							= OMVRBTree.RED;
 	protected ORecordBytesLazy											record;
 	protected OMemoryStream													stream;
+	protected WeakReference<OIdentityChangedListener> identityChangedListener;
 
 	public OMVRBTreeEntryDataProviderAbstract(final OMVRBTreeProviderAbstract<K, V> iTreeDataProvider, final int iFixedSize) {
 		this(iTreeDataProvider, null);
@@ -63,6 +68,9 @@ public abstract class OMVRBTreeEntryDataProviderAbstract<K, V> implements OMVRBT
 				load(treeDataProvider.storage);
 		} else
 			record.setIdentity(new ORecordId());
+
+		if(record.getIdentity().isNew() || record.getIdentity().isTemporary())
+			record.addListener(this);
 	}
 
 	protected void load(final ODatabaseRecord iDb) {
@@ -77,7 +85,7 @@ public abstract class OMVRBTreeEntryDataProviderAbstract<K, V> implements OMVRBT
 	}
 
 	protected void load(final OStorage iStorage) {
-		ORawBuffer raw = iStorage.readRecord((ORecordId) record.getIdentity(), null, null);
+		final ORawBuffer raw = iStorage.readRecord((ORecordId) record.getIdentity(), null, false, null);
 		record.fill((ORecordId) record.getIdentity(), raw.version, raw.buffer, false);
 		fromStream(raw.buffer);
 	}
@@ -153,43 +161,76 @@ public abstract class OMVRBTreeEntryDataProviderAbstract<K, V> implements OMVRBT
 					"Current thread has no database set and the tree cannot be saved correctly. Ensure that the database is closed before the application if off.");
 		}
 		record.save(treeDataProvider.clusterName);
+
+		if(!record.getIdentity().isTemporary())
+			record.removeListener(this);
 	}
 
 	protected void save(final OStorage iSt) {
 		record.fromStream(toStream());
 		if (record.getIdentity().isValid())
 			// UPDATE IT WITHOUT VERSION CHECK SINCE ALL IT'S LOCKED
-			record.setVersion(iSt.updateRecord((ORecordId) record.getIdentity(), record.toStream(), -1, record.getRecordType(), null));
+			record.setVersion(iSt.updateRecord((ORecordId) record.getIdentity(), record.toStream(), -1, record.getRecordType(), (byte) 0,
+					null));
 		else {
 			// CREATE IT
 			if (record.getIdentity().getClusterId() == ORID.CLUSTER_ID_INVALID)
 				((ORecordId) record.getIdentity()).clusterId = treeDataProvider.clusterId;
 			record.setIdentity(record.getIdentity().getClusterId(),
-					iSt.createRecord((ORecordId) record.getIdentity(), record.toStream(), record.getRecordType(), null));
+					iSt.createRecord((ORecordId) record.getIdentity(), record.toStream(), record.getRecordType(), (byte) 0, null));
 		}
 		record.unsetDirty();
+
+		if(!record.getIdentity().isTemporary())
+			record.removeListener(this);
 	}
 
 	public void delete() {
+		record.removeListener(this);
 		if (treeDataProvider.storage == null)
-			delete(OMVRBTreeProviderAbstract.getDatabase());
+			delete((ODatabaseRecord) null);
 		else
 			delete(treeDataProvider.storage);
 	}
 
 	protected void delete(final ODatabaseRecord iDb) {
+		record.removeListener(this);
 		record.delete();
 	}
 
 	protected void delete(final OStorage iSt) {
-		iSt.deleteRecord((ORecordId) record.getIdentity(), record.getVersion(), null);
+		record.removeListener(this);
+		iSt.deleteRecord((ORecordId) record.getIdentity(), record.getVersion(), (byte) 0, null);
 	}
+
+	public void onEvent(ORecord<?> record, ORecordListener.EVENT event) {
+		if(ORecordListener.EVENT.IDENTITY_CHANGED.equals(event))
+			if(identityChangedListener != null) {
+				final OIdentityChangedListener listener = identityChangedListener.get();
+				if(listener != null)
+					listener.onIdentityChanged(record.getIdentity());
+			}
+	}
+
+	public void setIdentityChangedListener(final OIdentityChangedListener listener) {
+		this.identityChangedListener = new WeakReference<OIdentityChangedListener>(listener);
+	}
+
+	public void removeIdentityChangedListener(final OIdentityChangedListener listener) {
+		if(identityChangedListener != null) {
+			final OIdentityChangedListener identityListener = identityChangedListener.get();
+			if(identityListener != null && identityListener.equals(listener))
+				identityChangedListener = null;
+		}
+	}
+
 
 	public void clear() {
 		if (stream != null) {
 			stream.close();
 			stream = null;
 		}
+		record.removeListener(this);
 		record.recycle(null);
 		record = null;
 		size = 0;

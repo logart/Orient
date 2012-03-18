@@ -7,7 +7,7 @@
 -->
 </style>
 <div id="tab-database">
-	<button onclick="javascript:askDatabaseInfo()" class="ui-button-text-icon">
+	<button onclick="javascript:askDatabaseInfo()" class="btn">
 		Refresh <img border="0" alt="Refresh" src="images/execute.png" align="top" />
 	</button>
 	<div id="tabs-db">
@@ -33,21 +33,21 @@
 									<table>
 										<tr>
 											<td>
-												<button id="queryClass" class="ui-button-text-icon" style="text-align: left">
+												<button id="queryClass" class="btn" style="text-align: left">
 													Query <img border="0" alt="Query" src="images/execute.png" align="top" />
 												</button>
 											</td>
 										</tr>
 										<tr>
 											<td>
-												<button id="createObject" class="ui-button-text-icon" style="text-align: left">
+												<button id="createObject" class="btn" style="text-align: left">
 													Create object <img border="0" alt="Create object" src="images/set.png" align="top" />
 												</button>
 											</td>
 										</tr>
 										<tr>
 											<td>
-												<button id="deleteClass" class="ui-button-text-icon" style="text-align: left">
+												<button id="deleteClass" class="btn" style="text-align: left">
 													Delete class <img border="0" alt="Delete record" src="images/delete.png" align="top" />
 												</button>
 											</td>
@@ -64,7 +64,7 @@
 									<table>
 										<tr>
 											<td>
-												<button id="addClass" class="ui-button-text-icon" style="text-align: left">
+												<button id="addClass" class="btn" style="text-align: left">
 													Add class <img border="0" alt="New record" src="images/add.png" align="top" />
 												</button>
 											</td>
@@ -88,7 +88,7 @@
 									<table>
 										<tr>
 											<td>
-												<button id="deleteProperty" class="ui-button-text-icon" style="text-align: left">
+												<button id="deleteProperty" class="btn" style="text-align: left">
 													Delete property <img border="0" alt="Delete record" src="images/delete.png" align="top" />
 												</button>
 											</td>
@@ -101,7 +101,7 @@
 									<table>
 										<tr>
 											<td>
-												<button id="addProperty" class="ui-button-text-icon" style="text-align: left">
+												<button id="addProperty" class="btn" style="text-align: left">
 													Add property <img border="0" alt="New record" src="images/add.png" align="top" />
 												</button>
 											</td>
@@ -112,42 +112,42 @@
 						</table>
 					</td>
 				</tr>
-                <tr>
-                    <td valign="top">
-                        <table width="100%">
-                            <tr>
-                                <td valign="top" width="850">
-                                    <table id="classIndexes" style="width: 100%;" cellspacing="0" cellpadding="5" border="1">
-                                    </table>
-                                </td>
-                                <td valign="top" align="left">
-                                    <table>
-                                        <tr>
-                                            <td>
-                                                <button id="deleteIndex" class="ui-button-text-icon" style="text-align: left">
-                                                    Delete index <img border="0" alt="Delete index" src="images/delete.png" align="top" />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    </table>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td valign="top" align="left">
-                                    <table>
-                                        <tr>
-                                            <td>
-                                                <button id="addIndex" class="ui-button-text-icon" style="text-align: left">
-                                                    Add index <img border="0" alt="Add index" src="images/add.png" align="top" />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    </table>
-                                </td>
-                            </tr>
-                        </table>
-                    </td>
-                </tr>
+				<tr>
+					<td valign="top">
+						<table width="100%">
+							<tr>
+								<td valign="top" width="850">
+									<table id="classIndexes" style="width: 100%;" cellspacing="0" cellpadding="5" border="1">
+									</table>
+								</td>
+								<td valign="top" align="left">
+									<table>
+										<tr>
+											<td>
+												<button id="deleteIndex" class="btn" style="text-align: left">
+													Delete index <img border="0" alt="Delete index" src="images/delete.png" align="top" />
+												</button>
+											</td>
+										</tr>
+									</table>
+								</td>
+							</tr>
+							<tr>
+								<td valign="top" align="left">
+									<table>
+										<tr>
+											<td>
+												<button id="addIndex" class="btn" style="text-align: left">
+													Add index <img border="0" alt="Add index" src="images/add.png" align="top" />
+												</button>
+											</td>
+										</tr>
+									</table>
+								</td>
+							</tr>
+						</table>
+					</td>
+				</tr>
 			</table>
 		</div>
 		<div id="tab-db-structure">
@@ -172,17 +172,17 @@
 						<table>
 							<tr>
 								<td>
-									<button id="addPhysicalCluster" class="ui-button-text-icon" style="text-align: left">
+									<button id="addPhysicalCluster" class="btn" style="text-align: left">
 										Add Physical Cluster <img border="0" alt="Add Physical Cluster" src="images/add.png" align="top" />
 									</button>
 								</td>
 								<td>
-									<button id="addLogicalCluster" class="ui-button-text-icon" style="text-align: left">
+									<button id="addLogicalCluster" class="btn" style="text-align: left">
 										Add Logical Cluster <img border="0" alt="Add Logical Cluster" src="images/add.png" align="top" />
 									</button>
 								</td>
 								<td>
-									<button id="removeCluster" class="ui-button-text-icon" style="text-align: left">
+									<button id="removeCluster" class="btn" style="text-align: left">
 										Remove Cluster <img border="0" alt="Remove Cluster" src="images/delete.png" align="top" />
 									</button>
 								</td>
@@ -290,44 +290,108 @@
 			</table>
 		</div>
 		<div id="tab-db-importExport">
-			<table style="width: 100%;" cellpadding="5">
-				<tr>
-					<td valign="top">
-						<button id="exportDatabase" class="ui-button-text exportButton" style="text-align: left; width: 100%;" >Export Database</button>
-					</td>
-					<td valign="top" class="help">Orient server can export databases as JSON data. Click the <b>Export Database</b> button to download a gzip compressed file containing said JSON file.</td>
-				</tr>
-				<tr>
-					<td valign="top">
-						<div id="importDatabaseContainer">
-							<form id="importDatabase" class="file_upload"
-								enctype="multipart/form-data" method="POST">
-								<input type="file" multiple="" name="databaseFile" />
-								<button type="button">Upload</button>
-								<div class="file_upload_label">Import Database</div>
-							</form>
-							<table id="importFileUploadTable">
-							</table>
-							<table id="importFileDownloadTable">
-							</table>
-						</div>
-					</td>
-					<td valign="top" class="help">Import a previously exported
-						database. JSON data.<br /> <b>Requirements:</b>
-						<ul>
-							<li>Supported only JSON text file types.</li>
-							<li>The default max request content lenght is
-								100000 bytes.<br />To change it add the following entry (value expressed in bytes) in the
-								<b>orientdb-server-config.xml</b>:<br> <code>&lt;entry name=&#34;network.http.maxLength&#34; value=&#34;&#34; &#47;&gt;</code></li>
-						</ul>
-					</td>
-				</tr>
-			</table>
+			<div id="tabs-impexp" class="row-fluid">
+				<ul>
+					<li><a href="#tab-impexp-db"><span>Database</span> </a></li>
+					<li><a href="#tab-impexp-records"><span>Records</span> </a></li>
+				</ul>
+				<div id="tab-impexp-db" class="row-fluid">
+					<table style="width: 100%;" cellpadding="5">
+						<tr>
+							<td valign="top">
+								<button id="exportDatabase" class="ui-button-text exportButton" style="text-align: left; width: 100%;">Export Database</button>
+							</td>
+							<td valign="top" class="help">Orient server can export databases as JSON data. Click the <b>Export Database</b> button to download a gzip
+								compressed file containing said JSON file.
+							</td>
+						</tr>
+						<tr>
+							<td valign="top">
+								<div id="importDatabaseContainer">
+									<form id="importDatabase" class="file_upload" enctype="multipart/form-data" method="POST">
+										<input type="file" multiple="" name="databaseFile" />
+										<button type="button">Upload</button>
+										<div class="file_upload_label">Import Database</div>
+									</form>
+									<table id="importFileUploadTable">
+									</table>
+									<table id="importFileDownloadTable">
+									</table>
+								</div>
+							</td>
+							<td valign="top" class="help">Import a previously exported database. JSON data.<br /> <b>Requirements:</b>
+								<ul>
+									<li>Supported only JSON text file types.</li>
+									<li>The default max request content lenght is 100000 bytes.<br />To change it add the following entry (value expressed in bytes) in the
+										<b>orientdb-server-config.xml</b>:<br> <code>&lt;entry name=&#34;network.http.maxLength&#34; value=&#34;&#34; &#47;&gt;</code></li>
+								</ul>
+							</td>
+						</tr>
+					</table>
+				</div>
+				<div id="tab-impexp-records">
+					<div class="row">
+						<table style='width: 100%;'>
+							<tr>
+								<td>Format:</td>
+								<td>Class:</td>
+								<td>Separator:</td>
+								<td>String delimiter:</td>
+								<td>Locale:</td>
+								<td colspan="2">
+									<button onclick="javascript:importRecords()" class="btn">
+										Import <i class="icon-arrow-right"></i>
+									</button>
+								</td>
+							</tr>
+							<tr>
+								<td><select id="importRecordsFormat" class="input-mini"><option value="csv">CSV</option></select></td>
+								<td>
+									<div id="impexp-classes"></div>
+								</td>
+								<td><input type="text" id="importRecordsSeparator" value="," class="input-mini" style="width: 20px;" /></td>
+								<td><input type="text" id="importRecordsStringDelimiter" value='"' class="input-mini" style="width: 20px;" /></td>
+								<td><input type="text" id="importRecordsLocale" class="input-mini" style="width: 80px;"></td>
+							</tr>
+						</table>
+						<table style='width: auto;'>
+							<tr>
+								<td><label>Input</label> <textarea style='width: auto;' id="importRecordsContent" rows="20" cols="200"></textarea></td>
+							</tr>
+						</table>
+					</div>
+				</div>
+			</div>
 		</div>
 	</div>
 </div>
 
-<script language="javascript">
+<script>
+	function importRecords() {
+		var format = $("#importRecordsFormat").val();
+		var cls = $("#importRecordsClass").val();
+		var content = $.trim($("#importRecordsContent").val());
+		var separator = $.trim($("#importRecordsSeparator").val());
+		var stringDelimiter = $.trim($("#importRecordsStringDelimiter").val());
+		var decimalSeparator = $
+				.trim($("#importRecordsDecimalSeparator").val());
+		var thousandsSeparator = $.trim($("#importRecordsThousandsSeparator")
+				.val());
+
+		orientServer.importRecords(content, {
+			"format" : format,
+			"class" : cls,
+			"separator" : separator,
+			"stringDelimiter" : stringDelimiter,
+			"decimalSeparator" : decimalSeparator,
+			"thousandsSeparator" : thousandsSeparator
+		}, function(msg) {
+			$("#output").text(msg);
+		}, function(msg) {
+			$("#output").val(msg);
+		});
+	}
+
 	function showDatabaseInfo() {
 		fillDynaTable($('#databaseClusters'), "Clusters", [ 'id', 'name',
 				'type', 'records', 'size', 'filled', 'maxSize', 'files' ], [ {
@@ -376,52 +440,58 @@
 		});
 
 		$("#addPhysicalCluster").click(function() {
-			jQuery("#databaseClusters").jqGrid('editGridRow', "newp", {
+			$("#databaseClusters").jqGrid('editGridRow', "newp", {
 				height : 320,
 				reloadAfterSubmit : false,
 				closeOnEscape : true,
 				closeAfterAdd : true,
 				editData : [ selectedClassName ],
 				afterSubmit : function(response, postdata) {
-					jQuery("#output").val(response.responseText);
+					$("#output").val(response.responseText);
 					return true;
 				}
 			});
 		});
 		$("#addLogicalCluster").click(function() {
-			jQuery("#databaseClusters").jqGrid('editGridRow', "newl", {
+			$("#databaseClusters").jqGrid('editGridRow', "newl", {
 				height : 320,
 				reloadAfterSubmit : false,
 				closeOnEscape : true,
 				closeAfterAdd : true,
 				editData : [ selectedClassName ],
 				afterSubmit : function(response, postdata) {
-					jQuery("#output").val(response.responseText);
+					$("#output").val(response.responseText);
 					return true;
 				}
 			});
 		});
-		$("#removeCluster").click(
-				function() {
-					var selectedRow = jQuery("#databaseClusters").jqGrid(
-							'getGridParam', 'selrow');
-					if (selectedRow != null) {
-						jQuery("#databaseClusters").jqGrid(
-								'delGridRow',
-								selectedRow,
-								{
-									reloadAfterSubmit : false,
-									closeOnEscape : true,
-									delData : [ selectedClassName ],
-									afterSubmit : function(response, postdata) {
-										jQuery("#output").val(
-												response.responseText);
-										return [ true, response.responseText ];
-									}
-								});
-					} else
-						alert("Please select the cluster to delete!");
-				});
+		$("#removeCluster")
+				.click(
+						function() {
+							var selectedRow = $("#databaseClusters").jqGrid(
+									'getGridParam', 'selrow');
+							if (selectedRow != null) {
+								$("#databaseClusters")
+										.jqGrid(
+												'delGridRow',
+												selectedRow,
+												{
+													reloadAfterSubmit : false,
+													closeOnEscape : true,
+													delData : [ selectedClassName ],
+													afterSubmit : function(
+															response, postdata) {
+														$("#output")
+																.val(
+																		response.responseText);
+														return [
+																true,
+																response.responseText ];
+													}
+												});
+							} else
+								alert("Please select the cluster to delete!");
+						});
 
 		fillDynaTable($('#databaseDataSegments'), "Data Segments", [ 'id',
 				'name', 'size', 'filled', 'maxSize', 'files' ], [ {
@@ -544,7 +614,7 @@
 					+ databaseInfo['classes'][cls].name;
 		}
 
-		jQuery($('#classProperties')).jqGrid('GridUnload');
+		$($('#classProperties')).jqGrid('GridUnload');
 		fillDynaTable(
 				$('#classProperties'),
 				"Properties",
@@ -569,7 +639,7 @@
 							width : 100,
 							edittype : "select",
 							editoptions : {
-								value : ":;BINARY:BINARY;BOOLEAN:BOOLEAN;EMBEDDED:EMBEDDED;EMBEDDEDLIST:EMBEDDEDLIST;EMBEDDEDMAP:EMBEDDEDMAP;EMBEDDEDSET:EMBEDDEDSET;FLOAT:FLOAT;DATE:DATE;DATETIME:DATETIME;DOUBLE:DOUBLE;INTEGER:INTEGER;LINK:LINK;LINKLIST:LINKLIST;LINKMAP:LINKMAP;LINKSET:LINKSET;LONG:LONG;SHORT:SHORT;STRING:STRING"
+								value : ":;BINARY:BINARY;BOOLEAN:BOOLEAN;EMBEDDED:EMBEDDED;EMBEDDEDLIST:EMBEDDEDLIST;EMBEDDEDMAP:EMBEDDEDMAP;EMBEDDEDSET:EMBEDDEDSET;DECIMAL:DECIMAL;FLOAT:FLOAT;DATE:DATE;DATETIME:DATETIME;DOUBLE:DOUBLE;INTEGER:INTEGER;LINK:LINK;LINKLIST:LINKLIST;LINKMAP:LINKMAP;LINKSET:LINKSET;LONG:LONG;SHORT:SHORT;STRING:STRING"
 							},
 							editable : true,
 							editrules : {
@@ -585,7 +655,7 @@
 							width : 150,
 							edittype : "select",
 							editoptions : {
-								value : ":;BINARY:BINARY;BOOLEAN:BOOLEAN;EMBEDDED:EMBEDDED;EMBEDDEDLIST:EMBEDDEDLIST;EMBEDDEDMAP:EMBEDDEDMAP;EMBEDDEDSET:EMBEDDEDSET;FLOAT:FLOAT;DATE:DATE;DATETIME:DATETIME;DOUBLE:DOUBLE;INTEGER:INTEGER;LINK:LINK;LINKLIST:LINKLIST;LINKMAP:LINKMAP;LINKSET:LINKSET;LONG:LONG;SHORT:SHORT;STRING:STRING"
+								value : ":;BINARY:BINARY;BOOLEAN:BOOLEAN;EMBEDDED:EMBEDDED;EMBEDDEDLIST:EMBEDDEDLIST;EMBEDDEDMAP:EMBEDDEDMAP;EMBEDDEDSET:EMBEDDEDSET;DECIMAL:DECIMAL;FLOAT:FLOAT;DATE:DATE;DATETIME:DATETIME;DOUBLE:DOUBLE;INTEGER:INTEGER;LINK:LINK;LINKLIST:LINKLIST;LINKMAP:LINKMAP;LINKSET:LINKSET;LONG:LONG;SHORT:SHORT;STRING:STRING"
 							},
 							editable : true
 						}, {
@@ -634,7 +704,7 @@
 								return;
 							}
 
-							jQuery("#classProperties").jqGrid(
+							$("#classProperties").jqGrid(
 									'editGridRow',
 									"new",
 									{
@@ -645,160 +715,192 @@
 										editData : [ selectedClassName ],
 										afterSubmit : function(response,
 												postdata) {
-											jQuery("#output").val(
+											$("#output").val(
 													response.responseText);
 											return true;
 										}
 									});
 						});
-		$("#deleteProperty").click(
+		$("#deleteProperty")
+				.click(
+						function() {
+							var selectedRow = $("#classProperties").jqGrid(
+									'getGridParam', 'selrow');
+							if (selectedRow != null) {
+								var propName = $('#classProperties').jqGrid(
+										'getRowData', selectedRow)["name"];
+								$("#classProperties")
+										.jqGrid(
+												'delGridRow',
+												selectedRow,
+												{
+													reloadAfterSubmit : false,
+													closeOnEscape : true,
+													delData : [
+															selectedClassName,
+															propName ],
+													afterSubmit : function(
+															response, postdata) {
+														$("#output")
+																.val(
+																		response.responseText);
+														return [
+																true,
+																response.responseText ];
+													}
+												});
+							} else
+								alert("Please select the property to delete!");
+						});
+
+		$($('#classIndexes')).jqGrid('GridUnload');
+		fillDynaTable($('#classIndexes'), "Indexes", [ 'name', 'type',
+				'properties' ], [
+				{
+					name : 'name',
+					index : 'name',
+					width : 180,
+					editable : true,
+					editrules : {
+						required : true
+					},
+					formoptions : {
+						elmprefix : '(*)'
+					}
+				},
+				{
+					name : 'type',
+					index : 'type',
+					width : 100,
+					edittype : "select",
+					editoptions : {
+						value : ":;Unique:Unique;Not unique:Not Unique"
+					},
+					editable : true,
+					editrules : {
+						required : true
+					},
+					formoptions : {
+						elmprefix : '(*)'
+					}
+				},
+				{
+					name : 'fields',
+					width : 200,
+					editable : true,
+					editrules : {
+						required : true
+					},
+					editoptions : {
+						dataInit : function(elem) {
+							$(elem).attr("title",
+									"Add properties using comma as separator");
+							$(elem).tooltip({
+								// place tooltip on the right edge
+								position : "center right",
+								// a little tweaking of the position
+								offset : [ -2, 10 ],
+								// use the built-in fadeIn/fadeOut effect
+								effect : "fade"
+							});
+						}
+					},
+					formoptions : {
+						elmprefix : '(*)'
+					}
+				} ], null, {
+			editurl : getStudioURL('classIndexes'),
+			sortname : 'name'
+		});
+
+		var addIndexDialogId;
+		$("#addIndex")
+				.click(
+						function() {
+							if (selectedClassName == null) {
+								alert("Please select class for which index is going to be added !");
+								return;
+							}
+
+							$("#classIndexes")
+									.jqGrid(
+											'editGridRow',
+											"new",
+											{
+												height : 200,
+												reloadAfterSubmit : false,
+												closeOnEscape : true,
+												closeAfterAdd : true,
+												editData : [ selectedClassName ],
+												afterSubmit : function(
+														response, postdata) {
+													$("#output")
+															.val(
+																	response.responseText);
+
+													var textlist = $(
+															addIndexDialogId)
+															.find(
+																	'[type="text"]')
+															.each(
+																	function(
+																			index,
+																			element) {
+																		var tooltip = $(
+																				element)
+																				.data(
+																						"tooltip");
+																		if (tooltip)
+																			tooltip
+																					.hide();
+																	});
+
+													return true;
+												},
+
+												onClose : function() {
+													var textlist = $(
+															addIndexDialogId)
+															.find(
+																	'[type="text"]')
+															.each(
+																	function(
+																			index,
+																			element) {
+																		var tooltip = $(
+																				element)
+																				.data(
+																						"tooltip");
+																		if (tooltip)
+																			tooltip
+																					.hide();
+																	});
+												},
+												onInitializeForm : function(
+														formId) {
+													addIndexDialogId = formId;
+												}
+											});
+						});
+		$("#deleteIndex").click(
 				function() {
-					var selectedRow = jQuery("#classProperties").jqGrid(
-							'getGridParam', 'selrow');
+					var selectedRow = $("#classIndexes").jqGrid('getGridParam',
+							'selrow');
 					if (selectedRow != null) {
-						var propName = jQuery('#classProperties').jqGrid(
-								'getRowData', selectedRow)["name"];
-						jQuery("#classProperties").jqGrid(
-								'delGridRow',
-								selectedRow,
-								{
-									reloadAfterSubmit : false,
-									closeOnEscape : true,
-									delData : [ selectedClassName, propName ],
-									afterSubmit : function(response, postdata) {
-										jQuery("#output").val(
-												response.responseText);
-										return [ true, response.responseText ];
-									}
-								});
+						var indexName = $('#classIndexes').jqGrid('getRowData',
+								selectedRow)["name"];
+						$("#classIndexes").jqGrid('delGridRow', selectedRow, {
+							reloadAfterSubmit : false,
+							closeOnEscape : true,
+							delData : [ selectedClassName, indexName ],
+							afterSubmit : function(response, postdata) {
+								$("#output").val(response.responseText);
+								return [ true, response.responseText ];
+							}
+						});
 					} else
-						alert("Please select the property to delete!");
+						alert("Please select the index to delete!");
 				});
-
-        jQuery($('#classIndexes')).jqGrid('GridUnload');
-        fillDynaTable(
-                $('#classIndexes'),
-                "Indexes",
-                [ 'name', 'type', 'properties' ],
-                [
-                        {
-                            name : 'name',
-                            index : 'name',
-                            width : 180,
-                            editable : true,
-                            editrules : {
-                                required : true
-                            },
-                            formoptions : {
-                                elmprefix : '(*)'
-                            }
-                        },
-                        {
-                            name : 'type',
-                            index : 'type',
-                            width : 100,
-                            edittype : "select",
-                            editoptions : {
-						    value : ":;Unique:Unique;Not unique:Not Unique"
-                            },
-							editable : true,
-                            editrules : {
-                                required : true
-                            },
-                            formoptions : {
-                                elmprefix : '(*)'
-                            }
-                        },
-                        {
-                            name :'fields',
-                            width : 200,
-                            editable : true,
-                            editrules : {
-                                required : true
-                            },
-                            editoptions : {
-                                dataInit : function(elem) {
-                                   $(elem).attr("title", "Add properties using comma as separator");
-                                   $(elem).tooltip({
-                                        // place tooltip on the right edge
-                                        position: "center right",
-                                        // a little tweaking of the position
-                                        offset: [-2, 10],
-                                        // use the built-in fadeIn/fadeOut effect
-                                        effect: "fade"
-                                    });
-                                }
-                            },
-                            formoptions : {
-                                elmprefix : '(*)'
-                            }
-                        }
-                ], null, {
-                    editurl : getStudioURL('classIndexes'),
-                    sortname : 'name'
-                });
-
-        var addIndexDialogId;
-        $("#addIndex").click(function() {
-            if(selectedClassName == null) {
-                alert("Please select class for which index is going to be added !");
-                return;
-            }
-
-            jQuery("#classIndexes").jqGrid('editGridRow', "new", {
-                height : 200,
-                reloadAfterSubmit : false,
-                closeOnEscape : true,
-                closeAfterAdd : true,
-                editData : [ selectedClassName ],
-                afterSubmit : function(response, postdata) {
-                    jQuery("#output").val(response.responseText);
-
-                    var textlist = $(addIndexDialogId).find('[type="text"]').each(function (index, element) {
-                        var tooltip = $(element).data("tooltip");
-                        if (tooltip)
-                            tooltip.hide();
-                    });
-
-                    return true;
-                },
-
-                onClose : function() {
-                    var textlist = $(addIndexDialogId).find('[type="text"]').each(function (index, element) {
-                        var tooltip  = $(element).data("tooltip");
-                        if(tooltip)
-                            tooltip.hide();
-                    });
-                },
-                onInitializeForm : function(formId) {
-                    addIndexDialogId = formId;
-                }
-            });
-        });
-        $("#deleteIndex").click(
-                function() {
-                    var selectedRow = jQuery("#classIndexes").jqGrid(
-                            'getGridParam', 'selrow');
-                    if (selectedRow != null) {
-                        var indexName = jQuery('#classIndexes').jqGrid(
-                                'getRowData', selectedRow)["name"];
-                        jQuery("#classIndexes").jqGrid(
-                                'delGridRow',
-                                selectedRow,
-                                {
-                                    reloadAfterSubmit : false,
-                                    closeOnEscape : true,
-                                    delData : [ selectedClassName, indexName ],
-                                    afterSubmit : function(response, postdata) {
-                                        jQuery("#output").val(
-                                                response.responseText);
-                                        return [ true, response.responseText ];
-                                    }
-                                });
-                    } else
-                        alert("Please select the index to delete!");
-                });
-
 
 		fillDynaTable(
 				$('#databaseClasses'),
@@ -857,58 +959,64 @@
 						fillDynaTableRows(
 								$('#classProperties'),
 								databaseInfo['classes'][classRowNum - 1]['properties']);
-                        fillDynaTableRows(
+						fillDynaTableRows(
 								$('#classIndexes'),
 								databaseInfo['classes'][classRowNum - 1]['indexes']);
 					}
 				});
 
 		$("#addClass").click(function() {
-			jQuery("#databaseClasses").jqGrid('editGridRow', "new", {
+			$("#databaseClasses").jqGrid('editGridRow', "new", {
 				height : 320,
 				reloadAfterSubmit : false,
 				closeOnEscape : true,
 				closeAfterAdd : true,
 				editData : [ selectedClassName ],
 				afterSubmit : function(response, postdata) {
-					jQuery("#output").val(response.responseText);
+					$("#output").val(response.responseText);
 					return true;
 				}
 			});
 		});
-		$("#deleteClass").click(
-				function() {
-					var selectedRow = jQuery("#databaseClasses").jqGrid(
-							'getGridParam', 'selrow');
-					if (selectedRow != null) {
-						jQuery("#databaseClasses").jqGrid(
-								'delGridRow',
-								selectedRow,
-								{
-									reloadAfterSubmit : false,
-									closeOnEscape : true,
-									delData : [ selectedClassName ],
-									afterSubmit : function(response, postdata) {
-										jQuery("#output").val(
-												response.responseText);
-										return [ true, response.responseText ];
-									}
-								});
-					} else
-						alert("Please select the class to delete!");
-				});
+		$("#deleteClass")
+				.click(
+						function() {
+							var selectedRow = $("#databaseClasses").jqGrid(
+									'getGridParam', 'selrow');
+							if (selectedRow != null) {
+								$("#databaseClasses")
+										.jqGrid(
+												'delGridRow',
+												selectedRow,
+												{
+													reloadAfterSubmit : false,
+													closeOnEscape : true,
+													delData : [ selectedClassName ],
+													afterSubmit : function(
+															response, postdata) {
+														$("#output")
+																.val(
+																		response.responseText);
+														return [
+																true,
+																response.responseText ];
+													}
+												});
+							} else
+								alert("Please select the class to delete!");
+						});
 		$("#queryClass").click(
 				function() {
-					var selectedRow = jQuery("#databaseClasses").jqGrid(
+					var selectedRow = $("#databaseClasses").jqGrid(
 							'getGridParam', 'selrow');
 					if (selectedRow != null) {
-						selObject = jQuery('#databaseClasses').jqGrid(
-								'getRowData', selectedRow)["name"];
+						selObject = $('#databaseClasses').jqGrid('getRowData',
+								selectedRow)["name"];
 
 						controller.parameter('queryLoad', function() {
-							queryEditor.setCode("select from " + selObject);
-							executeQuery();
+							executeQuery("select from " + selObject);
 							queryEditor.focus();
+							controller.parameter('queryLoad', null);
 						});
 
 						controller.loadFragment("panelQuery.htm");
@@ -916,11 +1024,11 @@
 				});
 		$("#createObject").click(
 				function() {
-					var selectedRow = jQuery("#databaseClasses").jqGrid(
+					var selectedRow = $("#databaseClasses").jqGrid(
 							'getGridParam', 'selrow');
 					if (selectedRow != null) {
-						selObject = jQuery('#databaseClasses').jqGrid(
-								'getRowData', selectedRow)["name"];
+						selObject = $('#databaseClasses').jqGrid('getRowData',
+								selectedRow)["name"];
 
 						controller.loadFragment("panelDocument.htm",
 								function() {
@@ -938,19 +1046,20 @@
 				databaseInfo['config'].properties, {
 					sortname : 'name'
 				});
-		
+
 		$("#exportDatabase").click(
-                function() {
-                	orientServer.open();
-                    var exportUrl = orientServer.getDatabaseUrl() + "export/" + orientServer.getDatabaseName();
-                    window.open(exportUrl,'Download');
-                });
+				function() {
+					orientServer.open();
+					var exportUrl = orientServer.getDatabaseUrl() + "export/"
+							+ orientServer.getDatabaseName();
+					window.open(exportUrl, 'Download');
+				});
 	}
 
 	function askDatabaseInfo() {
 		databaseInfo = orientServer.open();
 		if (databaseInfo == null) {
-			jQuery("#output").text(orientServer.getErrorMessage());
+			$("#output").text(orientServer.getErrorMessage());
 		} else {
 			showDatabaseInfo();
 		}
@@ -1090,26 +1199,43 @@
 						}
 					});
 	$('#tabs-security').tabs();
-	
-	$('#importDatabase').fileUploadUI({
-		url: orientServer.getDatabaseUrl() + 'import/' + orientServer.getDatabaseName(),
-		uploadTable: $('#importFileUploadTable'),
-		downloadTable: $('#importFileDownloadTable'),
-		buildUploadRow: function() {
-			orientServer.open();
-			return $('<tr>' +
-			'<td class="file_upload_progress"><div><\/div><\/td>' +
-			'<td class="file_upload_cancel">' +
-			'<button class="ui-state-default ui-corner-all" title="Cancel">' +
-			'<span class="ui-icon ui-icon-cancel">Cancel<\/span>' +
-			'<\/button>' +
-			'<\/td>' +
-			'<\/tr>');
-		},
-		buildDownloadRow: function(response) {
-			var responseText = response.responseText;
-			jQuery('#output').val(responseText);
+	$('#tabs-impexp').tabs();
+	$('#impexp-classes').html(generateClassSelect("importRecordsClass"));
+
+	$('#importDatabase')
+			.fileUploadUI(
+					{
+						url : orientServer.getDatabaseUrl() + 'import/'
+								+ orientServer.getDatabaseName(),
+						uploadTable : $('#importFileUploadTable'),
+						downloadTable : $('#importFileDownloadTable'),
+						buildUploadRow : function() {
+							orientServer.open();
+							return $('<tr>'
+									+ '<td class="file_upload_progress"><div><\/div><\/td>'
+									+ '<td class="file_upload_cancel">'
+									+ '<button class="ui-state-default ui-corner-all" title="Cancel">'
+									+ '<span class="ui-icon ui-icon-cancel">Cancel<\/span>'
+									+ '<\/button>' + '<\/td>' + '<\/tr>');
+						},
+						buildDownloadRow : function(response) {
+							var responseText = response.responseText;
+							$('#output').val(responseText);
+						}
+					});
+
+	function displayClass(clsName) {
+		$('#tabs-db').tabs('select', 0);
+
+		var rows = $('#databaseClasses').getGridParam("records");
+		for ( var i = 0; i < rows; ++i) {
+			var row = $('#databaseClasses').jqGrid('getRowData', i);
+			if (row['name'] == clsName) {
+				$('#databaseClasses').setSelection(i);
+				break;
+			}
 		}
-	});
+	}
+
 	showDatabaseInfo();
 </script>

@@ -22,6 +22,8 @@ import java.net.SocketTimeoutException;
 import java.net.URLDecoder;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.IllegalFormatException;
+import java.util.InputMismatchException;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -69,19 +71,20 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
 	}
 
 	@Override
-	public void config(final OServer iServer, final Socket iSocket, final OClientConnection iConnection,
-			final OContextConfiguration iConfiguration) throws IOException {
+	public void config(final OServer iServer, final Socket iSocket, final OContextConfiguration iConfiguration) throws IOException {
+		// CREATE THE CLIENT CONNECTION
+		connection = OClientConnectionManager.instance().connect(iSocket, this);
+
 		server = iServer;
 		requestMaxContentLength = iConfiguration.getValueAsInteger(OGlobalConfiguration.NETWORK_HTTP_MAX_CONTENT_LENGTH);
 		socketTimeout = iConfiguration.getValueAsInteger(OGlobalConfiguration.NETWORK_SOCKET_TIMEOUT);
 		responseCharSet = iConfiguration.getValueAsString(OGlobalConfiguration.NETWORK_HTTP_CONTENT_CHARSET);
 
 		channel = new OChannelTextServer(iSocket, iConfiguration);
-		connection = iConnection;
 
-		request = new OHttpRequest(this, channel, data, iConfiguration);
+		request = new OHttpRequest(this, channel, connection.data, iConfiguration);
 
-		data.caller = channel.toString();
+		connection.data.caller = channel.toString();
 
 		start();
 	}
@@ -89,9 +92,9 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
 	public void service() throws ONetworkProtocolException, IOException {
 		OProfiler.getInstance().updateCounter("Server.requests", +1);
 
-		++data.totalRequests;
-		data.commandInfo = null;
-		data.commandDetail = null;
+		++connection.data.totalRequests;
+		connection.data.commandInfo = null;
+		connection.data.commandDetail = null;
 
 		long begin = System.currentTimeMillis();
 
@@ -148,11 +151,11 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
 			}
 		} while (isChain);
 
-		data.lastCommandInfo = data.commandInfo;
-		data.lastCommandDetail = data.commandDetail;
+		connection.data.lastCommandInfo = connection.data.commandInfo;
+		connection.data.lastCommandDetail = connection.data.commandDetail;
 
-		data.lastCommandExecutionTime = System.currentTimeMillis() - begin;
-		data.totalCommandExecutionTime += data.lastCommandExecutionTime;
+		connection.data.lastCommandExecutionTime = System.currentTimeMillis() - begin;
+		connection.data.totalCommandExecutionTime += connection.data.lastCommandExecutionTime;
 	}
 
 	protected void handleError(Exception e) {
@@ -164,15 +167,22 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
 		String errorMessage = null;
 		String responseHeaders = null;
 
-		if (e instanceof ORecordNotFoundException)
-			errorCode = 404;
-		else if (e instanceof OConcurrentModificationException) {
+		if (e instanceof IllegalFormatException || e instanceof InputMismatchException) {
+			errorCode = OHttpUtils.STATUS_BADREQ_CODE;
+			errorReason = OHttpUtils.STATUS_BADREQ_DESCRIPTION;
+		} else if (e instanceof ORecordNotFoundException) {
+			errorCode = OHttpUtils.STATUS_NOTFOUND_CODE;
+			errorReason = OHttpUtils.STATUS_NOTFOUND_DESCRIPTION;
+		} else if (e instanceof OConcurrentModificationException) {
 			errorCode = OHttpUtils.STATUS_CONFLICT_CODE;
 			errorReason = OHttpUtils.STATUS_CONFLICT_DESCRIPTION;
 		} else if (e instanceof OLockException) {
 			errorCode = 423;
+		} else if (e instanceof UnsupportedOperationException) {
+			errorCode = OHttpUtils.STATUS_NOTIMPL_CODE;
+			errorReason = OHttpUtils.STATUS_NOTIMPL_DESCRIPTION;
 		} else if (e instanceof IllegalArgumentException)
-			errorCode = OHttpUtils.STATUS_INTERNALERROR;
+			errorCode = OHttpUtils.STATUS_INTERNALERROR_CODE;
 
 		if (e instanceof ODatabaseException || e instanceof OSecurityAccessException || e instanceof OCommandExecutionException
 				|| e instanceof OLockException) {
@@ -204,7 +214,7 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
 		}
 
 		if (errorReason == null)
-			errorReason = OHttpUtils.STATUS_ERROR_DESCRIPTION;
+			errorReason = OHttpUtils.STATUS_INTERNALERROR_DESCRIPTION;
 
 		if (errorMessage == null) {
 			// FORMAT GENERIC MESSAGE BY READING THE EXCEPTION STACK
@@ -276,7 +286,7 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
 		writeLine("Pragma: no-cache");
 		writeLine("Date: " + new Date());
 		writeLine("Content-Type: " + iContentType + "; charset=" + responseCharSet);
-		writeLine("Server: " + data.serverInfo);
+		writeLine("Server: " + connection.data.serverInfo);
 		writeLine("Connection: Keep-Alive");
 	}
 
@@ -335,7 +345,7 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
 						iRequest.ifMatch = line.substring(OHttpUtils.HEADER_IF_MATCH.length());
 
 					else if (OStringSerializerHelper.startsWithIgnoreCase(line, OHttpUtils.HEADER_X_FORWARDED_FOR))
-						getData().caller = line.substring(OHttpUtils.HEADER_X_FORWARDED_FOR.length());
+						connection.data.caller = line.substring(OHttpUtils.HEADER_X_FORWARDED_FOR.length());
 
 				}
 
@@ -375,8 +385,8 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
 		}
 
 		if (OLogManager.instance().isDebugEnabled())
-			OLogManager.instance().debug(this,
-					"Error on parsing HTTP content from client " + channel.socket.getInetAddress().getHostAddress() + ":\n" + request);
+			OLogManager.instance().debug(this, "Error on parsing HTTP content from client %s:\n%s",
+					channel.socket.getInetAddress().getHostAddress(), request);
 
 		return;
 	}
@@ -388,12 +398,12 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
 			return;
 		}
 
-		data.commandInfo = "Listening";
-		data.commandDetail = null;
+		connection.data.commandInfo = "Listening";
+		connection.data.commandDetail = null;
 
 		try {
 			channel.socket.setSoTimeout(socketTimeout);
-			data.lastCommandReceived = -1;
+			connection.data.lastCommandReceived = -1;
 
 			char c = (char) channel.inStream.read();
 
@@ -403,7 +413,7 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
 			}
 
 			channel.socket.setSoTimeout(socketTimeout);
-			data.lastCommandReceived = OProfiler.getInstance().startChrono();
+			connection.data.lastCommandReceived = OProfiler.getInstance().startChrono();
 
 			requestContent.setLength(0);
 			request.isMultipart = false;
@@ -437,8 +447,8 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
 						request.content = URLDecoder.decode(request.content, "UTF-8").trim();
 
 					if (OLogManager.instance().isDebugEnabled())
-						OLogManager.instance().debug(this,
-								"[ONetworkProtocolHttpAbstract.execute] Requested: " + request.method + " " + request.url);
+						OLogManager.instance().debug(this, "[ONetworkProtocolHttpAbstract.execute] Requested: %s %s", request.method,
+								request.url);
 
 					service();
 					return;
@@ -468,8 +478,8 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
 
 			readAllContent(request);
 		} finally {
-			if (data.lastCommandReceived > -1)
-				OProfiler.getInstance().stopChrono("ONetworkProtocolHttp.execute", data.lastCommandReceived);
+			if (connection.data.lastCommandReceived > -1)
+				OProfiler.getInstance().stopChrono("ONetworkProtocolHttp.execute", connection.data.lastCommandReceived);
 		}
 	}
 

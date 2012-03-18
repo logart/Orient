@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import com.orientechnologies.common.concur.resource.OCloseable;
 import com.orientechnologies.common.concur.resource.OSharedContainerImpl;
+import com.orientechnologies.common.concur.resource.OSharedResource;
 import com.orientechnologies.common.concur.resource.OSharedResourceAdaptive;
 import com.orientechnologies.common.concur.resource.OSharedResourceAdaptiveExternal;
 import com.orientechnologies.common.exception.OException;
@@ -39,7 +40,7 @@ public abstract class OStorageAbstract extends OSharedContainerImpl implements O
 
 	protected volatile STATUS									status	= STATUS.CLOSED;
 	protected OSharedResourceAdaptiveExternal	lock		= new OSharedResourceAdaptiveExternal(
-																												OGlobalConfiguration.ENVIRONMENT_CONCURRENT.getValueAsBoolean(), 0);
+																												OGlobalConfiguration.ENVIRONMENT_CONCURRENT.getValueAsBoolean(), 0, true);
 
 	protected enum STATUS {
 		CLOSED, OPEN, CLOSING
@@ -99,6 +100,9 @@ public abstract class OStorageAbstract extends OSharedContainerImpl implements O
 			return;
 
 		for (Object resource : sharedResources.values()) {
+			if (resource instanceof OSharedResource)
+				((OSharedResource) resource).releaseExclusiveLock();
+
 			if (resource instanceof OCloseable)
 				((OCloseable) resource).close();
 		}

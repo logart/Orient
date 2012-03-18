@@ -28,18 +28,17 @@ function ODocumentView(name, component, doc, options) {
 	this.settings = {
 		editable : true,
 
-		styleClass : "odocumentview",
-		showRid : true,
-		ridLabelStyleClass : "odocumentview_header_label",
-		ridValueStyleClass : "odocumentview_header_value",
+		ridLabelStyleClass : "odocumentview_rid_label",
+		ridValueStyleClass : "odocumentview_rid_value",
 
-		showClass : true,
-		classLabelStyleClass : "odocumentview_header_label",
-		classValueStyleClass : "odocumentview_header_value",
+		classLabelStyleClass : "odocumentview_class_label",
+		classValueStyleClass : "odocumentview_class_value",
 
-		showVersion : true,
-		versionLabelStyleClass : "odocumentview_header_label",
-		versionValueStyleClass : "odocumentview_header_value",
+		versionLabelStyleClass : "odocumentview_version_label",
+		versionValueStyleClass : "odocumentview_version_value",
+
+		typeLabelStyleClass : "odocumentview_type_label",
+		typeValueStyleClass : "odocumentview_type_value",
 
 		fieldColumnName : "Field",
 		fieldStyleClass : "odocumentview_field_label",
@@ -80,105 +79,100 @@ function ODocumentView(name, component, doc, options) {
 		}
 	}
 
-	ODocumentView.prototype.render = function(doc, database) {
-		if (doc != null)
-			this.doc = doc;
+	this.types = [ "binary", "boolean", "embedded", "embeddedlist",
+			"embeddedmap", "embeddedset", "decimal", "float", "date",
+			"datetime", "double", "integer", "link", "linklist", "linkmap",
+			"linkset", "long", "short", "string" ];
 
+	ODocumentView.prototype.render = function(doc, database) {
 		if (database != null)
 			this.database = database;
 
-		var component = "<table class='" + this.settings.styleClass
-				+ "' width='100%'>";
+		if (doc != null && this.database != null) {
+			if (typeof doc == "string")
+				// LOAD THE RECORD BY RID
+				this.doc = database.load(doc);
+			else
+				this.doc = doc;
+		}
 
 		var script = "<script>";
 
-		// HEADER, BROWSE RESERVED FIELDS (@RID, @CLASS, @VERSION)
-		component += "<tr><td><table id='" + this.componentId
-				+ "_header' width='100%'><tr>";
+		// BEGIN COMMANDS
+		component = "<div id='" + this.componentId + "_header' class='row'>";
+		component += "<div class='offset6 span6 btn-group'>"
 
-		if (this.settings.showClass) {
-			if (this.doc != null)
-				fieldValue = this.doc['@class'];
+				+ this.generateButton('doc_graph', 'Graph', 'icon-picture',
+						"btn", "ODocumentView.graph('" + this.name + "')")
 
-			classes = "<select id='doc__class' class='"
-					+ this.settings.classValueStyleClass + "'>";
-			for (cls in databaseInfo['classes']) {
-				classes += "<option";
-				if (databaseInfo['classes'][cls].name == fieldValue)
-					classes += " selected = 'yes'";
-				classes += ">" + databaseInfo['classes'][cls].name
-						+ "</option>";
-			}
-			classes += "</select>";
+				+ this.generateButton('doc_create', 'Create', 'icon-plus',
+						"btn", "ODocumentView.create('" + this.name + "')")
 
-			component += "<td class='" + this.settings.classLabelStyleClass
-					+ "'>@class</td><td class='"
-					+ this.settings.classValueStyleClass + "'>" + classes
-					+ "</td>";
-		}
+				+ this.generateButton('doc_delete', 'Delete', 'icon-remove',
+						"btn", "ODocumentView.remove('" + this.name + "')")
 
-		component += "<td align='left'>"
-				+ this.generateButton('doc_create', 'Create ', 'add.png', null,
-						"ODocumentView.create('" + this.name + "')") + "</td>";
+				+ this.generateButton('doc_reload', 'Reload', 'icon-refresh',
+						"btn", "ODocumentView.reload('" + this.name + "')")
 
-		component += "<td align='left'>"
-				+ this.generateButton('doc_delete', 'Delete ', 'delete.png',
-						null, "ODocumentView.remove('" + this.name + "')")
-				+ "</td>";
+				+ this.generateButton('doc_copy', 'Copy', 'icon-lock', "btn",
+						"ODocumentView.copy('" + this.name + "')")
 
-		component += "<td align='left'>"
-				+ this.generateButton('doc_reload', 'Reload ', 'refresh.png',
-						null, "ODocumentView.reload('" + this.name + "')")
-				+ "</td>";
+				+ this.generateButton('doc_undo', 'Undo', 'icon.repeat', "btn",
+						"ODocumentView.undo('" + this.name + "')")
 
-		component += "<td align='left'>"
-				+ this.generateButton('doc_copy', 'Copy ', 'copy.png', null,
-						"ODocumentView.copy('" + this.name + "')") + "</td>";
+				+ this.generateButton('doc_clear', 'Clear', 'icon-trash',
+						"btn", "ODocumentView.clear('" + this.name + "')");
+		component += "</div></div>";
+		// END COMMANDS
 
-		component += "<td align='left'>"
-				+ this.generateButton('doc_undo', 'Undo ', 'undo.png', null,
-						"ODocumentView.undo('" + this.name + "')") + "</td>";
-
-		component += "<td align='left'>"
-				+ this.generateButton('doc_clear', 'Clear ', 'clear.png', null,
-						"ODocumentView.clear('" + this.name + "')") + "</td>";
-
-		component += "<td width='200'></td>";
+		// BEGIN RECORD ATTRIBUTES
+		component += "<div class='row'>";
+		component += "<div class='span6'><form class='form-inline'>";
 
 		var fieldValue;
-		if (this.settings.showRid) {
-			if (this.doc != null)
-				fieldValue = this.doc['@rid'];
-			else
-				fieldValue = "-1:-1";
+		var currentClass;
 
-			component += "<td class='" + this.settings.ridLabelStyleClass
-					+ "'>@rid</td><td class='"
-					+ this.settings.ridValueStyleClass
-					+ "'><input id='doc__rid' class='"
-					+ this.settings.ridValueStyleClass + "' value='"
-					+ fieldValue + "'/></td>";
-		}
+		if (this.doc != null)
+			fieldValue = this.doc['@class'];
 
-		if (this.settings.showVersion) {
-			if (this.doc != null)
-				fieldValue = this.doc['@version'];
-			else
-				fieldValue = 0;
+		component += "<label>@class</label>"
+				+ generateClassSelect("doc__class", fieldValue);
 
-			component += "<td class='" + this.settings.versionLabelStyleClass
-					+ "'>@version</td><td class='"
-					+ this.settings.versionValueStyleClass
-					+ "'><input id='doc__version' class='"
-					+ this.settings.versionValueStyleClass
-					+ "'disabled value='" + fieldValue + "'/></td>";
-		}
+		if (this.doc != null)
+			fieldValue = this.doc['@rid'].substring(1);
+		else
+			fieldValue = "-1:-1";
 
-		component += "</tr></table></td></tr>";
+		component += "<label>@rid</label><input id='doc__rid' style='width: 60px;' value='"
+				+ fieldValue + "'/>";
 
-		component += "<tr><td><table id='" + this.componentId
-				+ "_fields' width='100%'><th>" + this.settings.fieldColumnName
-				+ "</th><th>" + this.settings.valueColumnName + "</th>";
+		if (this.doc != null)
+			fieldValue = this.doc['@version'];
+		else
+			fieldValue = 0;
+
+		component += "<label>@version</label><input id='doc__version' style='width: 40px;' disabled value='"
+				+ fieldValue + "'/>";
+
+		component += "</form></div></div>";
+
+		// FIELD BIG BLOCK
+		component += "<div class='row-fluid'><div class='well noborder'><div class='row noborder'><div class='span12'><div class='row-fluid noborder'>";
+
+		// HEADER
+		component += "<div class='span2 noborder'>"
+				+ this.settings.fieldColumnName + "</div>"
+				+ "<div class='span10 noborder'>"
+				+ this.settings.valueColumnName + "</div>";
+
+		component += "</div></div>";
+
+		// BEGIN FIELDS
+		component += "<div class='span12 noborder' id='" + this.componentId
+				+ "_fields'>";
+
+		var currentClass = orientServer.getClass(this.doc["@class"]);
+
 		var fieldValue;
 		this.fieldNum = 0;
 		if (this.doc != null)
@@ -187,21 +181,31 @@ function ODocumentView(name, component, doc, options) {
 					continue;
 
 				fieldValue = this.doc[fieldName];
-				component += this.renderRow(fieldName, fieldValue);
+				var fieldType = "string";
+				for (p in currentClass.properties) {
+					if (currentClass.properties[p].name == fieldName) {
+						fieldType = currentClass.properties[p].type;
+						break;
+					}
+				}
+				component += this.renderRow(fieldName, fieldValue, fieldType);
 			}
+		component += "</div>";
+		// END FIELDS
 
-		component += "</table></td></tr>";
+		// BEGIN ADD BUTTON
+		component += "<div class='offset10 span2 noborder'>"
+				+ this.generateButton('doc_addField', 'Add Field', 'icon-plus',
+						"btn", "ODocumentView.addField('" + this.name + "')")
+				+ "</div>";
+		// END ADD BUTTON
 
-		component += "<td align='right'>"
-				+ this.generateButton('doc_addField', 'Add Field', 'add.png',
-						null, "ODocumentView.addField('" + this.name + "')")
-				+ "</td></tr><tr>";
+		component += "</div><div>"
+				+ this.generateButton('doc_save', 'Save', 'icon-ok',
+						"btn btn-large btn-primary", "ODocumentView.save('"
+								+ this.name + "')") + "</div>";
 
-		component += "<td align='left'>"
-				+ this.generateButton('doc_save', 'Save ', 'save.png', null,
-						"ODocumentView.save('" + this.name + "')") + "</td>";
-
-		component += "</tr></table>";
+		component += "</div></div></div></div>";
 		script += "</script>";
 
 		this.component.html(component + script);
@@ -219,13 +223,23 @@ function ODocumentView(name, component, doc, options) {
 
 	ODocumentView.prototype.renderRow = function(fieldName, fieldValue,
 			fieldType) {
-		component = "<tr id='doc_" + this.fieldNum + "'><td class='"
-				+ this.settings.fieldStyleClass + "'><input id='doc_"
-				+ this.fieldNum + "_label' class='"
-				+ this.settings.fieldStyleClass + "' value='";
-		component += fieldName;
-		component += "'/></td><td>";
 
+		if (fieldType)
+			fieldType = fieldType.toLowerCase();
+
+		component = "<div class='row-fluid noborder' id='doc_" + this.fieldNum
+				+ "'>";
+
+		// BEGIN FIELD LABEL
+		component += "<div class='span2 noborder'><input id='doc_"
+				+ this.fieldNum
+				+ "_label' class='input-small' style='margin-left: 0px;' value='";
+		component += fieldName;
+		component += "'/></div>";
+		// END FIELD LABEL
+
+		// BEGIN FIELD VALUE
+		component += "<div class='span8 noborder' style='margin-left: 0px;'>";
 		if (this.settings.editable) {
 			component += "<" + this.settings.valueHtmlComponentType
 					+ " id='doc_" + this.fieldNum + "_value' ";
@@ -233,40 +247,54 @@ function ODocumentView(name, component, doc, options) {
 				component += " class='" + this.settings.valueStyleClass + "'";
 			component += ">";
 		}
+		// END FIELD VALUE
 
 		if (fieldValue == null)
 			component += 'null';
 		else if (fieldValue instanceof Array) {
-			fieldType = "a";
+			component += '[';
 			for (v in fieldValue) {
 				if (v > 0)
 					component += ', ';
 
-				if (typeof fieldValue[v] == 'object')
+				if (typeof fieldValue[v] == 'object' && fieldValue[v]['@rid'])
 					component += ('#' + fieldValue[v]['@rid']);
 				else
 					component += fieldValue[v];
 			}
-		} else if (typeof fieldValue == 'object') {
-			fieldType = "o";
+			component += ']';
+		} else if (typeof fieldValue == 'object' && fieldValue['@rid']) {
 			component += ('#' + fieldValue['@rid']);
 		} else {
-			fieldType = "";
 			component += fieldValue;
 		}
 
 		if (this.settings.editable) {
 			component += "</" + this.settings.valueHtmlComponentType + ">";
 		}
+		component += "</div>";
+		// END FIELD VALUE
 
-		component += "<input type='hidden' id='doc_" + this.fieldNum
-				+ "_type' value='" + fieldType + "'>";
+		// BEGIN FIELD TYPE + REMOVE
+		component += "<div class='span2 noborder' style='margin-left: 0px;'>";
+		component += "<select id='doc_" + this.fieldNum + "_type' class='"
+				+ this.settings.typeValueStyleClass + "'>";
+		for (i in this.types) {
+			var t = this.types[i];
+			component += "<option";
+			if (t == fieldType)
+				component += " selected = 'yes'";
+			component += ">" + t + "</option>";
+		}
+		component += "</select>";
 
-		component += "</td><td class='" + this.settings.fieldStyleClass + "'>";
 		component += this.generateButton('doc_' + this.fieldNum + '_remove',
-				'', 'remove.png', null, "ODocumentView.removeField('doc_"
+				'', 'icon-trash', null, "ODocumentView.removeField('doc_"
 						+ this.fieldNum + "')");
-		component += "</td></tr>";
+		component += "</div>";
+		// END FIELD TYPE + REMOVE
+
+		component += "</div>";
 
 		this.fieldNum++;
 
@@ -280,10 +308,9 @@ function ODocumentView(name, component, doc, options) {
 		if (styleClass)
 			out += " class='" + styleClass + "'";
 		out += ">";
-		out += label;
 		if (image != null)
-			out += "<img border='0' alt='" + label + "' src='images/" + image
-					+ "'/>";
+			out += "<i alt='" + label + "' class='" + image + "'/> ";
+		out += label;
 		out += "</button>";
 		return out;
 	}
@@ -302,15 +329,21 @@ function ODocumentView(name, component, doc, options) {
 			fieldName = $('#doc_' + i + '_label').val();
 
 			if (fieldName != null) {
-				fieldValue = $('#doc_' + i + '_value').val();
+				fieldValue = $('#doc_' + i + '_value').val().trim();
 				fieldType = $('#doc_' + i + '_type').val();
 
-				if (fieldType == 'a') {
+				if (fieldType == 'linkset' || fieldType == 'linklist'
+						|| fieldType == 'embeddedset'
+						|| fieldType == 'embeddedlist') {
 					object[fieldName] = [];
-					fieldValue = fieldValue.split(",");
-					for (fieldIndex in fieldValue) {
-						object[fieldName].push(jQuery
-								.trim(fieldValue[fieldIndex]));
+					if (fieldValue.length > 0) {
+						fieldValue = fieldValue.substring(1,
+								fieldValue.length - 1);
+						fieldValue = fieldValue.split(",");
+						for (fieldIndex in fieldValue) {
+							object[fieldName].push($
+									.trim(fieldValue[fieldIndex]));
+						}
 					}
 				} else {
 					if (isNaN(fieldValue))
@@ -381,7 +414,8 @@ function ODocumentView(name, component, doc, options) {
 
 			if (!found)
 				component.append(this.renderRow(
-						selectedClass.properties[p].name, ""));
+						selectedClass.properties[p].name, "",
+						selectedClass.properties[p].type));
 		}
 	}
 
@@ -413,6 +447,11 @@ function ODocumentView(name, component, doc, options) {
 		return rid;
 	}
 
+	ODocumentView.prototype.graph = function() {
+		if (selectedObject != null)
+			displayGraph(selectedObject);
+	}
+
 	ODocumentView.prototype.clear = function() {
 		var i = 0;
 		var fieldName;
@@ -430,7 +469,7 @@ function ODocumentView(name, component, doc, options) {
 	ODocumentView.addField = function(instanceName) {
 		var instance = ODocumentViewInstances[instanceName];
 		$('#' + instance.getComponentId() + "_fields").append(
-				instance.renderRow("", ""));
+				instance.renderRow("", "", "string"));
 	}
 
 	ODocumentView.removeField = function(id) {
@@ -455,6 +494,10 @@ function ODocumentView(name, component, doc, options) {
 
 	ODocumentView.clear = function(instanceName) {
 		return ODocumentViewInstances[instanceName].clear();
+	}
+
+	ODocumentView.graph = function(instanceName) {
+		return ODocumentViewInstances[instanceName].graph();
 	}
 
 	ODocumentView.undo = function(instanceName) {

@@ -37,7 +37,6 @@ public class OStorageConfigurationSegment extends OStorageConfiguration {
 				fileTemplate.fileType, fileTemplate.maxSize, fileTemplate.fileIncrementSize));
 	}
 
-	@Override
 	public void close() throws IOException {
 		segment.close();
 	}
@@ -57,7 +56,7 @@ public class OStorageConfigurationSegment extends OStorageConfiguration {
 
 				// @COMPATIBILITY0.9.25
 				// CHECK FOR OLD VERSION OF DATABASE
-				final ORawBuffer rawRecord = storage.readRecord(CONFIG_RID, null, null);
+				final ORawBuffer rawRecord = storage.readRecord(CONFIG_RID, null, false, null);
 				if (rawRecord != null)
 					fromStream(rawRecord.buffer);
 
@@ -84,15 +83,19 @@ public class OStorageConfigurationSegment extends OStorageConfiguration {
 
 			final byte[] buffer = toStream();
 
-			final int requiredSpace = buffer.length + OBinaryProtocol.SIZE_INT;
-			if (segment.getFile().getFileSize() < requiredSpace)
-				segment.getFile().changeSize(requiredSpace);
+			final int len = buffer.length + OBinaryProtocol.SIZE_INT;
 
-			segment.getFile().allocateSpace(buffer.length + OBinaryProtocol.SIZE_INT);
+			if (len > segment.getFile().getFilledUpTo())
+				segment.getFile().allocateSpace(len - segment.getFile().getFilledUpTo());
+			
 			segment.getFile().writeInt(0, buffer.length);
 			segment.getFile().write(OBinaryProtocol.SIZE_INT, buffer);
 		} catch (Exception e) {
 			throw new OSerializationException("Error on update storage configuration", e);
 		}
+	}
+
+	public void synch() throws IOException {
+		segment.getFile().synch();
 	}
 }

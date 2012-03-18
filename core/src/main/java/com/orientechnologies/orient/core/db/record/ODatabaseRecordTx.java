@@ -15,20 +15,11 @@
  */
 package com.orientechnologies.orient.core.db.record;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map.Entry;
-import java.util.concurrent.Callable;
-
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.db.ODatabaseListener;
 import com.orientechnologies.orient.core.exception.OTransactionException;
 import com.orientechnologies.orient.core.id.ORID;
-import com.orientechnologies.orient.core.index.OIndex;
-import com.orientechnologies.orient.core.index.OIndexMVRBTreeAbstract;
 import com.orientechnologies.orient.core.record.ORecordInternal;
-import com.orientechnologies.orient.core.record.impl.ODocument;
-import com.orientechnologies.orient.core.storage.OStorageEmbedded;
 import com.orientechnologies.orient.core.tx.OTransaction;
 import com.orientechnologies.orient.core.tx.OTransaction.TXSTATUS;
 import com.orientechnologies.orient.core.tx.OTransaction.TXTYPE;
@@ -40,7 +31,8 @@ import com.orientechnologies.orient.core.tx.OTransactionOptimistic;
  * 
  */
 public class ODatabaseRecordTx extends ODatabaseRecordAbstract {
-	private OTransaction	currentTx;
+	public static final String	TYPE	= "record";
+	private OTransaction				currentTx;
 
 	public ODatabaseRecordTx(final String iURL, final byte iRecordType) {
 		super(iURL, iRecordType);
@@ -205,74 +197,39 @@ public class ODatabaseRecordTx extends ODatabaseRecordAbstract {
 	}
 
 	@Override
+	public ODatabaseRecord save(final ORecordInternal<?> iContent, final OPERATION_MODE iMode) {
+		return save(iContent, (String) null, iMode);
+	}
+
+	@Override
 	public ODatabaseRecord save(final ORecordInternal<?> iContent) {
-		return save(iContent, null);
+		return save(iContent, (String) null, OPERATION_MODE.SYNCHRONOUS);
 	}
 
 	@Override
 	public ODatabaseRecord save(final ORecordInternal<?> iContent, final String iClusterName) {
-		setCurrentDatabaseinThreadLocal();
-		currentTx.saveRecord(iContent, iClusterName);
+		return save(iContent, iClusterName, OPERATION_MODE.SYNCHRONOUS);
+	}
+
+	@Override
+	public ODatabaseRecord save(final ORecordInternal<?> iContent, final String iClusterName, final OPERATION_MODE iMode) {
+		currentTx.saveRecord(iContent, iClusterName, iMode);
 		return this;
 	}
 
 	@Override
 	public ODatabaseRecord delete(final ORecordInternal<?> iRecord) {
-		currentTx.deleteRecord(iRecord);
+		currentTx.deleteRecord(iRecord, OPERATION_MODE.SYNCHRONOUS);
+		return this;
+	}
+
+	@Override
+	public ODatabaseRecord delete(final ORecordInternal<?> iRecord, final OPERATION_MODE iMode) {
+		currentTx.deleteRecord(iRecord, iMode);
 		return this;
 	}
 
 	public void executeRollback(final OTransaction iTransaction) {
-	}
-
-	@SuppressWarnings("rawtypes")
-	public void executeCommit() {
-		if (!(getStorage() instanceof OStorageEmbedded))
-			getStorage().commit(currentTx);
-		else {
-			final List<String> involvedIndexes = currentTx.getInvolvedIndexes();
-
-			// LOCK INVOLVED INDEXES
-			List<OIndexMVRBTreeAbstract<?>> lockedIndexes = null;
-			try {
-				if (involvedIndexes != null)
-					for (String indexName : involvedIndexes) {
-						final OIndexMVRBTreeAbstract<?> index = (OIndexMVRBTreeAbstract<?>) getMetadata().getIndexManager().getIndexInternal(
-								indexName);
-						if (lockedIndexes == null)
-							lockedIndexes = new ArrayList<OIndexMVRBTreeAbstract<?>>();
-
-						index.acquireExclusiveLock();
-						lockedIndexes.add(index);
-					}
-
-				getStorage().callInLock(new Callable<Void>() {
-
-					public Void call() throws Exception {
-						getStorage().commit(currentTx);
-
-						// COMMIT INDEX CHANGES
-						final ODocument indexEntries = currentTx.getIndexChanges();
-						if (indexEntries != null) {
-							for (Entry<String, Object> indexEntry : indexEntries) {
-								final OIndex<?> index = getMetadata().getIndexManager().getIndexInternal(indexEntry.getKey());
-								index.commit((ODocument) indexEntry.getValue());
-							}
-						}
-						return null;
-					}
-
-				}, true);
-
-			} finally {
-				// RELEASE INDEX LOCKS IF ANY
-				if (lockedIndexes != null)
-					// DON'T USE GENERICS TO AVOID OpenJDK CRASH :-(
-					for (OIndexMVRBTreeAbstract index : lockedIndexes) {
-						index.releaseExclusiveLock();
-					}
-			}
-		}
 	}
 
 	protected void checkTransaction() {
@@ -297,6 +254,10 @@ public class ODatabaseRecordTx extends ODatabaseRecordAbstract {
 
 	public boolean existsUserObjectByRID(final ORID iRID) {
 		return true;
+	}
+
+	public String getType() {
+		return TYPE;
 	}
 
 	public void setDefaultTransactionMode() {

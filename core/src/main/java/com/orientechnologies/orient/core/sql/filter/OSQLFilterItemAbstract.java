@@ -33,10 +33,10 @@ import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.exception.OCommandExecutionException;
 import com.orientechnologies.orient.core.exception.OQueryParsingException;
 import com.orientechnologies.orient.core.exception.ORecordNotFoundException;
-import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.record.impl.ODocument;
+import com.orientechnologies.orient.core.record.impl.ODocumentHelper;
 import com.orientechnologies.orient.core.serialization.serializer.OStringSerializerHelper;
 
 /**
@@ -124,10 +124,10 @@ public abstract class OSQLFilterItemAbstract implements OSQLFilterItem {
 						ioResult = ioResult != null ? ioResult.toString().length() : 0;
 
 					else if (operator == OSQLFilterFieldOperator.TOUPPERCASE.id)
-						ioResult = ioResult != null ? ioResult.toString().toUpperCase() : 0;
+						ioResult = ioResult != null ? ioResult.toString().toUpperCase() : null;
 
 					else if (operator == OSQLFilterFieldOperator.TOLOWERCASE.id)
-						ioResult = ioResult != null ? ioResult.toString().toLowerCase() : 0;
+						ioResult = ioResult != null ? ioResult.toString().toLowerCase() : null;
 
 					else if (operator == OSQLFilterFieldOperator.TRIM.id)
 						ioResult = ioResult != null ? ioResult.toString().trim() : null;
@@ -137,24 +137,22 @@ public abstract class OSQLFilterItemAbstract implements OSQLFilterItem {
 
 							if (ioResult instanceof String) {
 								try {
-									ioResult = new ODocument(ODatabaseRecordThreadLocal.INSTANCE.get(), new ORecordId((String) ioResult));
+									ioResult = new ODocument(new ORecordId((String) ioResult));
 								} catch (Exception e) {
 									OLogManager.instance().error(this, "Error on reading rid with value '%s'", null, ioResult);
 									ioResult = null;
 								}
-							} else if (ioResult instanceof ORID)
-								ioResult = new ODocument(ODatabaseRecordThreadLocal.INSTANCE.get(), (ORID) ioResult);
-							else if (ioResult instanceof ORecord<?>)
-								ioResult = (ODocument) ioResult;
+							} else if (ioResult instanceof OIdentifiable)
+								ioResult = ((OIdentifiable) ioResult).getRecord();
 
 							if (ioResult != null) {
 								if (OMultiValue.isMultiValue(ioResult)) {
 									final List<Object> newColl = new ArrayList<Object>();
 									for (Object o : OMultiValue.getMultiValueIterable(ioResult)) {
-										if (o instanceof ODocument)
+										if (o instanceof OIdentifiable)
 											try {
-												final ODocument doc = (ODocument) o;
-												final Object v = doc.rawField(op.value.get(0));
+												final OIdentifiable doc = (OIdentifiable) o;
+												final Object v = ODocumentHelper.getIdentifiableValue(doc, op.value.get(0));
 
 												if (v != null)
 													if (OMultiValue.isMultiValue(v))
@@ -287,7 +285,8 @@ public abstract class OSQLFilterItemAbstract implements OSQLFilterItem {
 			for (OPair<Integer, List<String>> op : operationsChain) {
 				buffer.append('.');
 				buffer.append(OSQLFilterFieldOperator.getById(op.getKey()));
-				buffer.append(op.getValue());
+				if (op.getValue() != null)
+					buffer.append(op.getValue());
 			}
 		}
 		return buffer.toString();

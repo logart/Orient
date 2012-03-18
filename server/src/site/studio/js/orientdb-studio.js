@@ -17,7 +17,7 @@
 // GLOBAL VARIABLES
 var queryEditor;
 var commandEditor;
-var selectedObject;
+var graphEditor;
 
 function startTimer() {
 	startTime = new Date().getTime();
@@ -52,9 +52,54 @@ function formatServerURL() {
 	$('#rawServer').html($('#server').val() + "/");
 }
 
-jQuery(document).ready(function() {
-	jQuery(document).ajaxError(function(event, request, settings, err) {
-		jQuery("#output").val("Error: " + request.responseText);
+function getRequestParams(s) {
+	if (s == null) {
+		s = document.location.search;
+		if (s == null || s == '') {
+			s = document.location.hash;
+		}
+	}
+	if (s.match(/^\?/) || s.match(/^#/)) {
+		s = s.substring(1);
+	}
+	var strParams = s.split('&');
+	var params = {};
+	var i = 0;
+	for (i in strParams) {
+		var name = strParams[i];
+		var value = true;
+		var pos = name.indexOf('=');
+		if (pos > 0) {
+			value = decodeURIComponent(name.substring(pos + 1));
+			name = name.substring(0, pos);
+		}
+		params[name] = value;
+	}
+	return params;
+};
+
+function getRequestParam(name, string) {
+	var params = getRequestParams(string);
+	return params[name] || "";
+}
+
+function generateClassSelect(id, selectedClass) {
+	var classes = "<select id='" + id + "'>";
+	for (cls in databaseInfo['classes']) {
+		classes += "<option";
+		if (selectedClass && databaseInfo['classes'][cls].name == selectedClass) {
+			currentClass = databaseInfo['classes'][cls];
+			classes += " selected = 'yes'";
+		}
+		classes += ">" + databaseInfo['classes'][cls].name + "</option>";
+	}
+	classes += "</select>";
+	return classes;
+}
+
+$(document).ready(function() {
+	$(document).ajaxError(function(event, request, settings, err) {
+		$("#output").val("Error: " + request.responseText);
 	});
 
 	$('#header').hide();
@@ -65,7 +110,7 @@ jQuery(document).ready(function() {
 		$('#rawDatabase').val($("#database").val());
 	});
 
-	jQuery("#output").val(jQuery.trim(jQuery("#output").val()));
+	$("#output").val($.trim($("#output").val()));
 
 	$("#tabs-main").hide();
 	$("#buttonDisconnect").hide();

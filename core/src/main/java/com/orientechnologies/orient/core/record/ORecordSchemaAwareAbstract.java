@@ -36,25 +36,6 @@ public abstract class ORecordSchemaAwareAbstract<T> extends ORecordAbstract<T> i
 	public ORecordSchemaAwareAbstract() {
 	}
 
-	@Override
-	public ORecordAbstract<T> save() {
-		if (_clazz != null)
-			return save(getDatabase().getClusterNameById(_clazz.getDefaultClusterId()));
-
-		return super.save();
-	}
-
-	@Override
-	public ORecordAbstract<T> save(final String iClusterName) {
-		// OSerializationThreadLocal.INSTANCE.get().clear();
-		// try {
-		validate();
-		return super.save(iClusterName);
-		// } finally {
-		// OSerializationThreadLocal.INSTANCE.get().clear();
-		// }
-	}
-
 	/**
 	 * Validates the record following the declared constraints defined in schema such as mandatory, notNull, min, max, regexp, etc. If
 	 * the schema is not defined for the current class or there are not constraints then the validation is ignored.
@@ -70,10 +51,20 @@ public abstract class ORecordSchemaAwareAbstract<T> extends ORecordAbstract<T> i
 		checkForLoading();
 		checkForFields();
 
-		if (_clazz != null)
+		if (_clazz != null) {
+			if (_clazz.isStrictMode()) {
+				// CHECK IF ALL FIELDS ARE DEFINED
+				for (String f : fieldNames()) {
+					if (_clazz.getProperty(f) == null)
+						throw new OValidationException("Found additional field '" + f + "'. It cannot be added because the schema class '"
+								+ _clazz.getName() + "' is defined as STRICT");
+				}
+			}
+
 			for (OProperty p : _clazz.properties()) {
 				validateField(this, p);
 			}
+		}
 	}
 
 	public OClass getSchemaClass() {
@@ -292,10 +283,5 @@ public abstract class ORecordSchemaAwareAbstract<T> extends ORecordAbstract<T> i
 				throw new OValidationException("The field '" + iRecord.getClassName() + "." + p.getName() + "' contains more items than "
 						+ max + " requested");
 		}
-	}
-
-	protected void checkForLoading() {
-		if (_status == ORecordElement.STATUS.NOT_LOADED && ODatabaseRecordThreadLocal.INSTANCE.isDefined())
-			reload(null, true);
 	}
 }

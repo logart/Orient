@@ -18,6 +18,7 @@ package com.orientechnologies.orient.server.network.protocol.http.command;
 import java.io.IOException;
 
 import com.orientechnologies.orient.server.OServerMain;
+import com.orientechnologies.orient.server.config.OServerConfiguration;
 import com.orientechnologies.orient.server.network.protocol.http.OHttpRequest;
 import com.orientechnologies.orient.server.network.protocol.http.OHttpUtils;
 
@@ -25,7 +26,6 @@ import com.orientechnologies.orient.server.network.protocol.http.OHttpUtils;
  * Server based authenticated commands. Authenticates against the OrientDB server users found in configuration.
  * 
  * @author Luca Garulli
- * 
  */
 public abstract class OServerCommandAuthenticatedServerAbstract extends OServerCommandAbstract {
 
@@ -40,26 +40,46 @@ public abstract class OServerCommandAuthenticatedServerAbstract extends OServerC
 
 	@Override
 	public boolean beforeExecute(final OHttpRequest iRequest) throws IOException {
-		if (iRequest.authorization == null || SESSIONID_LOGOUT.equals(iRequest.sessionId)) {
-			sendAuthorizationRequest(iRequest);
-			return false;
-		} else
-			return authenticate(iRequest);
+		return authenticate(iRequest, true);
 	}
 
-	private boolean authenticate(final OHttpRequest iRequest) throws IOException {
-		if (iRequest.authorization != null) {
-			String[] authParts = iRequest.authorization.split(":");
+	protected boolean authenticate(final OHttpRequest iRequest, final boolean iAskForAuthentication) throws IOException {
+		if (checkGuestAccess())
+			// GUEST ACCESSES TO THE RESOURCE: OK ALSO WITHOUT AN AUTHENTICATION
+			return true;
 
+		if (iAskForAuthentication)
+			if (iRequest.authorization == null || SESSIONID_LOGOUT.equals(iRequest.sessionId)) {
+				// NO AUTHENTICATION AT ALL
+				sendAuthorizationRequest(iRequest);
+				return false;
+			}
+
+		if (iRequest.authorization != null) {
+			// GET CREDENTIALS
+			final String[] authParts = iRequest.authorization.split(":");
 			if (authParts.length == 2 && OServerMain.server().authenticate(authParts[0], authParts[1], resource))
+				// AUTHORIZED
 				return true;
 		}
 
-		sendAuthorizationRequest(iRequest);
+		// NON AUTHORIZED FOR RESOURCE
+		sendNotAuthorizedResponse(iRequest);
 		return false;
 	}
 
-	private void sendAuthorizationRequest(final OHttpRequest iRequest) throws IOException {
+	protected boolean checkGuestAccess() {
+		return OServerMain.server().authenticate(OServerConfiguration.SRV_ROOT_GUEST, null, resource);
+	}
+
+	protected void sendNotAuthorizedResponse(final OHttpRequest iRequest) throws IOException {
+		// UNAUTHORIZED
+		iRequest.sessionId = SESSIONID_UNAUTHORIZED;
+		sendTextContent(iRequest, OHttpUtils.STATUS_FORBIDDEN_CODE, OHttpUtils.STATUS_FORBIDDEN_DESCRIPTION,
+				"WWW-Authenticate: Basic realm=\"OrientDB Server\"", OHttpUtils.CONTENT_TEXT_PLAIN, "403 Forbidden.", false);
+	}
+
+	protected void sendAuthorizationRequest(final OHttpRequest iRequest) throws IOException {
 		// UNAUTHORIZED
 		iRequest.sessionId = SESSIONID_UNAUTHORIZED;
 		sendTextContent(iRequest, OHttpUtils.STATUS_AUTH_CODE, OHttpUtils.STATUS_AUTH_DESCRIPTION,

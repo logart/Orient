@@ -305,8 +305,10 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
 				for (final Iterator<OMVRBTreeEntryPersistent<K, V>> it = entryPoints.values().iterator(); it.hasNext();) {
 					final OMVRBTreeEntryPersistent<K, V> currentNode = it.next();
 
-					// JUMP THE FIRST (1 cannot never be the % of distance) THE LAST, ROOT AND LAST USED
-					if (currentNode != root && currentNode != lastSearchNode && it.hasNext())
+					//JUMP THE FIRST (1 cannot never be the % of distance) THE LAST, ROOT AND LAST USED
+					//RECORDS THAT WERE CREATED INSIDE OF TRANSACTION CAN'T BE REMOVED TILL COMMIT
+					if (currentNode != root && currentNode != lastSearchNode &&
+									!currentNode.dataProvider.getIdentity().isTemporary() && it.hasNext())
 						if (++currNode % distance != 0) {
 							// REMOVE THE NODE
 							entryPointsToRemove.add(currentNode);
@@ -816,10 +818,18 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
 	 * Removes the node also from the memory.
 	 */
 	@Override
-	protected void removeNode(final OMVRBTreeEntry<K, V> p) {
-		removeNodeFromMemory((OMVRBTreeEntryPersistent<K, V>) p);
-		((OMVRBTreeEntryPersistent<K, V>) p).getProvider().delete();
-		super.removeNode(p);
+	protected OMVRBTreeEntry<K, V> removeNode(final OMVRBTreeEntry<K, V> p) {
+    final  OMVRBTreeEntryPersistent<K, V> removed = (OMVRBTreeEntryPersistent<K, V>) super.removeNode( p );
+
+    removeNodeFromMemory(removed);
+
+    //this prevents NPE in case if tree contains single node and it was deleted inside of super.removeNode method.
+    if(removed.getProvider() != null)
+      removed.getProvider().delete();
+
+    //prevent record saving if it has been deleted.
+    recordsToCommit.remove( removed );
+    return removed;
 	}
 
 	/**

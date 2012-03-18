@@ -17,7 +17,6 @@ package com.orientechnologies.orient.client.remote;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -37,6 +36,7 @@ import com.orientechnologies.orient.core.storage.ORecordCallback;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.tx.OTransaction;
 import com.orientechnologies.orient.enterprise.channel.binary.OChannelBinaryClient;
+import com.orientechnologies.orient.enterprise.channel.binary.ORemoteServerEventListener;
 
 /**
  * Wrapper of OStorageRemote that maintains the sessionId. It's bound to the ODatabase and allow to use the shared OStorageRemote.
@@ -132,35 +132,36 @@ public class OStorageRemoteThread implements OStorage {
 		return delegate.getClusterNames();
 	}
 
-	public long createRecord(final ORecordId iRid, final byte[] iContent, final byte iRecordType, ORecordCallback<Long> iCallback) {
+	public long createRecord(final ORecordId iRid, final byte[] iContent, final byte iRecordType, final int iMode,
+			ORecordCallback<Long> iCallback) {
 		delegate.setSessionId(sessionId);
-		return delegate.createRecord(iRid, iContent, iRecordType, null);
+		return delegate.createRecord(iRid, iContent, iRecordType, iMode, null);
 	}
 
-	public ORawBuffer readRecord(final ORecordId iRid, final String iFetchPlan, ORecordCallback<ORawBuffer> iCallback) {
+	public ORawBuffer readRecord(final ORecordId iRid, final String iFetchPlan, boolean iIgnoreCache, ORecordCallback<ORawBuffer> iCallback) {
 		delegate.setSessionId(sessionId);
-		return delegate.readRecord(iRid, iFetchPlan, null);
+		return delegate.readRecord(iRid, iFetchPlan, iIgnoreCache, null);
 	}
 
-	public int updateRecord(final ORecordId iRid, final byte[] iContent, final int iVersion, final byte iRecordType,
+	public int updateRecord(final ORecordId iRid, final byte[] iContent, final int iVersion, final byte iRecordType, final int iMode,
 			ORecordCallback<Integer> iCallback) {
 		delegate.setSessionId(sessionId);
-		return delegate.updateRecord(iRid, iContent, iVersion, iRecordType, null);
+		return delegate.updateRecord(iRid, iContent, iVersion, iRecordType, iMode, null);
 	}
 
-	public String toString() {
+	public boolean deleteRecord(final ORecordId iRid, final int iVersion, final int iMode, ORecordCallback<Boolean> iCallback) {
 		delegate.setSessionId(sessionId);
-		return delegate.toString();
-	}
-
-	public boolean deleteRecord(final ORecordId iRid, final int iVersion, ORecordCallback<Boolean> iCallback) {
-		delegate.setSessionId(sessionId);
-		return delegate.deleteRecord(iRid, iVersion, null);
+		return delegate.deleteRecord(iRid, iVersion, iMode, null);
 	}
 
 	public long count(final int iClusterId) {
 		delegate.setSessionId(sessionId);
 		return delegate.count(iClusterId);
+	}
+
+	public String toString() {
+		delegate.setSessionId(sessionId);
+		return delegate.toString();
 	}
 
 	public long[] getClusterDataRange(final int iClusterId) {
@@ -181,11 +182,6 @@ public class OStorageRemoteThread implements OStorage {
 	public long count(final int[] iClusterIds) {
 		delegate.setSessionId(sessionId);
 		return delegate.count(iClusterIds);
-	}
-
-	public long count(final String iClassName) {
-		delegate.setSessionId(sessionId);
-		return delegate.count(iClassName);
 	}
 
 	public Object command(final OCommandRequestText iCommand) {
@@ -282,7 +278,7 @@ public class OStorageRemoteThread implements OStorage {
 		return delegate.isPermanentRequester();
 	}
 
-	public void updateClusterConfiguration(final byte[] iContent) {
+	public void updateClusterConfiguration(final ODocument iContent) {
 		delegate.setSessionId(sessionId);
 		delegate.updateClusterConfiguration(iContent);
 	}
@@ -336,18 +332,6 @@ public class OStorageRemoteThread implements OStorage {
 		return delegate.getClusterConfiguration();
 	}
 
-	public List<ORemoteServerEventListener> getRemoteServerEventListeners() {
-		return delegate.getRemoteServerEventListeners();
-	}
-
-	public void addRemoteServerEventListener(final ORemoteServerEventListener iListener) {
-		delegate.addRemoteServerEventListener(iListener);
-	}
-
-	public void removeRemoteServerEventListener(final ORemoteServerEventListener iListener) {
-		delegate.removeRemoteServerEventListener(iListener);
-	}
-
 	public void closeChannel(final OChannelBinaryClient network) {
 		delegate.closeChannel(network);
 	}
@@ -358,5 +342,21 @@ public class OStorageRemoteThread implements OStorage {
 
 	public <V> V callInLock(final Callable<V> iCallable, final boolean iExclusiveLock) {
 		return delegate.callInLock(iCallable, iExclusiveLock);
+	}
+
+	public ORemoteServerEventListener getRemoteServerEventListener() {
+		return delegate.getAsynchEventListener();
+	}
+
+	public void setRemoteServerEventListener(final ORemoteServerEventListener iListener) {
+		delegate.setAsynchEventListener(iListener);
+	}
+
+	public void removeRemoteServerEventListener() {
+		delegate.removeRemoteServerEventListener();
+	}
+
+	public static int getNextConnectionId() {
+		return sessionSerialId.decrementAndGet();
 	}
 }

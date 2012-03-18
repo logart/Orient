@@ -3,7 +3,6 @@ package com.orientechnologies.orient.test.database.speed;
 import java.util.HashSet;
 import java.util.Set;
 
-import com.orientechnologies.orient.core.index.OIndex;
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
@@ -12,6 +11,7 @@ import org.testng.annotations.Test;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORID;
+import com.orientechnologies.orient.core.index.OIndex;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.impl.ODocument;
@@ -25,14 +25,14 @@ public class LocalDocumentAndBinarySpeedTest {
 	private static final int		size								= 64000;
 	private static final int		count								= 10000;
 	private static final int		load								= 10000;
-	private OIndex<?> index;
+	private OIndex<?>						index;
 	private ODatabaseDocumentTx	database;
 
 	@BeforeClass
 	public void setUpClass() {
 		database = new ODatabaseDocumentTx(DEFAULT_DB_URL);
 		if (database.exists()) {
-			database.delete();
+			database.drop();
 			database.create();
 		} else {
 			database.create();
@@ -59,7 +59,7 @@ public class LocalDocumentAndBinarySpeedTest {
 				data[i] = (byte) (i % 255);
 			}
 
-			ODocument doc = new ODocument(database, "Chunk");
+			ODocument doc = new ODocument("Chunk");
 
 			for (int i = 0; i < count; i++) {
 				doc.reset();

@@ -17,8 +17,10 @@ package com.orientechnologies.orient.core.tx;
 
 import java.util.List;
 
+import com.orientechnologies.orient.core.db.ODatabaseComplex.OPERATION_MODE;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecordTx;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
+import com.orientechnologies.orient.core.db.record.ORecordOperation;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.index.OIndex;
 import com.orientechnologies.orient.core.record.ORecordInternal;
@@ -45,25 +47,25 @@ public interface OTransaction {
 
 	public ORecordInternal<?> loadRecord(ORID iRid, ORecordInternal<?> iRecord, String iFetchPlan);
 
-	public void saveRecord(ORecordInternal<?> iContent, String iClusterName);
+	public void saveRecord(ORecordInternal<?> iContent, String iClusterName, OPERATION_MODE iMode);
 
-	public void deleteRecord(ORecordInternal<?> iRecord);
+	public void deleteRecord(ORecordInternal<?> iRecord, OPERATION_MODE iMode);
 
 	public int getId();
 
 	public TXSTATUS getStatus();
 
-	public Iterable<? extends OTransactionRecordEntry> getCurrentRecordEntries();
+	public Iterable<? extends ORecordOperation> getCurrentRecordEntries();
 
-	public Iterable<? extends OTransactionRecordEntry> getAllRecordEntries();
+	public Iterable<? extends ORecordOperation> getAllRecordEntries();
 
-	public List<OTransactionRecordEntry> getRecordEntriesByClass(String iClassName);
+	public List<ORecordOperation> getRecordEntriesByClass(String iClassName);
 
-	public List<OTransactionRecordEntry> getRecordEntriesByClusterIds(int[] iIds);
+	public List<ORecordOperation> getRecordEntriesByClusterIds(int[] iIds);
 
 	public ORecordInternal<?> getRecord(ORID iRid);
 
-	public OTransactionRecordEntry getRecordEntry(ORID rid);
+	public ORecordOperation getRecordEntry(ORID rid);
 
 	public List<String> getInvolvedIndexes();
 

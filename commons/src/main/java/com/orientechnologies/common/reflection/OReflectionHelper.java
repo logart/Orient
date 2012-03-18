@@ -3,6 +3,9 @@ package com.orientechnologies.common.reflection;
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.net.JarURLConnection;
 import java.net.URL;
 import java.net.URLDecoder;
@@ -11,6 +14,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Map;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -32,22 +36,30 @@ public class OReflectionHelper {
 		ArrayList<File> directories = new ArrayList<File>();
 		try {
 			// Ask for all resources for the path
-			Enumeration<URL> resources = iClassLoader.getResources(iPackageName.replace('.', '/'));
-			while (resources.hasMoreElements()) {
-				URL res = resources.nextElement();
-				if (res.getProtocol().equalsIgnoreCase("jar")) {
-					JarURLConnection conn = (JarURLConnection) res.openConnection();
-					JarFile jar = conn.getJarFile();
-					for (JarEntry e : Collections.list(jar.entries())) {
+			final String packageUrl = iPackageName.replace('.', '/');
+			Enumeration<URL> resources = iClassLoader.getResources(packageUrl);
+			if (!resources.hasMoreElements()) {
+				resources = iClassLoader.getResources(packageUrl + CLASS_EXTENSION);
+				if (resources.hasMoreElements()) {
+					throw new IllegalArgumentException(iPackageName + " does not appear to be a valid package but a class");
+				}
+			} else {
+				while (resources.hasMoreElements()) {
+					URL res = resources.nextElement();
+					if (res.getProtocol().equalsIgnoreCase("jar")) {
+						JarURLConnection conn = (JarURLConnection) res.openConnection();
+						JarFile jar = conn.getJarFile();
+						for (JarEntry e : Collections.list(jar.entries())) {
 
-						if (e.getName().startsWith(iPackageName.replace('.', '/')) && e.getName().endsWith(CLASS_EXTENSION)
-								&& !e.getName().contains("$")) {
-							String className = e.getName().replace("/", ".").substring(0, e.getName().length() - 6);
-							classes.add(Class.forName(className));
+							if (e.getName().startsWith(iPackageName.replace('.', '/')) && e.getName().endsWith(CLASS_EXTENSION)
+									&& !e.getName().contains("$")) {
+								String className = e.getName().replace("/", ".").substring(0, e.getName().length() - 6);
+								classes.add(Class.forName(className));
+							}
 						}
-					}
-				} else
-					directories.add(new File(URLDecoder.decode(res.getPath(), "UTF-8")));
+					} else
+						directories.add(new File(URLDecoder.decode(res.getPath(), "UTF-8")));
+				}
 			}
 		} catch (NullPointerException x) {
 			throw new ClassNotFoundException(iPackageName + " does not appear to be " + "a valid package (Null pointer exception)");
@@ -133,5 +145,46 @@ public class OReflectionHelper {
 		}
 
 		return classList;
+	}
+
+	/**
+	 * Returns the declared generic types of a class.
+	 * 
+	 * @param iClass
+	 *          Class to examine
+	 * @return The array of Type if any, otherwise null
+	 */
+	public static Type[] getGenericTypes(final Class<?> iClass) {
+		final Type genericType = iClass.getGenericInterfaces()[0];
+		if (genericType != null && genericType instanceof ParameterizedType) {
+			final ParameterizedType pt = (ParameterizedType) genericType;
+			if (pt.getActualTypeArguments() != null && pt.getActualTypeArguments().length > 1)
+				return pt.getActualTypeArguments();
+		}
+		return null;
+	}
+
+	/**
+	 * Returns the generic class of multi-value objects.
+	 * 
+	 * @param p
+	 *          Field to examine
+	 * @return The Class<?> of generic type if any, otherwise null
+	 */
+	public static Class<?> getGenericMultivalueType(final Field p) {
+		if (p.getType() instanceof Class<?>) {
+			final Type genericType = p.getGenericType();
+			if (genericType != null && genericType instanceof ParameterizedType) {
+				final ParameterizedType pt = (ParameterizedType) genericType;
+				if (pt.getActualTypeArguments() != null && pt.getActualTypeArguments().length > 0) {
+					if (((Class<?>) pt.getRawType()).isAssignableFrom(Map.class)) {
+						if (pt.getActualTypeArguments()[1] instanceof Class<?>)
+							return (Class<?>) pt.getActualTypeArguments()[1];
+					} else if (pt.getActualTypeArguments()[0] instanceof Class<?>)
+						return (Class<?>) pt.getActualTypeArguments()[0];
+				}
+			}
+		}
+		return null;
 	}
 }

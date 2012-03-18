@@ -19,8 +19,10 @@ import java.util.Collection;
 import java.util.List;
 
 import com.orientechnologies.common.exception.OException;
+import com.orientechnologies.orient.core.db.ODatabaseComplex.OPERATION_MODE;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecordTx;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
+import com.orientechnologies.orient.core.db.record.ORecordOperation;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.index.OIndex;
@@ -61,9 +63,9 @@ public class OTransactionNoTx extends OTransactionAbstract {
 	/**
 	 * Update the record.
 	 */
-	public void saveRecord(final ORecordInternal<?> iRecord, final String iClusterName) {
+	public void saveRecord(final ORecordInternal<?> iRecord, final String iClusterName, final OPERATION_MODE iMode) {
 		try {
-			database.executeSaveRecord(iRecord, iClusterName, iRecord.getVersion(), iRecord.getRecordType());
+			database.executeSaveRecord(iRecord, iClusterName, iRecord.getVersion(), iRecord.getRecordType(), iMode);
 		} catch (Exception e) {
 			// REMOVE IT FROM THE CACHE TO AVOID DIRTY RECORDS
 			final ORecordId rid = (ORecordId) iRecord.getIdentity();
@@ -72,16 +74,19 @@ public class OTransactionNoTx extends OTransactionAbstract {
 
 			if (e instanceof RuntimeException)
 				throw (RuntimeException) e;
-			new OException(e);
+			throw new OException(e);
 		}
 	}
 
 	/**
-	 * Delete the record.
+	 * Deletes the record.
 	 */
-	public void deleteRecord(final ORecordInternal<?> iRecord) {
+	public void deleteRecord(final ORecordInternal<?> iRecord, final OPERATION_MODE iMode) {
+		if (!iRecord.getIdentity().isPersistent())
+			return;
+
 		try {
-			database.executeDeleteRecord(iRecord, iRecord.getVersion());
+			database.executeDeleteRecord(iRecord, iRecord.getVersion(), true, iMode);
 		} catch (Exception e) {
 			// REMOVE IT FROM THE CACHE TO AVOID DIRTY RECORDS
 			final ORecordId rid = (ORecordId) iRecord.getIdentity();
@@ -90,23 +95,23 @@ public class OTransactionNoTx extends OTransactionAbstract {
 
 			if (e instanceof RuntimeException)
 				throw (RuntimeException) e;
-			new OException(e);
+			throw new OException(e);
 		}
 	}
 
-	public Collection<OTransactionRecordEntry> getCurrentRecordEntries() {
+	public Collection<ORecordOperation> getCurrentRecordEntries() {
 		return null;
 	}
 
-	public Collection<OTransactionRecordEntry> getAllRecordEntries() {
+	public Collection<ORecordOperation> getAllRecordEntries() {
 		return null;
 	}
 
-	public List<OTransactionRecordEntry> getRecordEntriesByClass(String iClassName) {
+	public List<ORecordOperation> getRecordEntriesByClass(String iClassName) {
 		return null;
 	}
 
-	public List<OTransactionRecordEntry> getRecordEntriesByClusterIds(int[] iIds) {
+	public List<ORecordOperation> getRecordEntriesByClusterIds(int[] iIds) {
 		return null;
 	}
 
@@ -121,7 +126,7 @@ public class OTransactionNoTx extends OTransactionAbstract {
 		return null;
 	}
 
-	public OTransactionRecordEntry getRecordEntry(final ORID rid) {
+	public ORecordOperation getRecordEntry(final ORID rid) {
 		return null;
 	}
 

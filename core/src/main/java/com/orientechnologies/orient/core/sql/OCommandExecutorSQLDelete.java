@@ -65,24 +65,26 @@ public class OCommandExecutorSQLDelete extends OCommandExecutorSQLAbstract imple
 
 		int pos = OSQLHelper.nextWord(text, textUpperCase, 0, word, true);
 		if (pos == -1 || !word.toString().equals(OCommandExecutorSQLDelete.KEYWORD_DELETE))
-			throw new OCommandSQLParsingException("Keyword " + OCommandExecutorSQLDelete.KEYWORD_DELETE + " not found", text, 0);
+			throw new OCommandSQLParsingException("Keyword " + OCommandExecutorSQLDelete.KEYWORD_DELETE + " not found. Use "
+					+ getSyntax(), text, 0);
 
 		int oldPos = pos;
 		pos = OSQLHelper.nextWord(text, textUpperCase, oldPos, word, true);
 		if (pos == -1 || !word.toString().equals(KEYWORD_FROM))
-			throw new OCommandSQLParsingException("Keyword " + KEYWORD_FROM + " not found", text, oldPos);
+			throw new OCommandSQLParsingException("Keyword " + KEYWORD_FROM + " not found. Use " + getSyntax(), text, oldPos);
 
 		oldPos = pos;
 		pos = OSQLHelper.nextWord(text, textUpperCase, oldPos, word, true);
 		if (pos == -1)
-			throw new OCommandSQLParsingException("Invalid subject name. Expected cluster, class or index", text, oldPos);
+			throw new OCommandSQLParsingException("Invalid subject name. Expected cluster, class or index. Use " + getSyntax(), text,
+					oldPos);
 
 		final String subjectName = word.toString();
 
 		if (subjectName.startsWith(OCommandExecutorSQLAbstract.INDEX_PREFIX)) {
 			// INDEX
 			indexName = subjectName.substring(OCommandExecutorSQLAbstract.INDEX_PREFIX.length());
-			compiledFilter = OSQLEngine.getInstance().parseFromWhereCondition(text.substring(oldPos));
+			compiledFilter = OSQLEngine.getInstance().parseFromWhereCondition(text.substring(oldPos), context);
 		} else {
 			query = database.command(new OSQLAsynchQuery<ODocument>("select from " + subjectName + " " + text.substring(pos), this));
 		}
@@ -145,9 +147,16 @@ public class OCommandExecutorSQLDelete extends OCommandExecutorSQLAbstract imple
 	 */
 	public boolean result(final Object iRecord) {
 		final ORecordAbstract<?> record = (ORecordAbstract<?>) iRecord;
-		record.delete();
 
-		recordCount++;
-		return true;
+		if (record.getIdentity().isValid()) {
+			record.delete();
+			recordCount++;
+			return true;
+		}
+		return false;
+	}
+
+	public String getSyntax() {
+		return "DELETE FROM <Class>|cluster:<cluster [WHERE <condition>*]";
 	}
 }

@@ -25,11 +25,14 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import com.orientechnologies.common.parser.OStringParser;
+import com.orientechnologies.orient.core.command.OCommandContext;
 import com.orientechnologies.orient.core.command.OCommandToParse;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
+import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.exception.OCommandExecutionException;
 import com.orientechnologies.orient.core.exception.OQueryParsingException;
+import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.metadata.schema.OProperty;
 import com.orientechnologies.orient.core.record.ORecord;
@@ -37,9 +40,11 @@ import com.orientechnologies.orient.core.record.ORecordSchemaAware;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.serialization.serializer.OStringSerializerHelper;
 import com.orientechnologies.orient.core.sql.OCommandExecutorSQLAbstract;
+import com.orientechnologies.orient.core.sql.OCommandSQL;
 import com.orientechnologies.orient.core.sql.OSQLEngine;
 import com.orientechnologies.orient.core.sql.OSQLHelper;
 import com.orientechnologies.orient.core.sql.operator.OQueryOperator;
+import com.orientechnologies.orient.core.sql.operator.OQueryOperatorNot;
 
 /**
  * Parsed query. It's built once a query is parsed.
@@ -48,18 +53,20 @@ import com.orientechnologies.orient.core.sql.operator.OQueryOperator;
  * 
  */
 public class OSQLFilter extends OCommandToParse {
-	protected ODatabaseRecord								database;
-	protected List<String>									targetRecords;
-	protected Map<String, String>						targetClusters;
-	protected Map<OClass, String>						targetClasses;
-	protected String												targetIndex;
-	protected Set<OProperty>								properties	= new HashSet<OProperty>();
-	protected OSQLFilterCondition						rootCondition;
-	protected List<String>									recordTransformed;
-	protected List<OSQLFilterItemParameter>	parameterItems;
-	protected int														braces;
+	protected ODatabaseRecord										database;
+	protected Iterable<? extends OIdentifiable>	targetRecords;
+	protected Map<String, String>								targetClusters;
+	protected Map<OClass, String>								targetClasses;
+	protected String														targetIndex;
+	protected Set<OProperty>										properties	= new HashSet<OProperty>();
+	protected OSQLFilterCondition								rootCondition;
+	protected List<String>											recordTransformed;
+	protected List<OSQLFilterItemParameter>			parameterItems;
+	protected int																braces;
+	private OCommandContext											context;
 
-	public OSQLFilter(final String iText) {
+	public OSQLFilter(final String iText, final OCommandContext iContext) {
+		context = iContext;
 		try {
 			database = ODatabaseRecordThreadLocal.INSTANCE.get();
 			text = iText.trim();
@@ -89,7 +96,7 @@ public class OSQLFilter extends OCommandToParse {
 		}
 	}
 
-	public boolean evaluate(final ORecord<?> iRecord) {
+	public boolean evaluate(final ORecord<?> iRecord, final OCommandContext iContext) {
 		if (targetClasses != null) {
 			final OClass cls = targetClasses.keySet().iterator().next();
 			// CHECK IF IT'S PART OF THE REQUESTED CLASS
@@ -102,16 +109,15 @@ public class OSQLFilter extends OCommandToParse {
 		if (rootCondition == null)
 			return true;
 
-		return (Boolean) rootCondition.evaluate((ORecordSchemaAware<?>) iRecord);
+		return (Boolean) rootCondition.evaluate((ORecordSchemaAware<?>) iRecord, iContext);
 	}
 
+	@SuppressWarnings("unchecked")
 	private boolean extractTargets() {
 		jumpWhiteSpaces();
 
 		if (currentPos == -1)
 			throw new OQueryParsingException("No query target found", text, 0);
-
-		targetRecords = new ArrayList<String>();
 
 		final char c = text.charAt(currentPos);
 
@@ -120,11 +126,31 @@ public class OSQLFilter extends OCommandToParse {
 			final StringBuilder word = new StringBuilder();
 			currentPos = OSQLHelper.nextWord(text, textUpperCase, currentPos, word, true);
 
-			targetRecords.add(word.toString());
+			targetRecords = new ArrayList<OIdentifiable>();
+			((List<OIdentifiable>) targetRecords).add(new ORecordId(word.toString()));
 
+		} else if (c == '(') {
+			// SUB QUERY
+			final StringBuilder subText = new StringBuilder();
+			currentPos = OStringSerializerHelper.getEmbedded(text, currentPos, -1, subText);
+			final OCommandSQL subCommand = new OCommandSQL(subText.toString());
+			targetRecords = (Iterable<? extends OIdentifiable>) subCommand.execute();
+			final OCommandContext subContext = subCommand.getContext();
+
+			// MERGE THE CONTEXTS
+			if (context != null)
+				context.merge(subContext);
+			else
+				context = subContext;
 		} else if (c == OStringSerializerHelper.COLLECTION_BEGIN) {
 			// COLLECTION OF RIDS
-			currentPos = OStringSerializerHelper.getCollection(text, currentPos, targetRecords);
+			final List<String> rids = new ArrayList<String>();
+			currentPos = OStringSerializerHelper.getCollection(text, currentPos, rids);
+
+			targetRecords = new ArrayList<OIdentifiable>();
+			for (String rid : rids)
+				((List<OIdentifiable>) targetRecords).add(new ORecordId(rid));
+
 			if (currentPos > -1)
 				currentPos++;
 		} else {
@@ -217,9 +243,18 @@ public class OSQLFilter extends OCommandToParse {
 			return null;
 
 		// EXTRACT ITEMS
-		final Object left = extractConditionItem(1);
-		final OQueryOperator oper = extractConditionOperator();
-		final Object right = oper != null ? extractConditionItem(oper.expectedRightWords) : null;
+		Object left = extractConditionItem(true, 1);
+		final OQueryOperator oper;
+		final Object right;
+
+		if (left instanceof OQueryOperator && ((OQueryOperator) left).isUnary()) {
+			oper = (OQueryOperator) left;
+			left = extractConditionItem(false, 1);
+			right = null;
+		} else {
+			oper = extractConditionOperator();
+			right = oper != null ? extractConditionItem(false, oper.expectedRightWords) : null;
+		}
 
 		// CREATE THE CONDITION OBJECT
 		return new OSQLFilterCondition(left, oper, right);
@@ -258,7 +293,7 @@ public class OSQLFilter extends OCommandToParse {
 		throw new OQueryParsingException("Unknown operator " + word, text, currentPos);
 	}
 
-	private Object extractConditionItem(final int iExpectedWords) {
+	private Object extractConditionItem(final boolean iAllowOperator, final int iExpectedWords) {
 		final Object[] result = new Object[iExpectedWords];
 
 		for (int i = 0; i < iExpectedWords; ++i) {
@@ -276,7 +311,9 @@ public class OSQLFilter extends OCommandToParse {
 
 				if (!jumpWhiteSpaces() || text.charAt(currentPos) == ')')
 					braces--;
-				currentPos++;
+
+				if (currentPos > -1)
+					currentPos++;
 
 				result[i] = subCondition;
 			} else if (words[0].charAt(0) == OStringSerializerHelper.COLLECTION_BEGIN) {
@@ -288,7 +325,7 @@ public class OSQLFilter extends OCommandToParse {
 
 				if (stringItems.get(0).charAt(0) == OStringSerializerHelper.COLLECTION_BEGIN) {
 
-					List<List<Object>> coll = new ArrayList<List<Object>>();
+					final List<List<Object>> coll = new ArrayList<List<Object>>();
 					for (String stringItem : stringItems) {
 						final List<String> stringSubItems = new ArrayList<String>();
 						OStringSerializerHelper.getCollection(stringItem, 0, stringSubItems);
@@ -315,17 +352,27 @@ public class OSQLFilter extends OCommandToParse {
 			} else {
 
 				if (words[0].equals("NOT")) {
-					// GET THE NEXT VALUE
-					String[] nextWord = nextValue(true);
-					if (nextWord != null && nextWord.length == 2) {
-						words[1] = words[1] + " " + nextWord[1];
+					if (iAllowOperator)
+						return new OQueryOperatorNot();
+					else {
+						// GET THE NEXT VALUE
+						final String[] nextWord = nextValue(true);
+						if (nextWord != null && nextWord.length == 2) {
+							words[1] = words[1] + " " + nextWord[1];
 
-						if (words[1].endsWith(")"))
-							words[1] = words[1].substring(0, words[1].length() - 1);
+							if (words[1].endsWith(")"))
+								words[1] = words[1].substring(0, words[1].length() - 1);
+						}
 					}
 				}
 
-				result[i] = OSQLHelper.parseValue(this, this, words[1]);
+				if (words[1].endsWith(")")) {
+					final int openParenthesis = words[1].indexOf('(');
+					if (openParenthesis == -1)
+						words[1] = words[1].substring(0, words[1].length() - 1);
+				}
+
+				result[i] = OSQLHelper.parseValue(this, this, words[1], context);
 			}
 		}
 
@@ -335,7 +382,7 @@ public class OSQLFilter extends OCommandToParse {
 	private List<Object> convertCollectionItems(List<String> stringItems) {
 		List<Object> coll = new ArrayList<Object>();
 		for (String s : stringItems) {
-			coll.add(OSQLHelper.parseValue(this, this, s));
+			coll.add(OSQLHelper.parseValue(this, this, s, context));
 		}
 		return coll;
 	}
@@ -348,7 +395,7 @@ public class OSQLFilter extends OCommandToParse {
 		return targetClasses;
 	}
 
-	public List<String> getTargetRecords() {
+	public Iterable<? extends OIdentifiable> getTargetRecords() {
 		return targetRecords;
 	}
 
@@ -413,8 +460,8 @@ public class OSQLFilter extends OCommandToParse {
 				}
 			} else if (c == ' ' && openBraces == 0) {
 				break;
-			} else if (!Character.isLetter(c) && !Character.isDigit(c) && c != '.' && c != ':' && c != '-' && c != '_' && c != '+'
-					&& c != '@' && openBraces == 0 && openBraket == 0) {
+			} else if (!Character.isLetter(c) && !Character.isDigit(c) && c != '.' && c != '$' && c != ':' && c != '-' && c != '_'
+					&& c != '+' && c != '@' && openBraces == 0 && openBraket == 0) {
 				if (iAdvanceWhenNotFound)
 					currentPos++;
 				break;
@@ -455,16 +502,11 @@ public class OSQLFilter extends OCommandToParse {
 		if (parameterItems == null || iArgs == null || iArgs.size() == 0)
 			return;
 
-		if (iArgs.size() < parameterItems.size())
-			throw new OCommandExecutionException("Cannot execute because " + (parameterItems.size() - iArgs.size())
-					+ " parameter(s) are unbounded");
-
-		String paramName;
 		for (Entry<Object, Object> entry : iArgs.entrySet()) {
 			if (entry.getKey() instanceof Integer)
 				parameterItems.get(((Integer) entry.getKey())).setValue(entry.setValue(entry.getValue()));
 			else {
-				paramName = entry.getKey().toString();
+				String paramName = entry.getKey().toString();
 				for (OSQLFilterItemParameter value : parameterItems) {
 					if (value.getName().equalsIgnoreCase(paramName)) {
 						value.setValue(entry.getValue());

@@ -16,16 +16,27 @@
 package com.orientechnologies.orient.test.database.auto;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.testng.Assert;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Optional;
 import org.testng.annotations.Parameters;
 import org.testng.annotations.Test;
 
 import com.orientechnologies.orient.core.db.object.ODatabaseObjectPool;
 import com.orientechnologies.orient.core.db.object.ODatabaseObjectTx;
 import com.orientechnologies.orient.core.record.impl.ODocument;
+import com.orientechnologies.orient.core.serialization.serializer.object.OObjectSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.object.OObjectSerializerContext;
+import com.orientechnologies.orient.core.serialization.serializer.object.OObjectSerializerHelper;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 import com.orientechnologies.orient.test.domain.business.Address;
 import com.orientechnologies.orient.test.domain.business.City;
@@ -38,13 +49,55 @@ public class ObjectTreeTest {
 	protected long						startRecordNumber;
 	private long							beginCities;
 	private String						url;
+	protected int							serialized;
+	protected int							unserialized;
+
+	public class CustomClass {
+		private String								name;
+		private Long									age;
+		private CustomType						custom;
+		private List<CustomType>			customTypeList;
+		private Set<CustomType>				customTypeSet;
+		private Map<Long, CustomType>	customTypeMap;
+
+		public CustomClass(String iName, Long iAge, CustomType iCustom, List<CustomType> iCustomTypeList,
+				Set<CustomType> iCustomTypeSet, Map<Long, CustomType> iCustomTypeMap) {
+			name = iName;
+			age = iAge;
+			custom = iCustom;
+			customTypeList = iCustomTypeList;
+			customTypeSet = iCustomTypeSet;
+			customTypeMap = iCustomTypeMap;
+		}
+	}
+
+	public class CustomType {
+		public long	value;
+
+		public CustomType(Long iFieldValue) {
+			value = iFieldValue;
+		}
+	}
 
 	@Parameters(value = "url")
-	public ObjectTreeTest(String iURL) {
+	public ObjectTreeTest(@Optional(value = "memory:test") String iURL) {
 		url = iURL;
+	}
 
-		database = new ODatabaseObjectTx(iURL);
+	@AfterClass
+	public void close() {
+		database.close();
+	}
+
+	@BeforeClass
+	public void open() {
+		database = new ODatabaseObjectTx(url);
 		database.getEntityManager().registerEntityClasses("com.orientechnologies.orient.test.domain");
+		if ("memory:test".equals(database.getURL())) {
+			database.create();
+		} else {
+			database.open("admin", "admin");
+		}
 	}
 
 	@Test
@@ -61,8 +114,6 @@ public class ObjectTreeTest {
 
 	@Test
 	public void testPersonSaving() {
-		database.open("admin", "admin");
-
 		final long beginProfiles = database.countClusterElements("Profile");
 		beginCities = database.countClusterElements("City");
 
@@ -164,8 +215,47 @@ public class ObjectTreeTest {
 		}
 	}
 
-	@Test(dependsOnMethods = "testQueryMultiCircular")
-	public void close() {
-		database.close();
+	@Test
+	public void testCustomTypes() {
+		database.getEntityManager().registerEntityClass(CustomClass.class);
+
+		OObjectSerializerContext serializerContext = new OObjectSerializerContext();
+		serializerContext.bind(new OObjectSerializer<CustomType, Long>() {
+
+			public Long serializeFieldValue(Class<?> itype, CustomType iFieldValue) {
+				serialized++;
+				return iFieldValue.value;
+			}
+
+			public CustomType unserializeFieldValue(Class<?> itype, Long iFieldValue) {
+				unserialized++;
+				return new CustomType(iFieldValue);
+			}
+
+		});
+		OObjectSerializerHelper.bindSerializerContext(null, serializerContext);
+
+		database.getMetadata().getSchema().createClass("CustomClass");
+
+		List<CustomType> customTypesList = new ArrayList<CustomType>();
+		customTypesList.add(new CustomType(102L));
+
+		Set<CustomType> customTypeSet = new HashSet<CustomType>();
+		customTypeSet.add(new CustomType(103L));
+
+		Map<Long, CustomType> customTypeMap = new HashMap<Long, CustomType>();
+		customTypeMap.put(1L, new CustomType(104L));
+
+		CustomClass pojo = new CustomClass("test", 33L, new CustomType(101L), customTypesList, customTypeSet, customTypeMap);
+		// init counters
+		serialized = 0;
+		unserialized = 0;
+		database.save(pojo);
+		Assert.assertEquals(serialized, 4);
+		Assert.assertEquals(unserialized, 0);
+
+		database.reload(pojo);
+		Assert.assertEquals(serialized, 4);
+		Assert.assertEquals(unserialized, 4);
 	}
 }

@@ -21,6 +21,7 @@ import java.io.OutputStream;
 import java.util.List;
 
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
+import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.exception.ODatabaseException;
 import com.orientechnologies.orient.core.record.ORecord;
@@ -133,9 +134,9 @@ public class ORecordId implements ORID {
 			return true;
 		if (obj == null)
 			return false;
-		if (!(obj instanceof ORecordId))
+		if (!(obj instanceof OIdentifiable))
 			return false;
-		final ORecordId other = (ORecordId) obj;
+		final ORecordId other = (ORecordId) ((OIdentifiable) obj).getIdentity();
 		if (clusterId != other.clusterId)
 			return false;
 		if (clusterPosition != other.clusterPosition)
@@ -275,7 +276,13 @@ public class ORecordId implements ORID {
 		return this;
 	}
 
-	public ORecord<?> getRecord() {
-		return ODatabaseRecordThreadLocal.INSTANCE.get().load(this);
+	@SuppressWarnings("unchecked")
+	public <T extends ORecord<?>> T getRecord() {
+		final ODatabaseRecord db = ODatabaseRecordThreadLocal.INSTANCE.get();
+		if (db == null)
+			throw new ODatabaseException(
+					"No database found in current thread local space. If you manually control databases over threads assure to set the current database before to use it by calling: ODatabaseRecordThreadLocal.INSTANCE.set(db);");
+
+		return (T) db.load(this);
 	}
 }

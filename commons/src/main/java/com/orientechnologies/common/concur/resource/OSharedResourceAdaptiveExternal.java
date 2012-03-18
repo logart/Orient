@@ -22,8 +22,8 @@ package com.orientechnologies.common.concur.resource;
  * 
  */
 public class OSharedResourceAdaptiveExternal extends OSharedResourceAdaptive implements OSharedResource {
-	public OSharedResourceAdaptiveExternal(final boolean iConcurrent, final int iTimeout) {
-		super(iConcurrent, iTimeout);
+	public OSharedResourceAdaptiveExternal(final boolean iConcurrent, final int iTimeout, final boolean ignoreThreadInterruption) {
+		super(iConcurrent, iTimeout, ignoreThreadInterruption);
 	}
 
 	@Override
@@ -31,9 +31,17 @@ public class OSharedResourceAdaptiveExternal extends OSharedResourceAdaptive imp
 		super.acquireExclusiveLock();
 	}
 
+	public boolean tryAcquireExclusiveLock() {
+		return super.tryAcquireExclusiveLock();
+	}
+
 	@Override
 	public void acquireSharedLock() {
 		super.acquireSharedLock();
+	}
+
+	public boolean tryAcquireSharedLock() {
+		return super.tryAcquireSharedLock();
 	}
 
 	@Override

@@ -16,7 +16,6 @@
 package com.orientechnologies.orient.core.config;
 
 import java.io.IOException;
-import java.text.DateFormat;
 import java.text.DecimalFormatSymbols;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -75,7 +74,7 @@ public class OStorageConfiguration implements OSerializableStream {
 	 * @throws OSerializationException
 	 */
 	public OStorageConfiguration load() throws OSerializationException {
-		final byte[] record = storage.readRecord(CONFIG_RID, null, null).buffer;
+		final byte[] record = storage.readRecord(CONFIG_RID, null, false, null).buffer;
 
 		if (record == null)
 			throw new OStorageException("Cannot load database's configuration. The database seems to be corrupted.");
@@ -86,7 +85,7 @@ public class OStorageConfiguration implements OSerializableStream {
 
 	public void update() throws OSerializationException {
 		final byte[] record = toStream();
-		storage.updateRecord(CONFIG_RID, record, -1, ORecordBytes.RECORD_TYPE, null);
+		storage.updateRecord(CONFIG_RID, record, -1, ORecordBytes.RECORD_TYPE, 0, null);
 	}
 
 	public boolean isEmpty() {
@@ -100,13 +99,13 @@ public class OStorageConfiguration implements OSerializableStream {
 		return localeInstance;
 	}
 
-	public DateFormat getDateFormatInstance() {
+	public SimpleDateFormat getDateFormatInstance() {
 		SimpleDateFormat dateFormatInstance = new SimpleDateFormat(dateFormat);
 		dateFormatInstance.setLenient(false);
 		return dateFormatInstance;
 	}
 
-	public DateFormat getDateTimeFormatInstance() {
+	public SimpleDateFormat getDateTimeFormatInstance() {
 		SimpleDateFormat dateTimeFormatInstance = new SimpleDateFormat(dateTimeFormat);
 		dateTimeFormatInstance.setLenient(false);
 		return dateTimeFormatInstance;
@@ -355,10 +354,26 @@ public class OStorageConfiguration implements OSerializableStream {
 		iBuffer.append(iValue != null ? iValue.toString() : ' ');
 	}
 
+	public void create() throws IOException {
+		storage.createRecord(CONFIG_RID, new byte[] { 0, 0, 0, 0 }, ORecordBytes.RECORD_TYPE, (byte) 0, null);
+	}
+
+	public void synch() throws IOException {
+	}
+
 	public void close() throws IOException {
 	}
 
-	public void create() throws IOException {
-		storage.createRecord(CONFIG_RID, new byte[] { 0, 0, 0, 0 }, ORecordBytes.RECORD_TYPE, null);
+	public void setCluster(final OStorageClusterConfiguration config) {
+		while (config.getId() >= clusters.size())
+			clusters.add(null);
+		clusters.set(config.getId(), config);
+	}
+
+	public void dropCluster(final int iClusterId) {
+		if (iClusterId < clusters.size()) {
+			clusters.set(iClusterId, null);
+			update();
+		}
 	}
 }

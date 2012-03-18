@@ -18,9 +18,11 @@ package com.orientechnologies.common.collection;
 import java.lang.reflect.Array;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
+import java.util.Set;
 
 import com.orientechnologies.common.log.OLogManager;
 
@@ -59,7 +61,7 @@ public class OMultiValue {
 	 * 
 	 * @param iObject
 	 *          Multi-value object (array, collection or map)
-	 * @return
+	 * @return the size of the multi value object
 	 */
 	public static int getSize(final Object iObject) {
 		if (iObject == null)
@@ -94,15 +96,60 @@ public class OMultiValue {
 		try {
 			if (iObject instanceof Collection<?>)
 				return ((Collection<Object>) iObject).iterator().next();
-			if (iObject instanceof Map<?, ?>)
+			else if (iObject instanceof Map<?, ?>)
 				return ((Map<?, Object>) iObject).values().iterator().next();
-			if (iObject.getClass().isArray())
+			else if (iObject.getClass().isArray())
 				return Array.get(iObject, 0);
 		} catch (Exception e) {
 			// IGNORE IT
 			OLogManager.instance().debug(iObject, "Error on reading the first item of the Multi-value field '%s'", iObject);
 		}
 
+		return null;
+	}
+
+	/**
+	 * Returns the iIndex item of the Multi-value object (array, collection or map)
+	 * 
+	 * @param iObject
+	 *          Multi-value object (array, collection or map)
+	 * @param iIndex
+	 *          integer as the position requested
+	 * @return The first item if any
+	 */
+	public static Object getValue(final Object iObject, final int iIndex) {
+		if (iObject == null)
+			return null;
+
+		if (!isMultiValue(iObject))
+			return null;
+
+		if (iIndex > getSize(iObject))
+			return null;
+
+		try {
+			if (iObject instanceof List<?>)
+				return ((List<?>) iObject).get(iIndex);
+			else if (iObject instanceof Set<?>) {
+				int i = 0;
+				for (Object o : ((Set<?>) iObject)) {
+					if (i++ == iIndex) {
+						return o;
+					}
+				}
+			} else if (iObject instanceof Map<?, ?>) {
+				int i = 0;
+				for (Object o : ((Map<?, ?>) iObject).values()) {
+					if (i++ == iIndex) {
+						return o;
+					}
+				}
+			} else if (iObject.getClass().isArray())
+				return Array.get(iObject, 0);
+		} catch (Exception e) {
+			// IGNORE IT
+			OLogManager.instance().debug(iObject, "Error on reading the first item of the Multi-value field '%s'", iObject);
+		}
 		return null;
 	}
 
@@ -156,7 +203,7 @@ public class OMultiValue {
 	 * 
 	 * @param iObject
 	 *          Multi-value object (array, collection or map)
-	 * @return
+	 * @return a stringified version of the multi-value object.
 	 */
 	public static String toString(final Object iObject) {
 		final StringBuilder sb = new StringBuilder();

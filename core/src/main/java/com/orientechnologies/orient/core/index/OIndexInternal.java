@@ -15,9 +15,9 @@
  */
 package com.orientechnologies.orient.core.index;
 
-import java.util.Collection;
 import java.util.Map.Entry;
 
+import com.orientechnologies.orient.core.db.ODatabaseListener;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 
@@ -27,7 +27,7 @@ import com.orientechnologies.orient.core.record.impl.ODocument;
  * @author Luca Garulli (l.garulli--at--orientechnologies.com)
  * 
  */
-public interface OIndexInternal<T> extends OIndex<T>, Iterable<Entry<Object, T>> {
+public interface OIndexInternal<T> extends OIndex<T>, Iterable<Entry<Object, T>>, ODatabaseListener {
 
 	public static final String	CONFIG_KEYTYPE					= "keyType";
 	public static final String	CONFIG_AUTOMATIC				= "automatic";
@@ -36,8 +36,6 @@ public interface OIndexInternal<T> extends OIndex<T>, Iterable<Entry<Object, T>>
 	public static final String	CONFIG_NAME							= "name";
 	public static final String	INDEX_DEFINITION				= "indexDefinition";
 	public static final String	INDEX_DEFINITION_CLASS	= "indexDefinitionClass";
-
-	public void checkEntry(final OIdentifiable iRecord, final Object iKey);
 
 	public void flush();
 

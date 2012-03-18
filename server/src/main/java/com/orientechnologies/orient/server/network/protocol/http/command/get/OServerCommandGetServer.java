@@ -34,6 +34,7 @@ import com.orientechnologies.orient.server.OClientConnection;
 import com.orientechnologies.orient.server.OServerMain;
 import com.orientechnologies.orient.server.config.OServerEntryConfiguration;
 import com.orientechnologies.orient.server.db.OSharedDocumentDatabase;
+import com.orientechnologies.orient.server.network.protocol.ONetworkProtocolData;
 import com.orientechnologies.orient.server.network.protocol.http.OHttpRequest;
 import com.orientechnologies.orient.server.network.protocol.http.OHttpUtils;
 import com.orientechnologies.orient.server.network.protocol.http.command.OServerCommandAuthenticatedServerAbstract;
@@ -43,7 +44,7 @@ public class OServerCommandGetServer extends OServerCommandAuthenticatedServerAb
 	private final static DateFormat	dateTimeFormat	= new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
 
 	public OServerCommandGetServer() {
-		super("info-server");
+		super("server.info");
 	}
 
 	@Override
@@ -65,27 +66,40 @@ public class OServerCommandGetServer extends OServerCommandAuthenticatedServerAb
 
 			final OClientConnection[] conns = OServerMain.server().getManagedServer().getConnections();
 			for (OClientConnection c : conns) {
+				final ONetworkProtocolData data = c.data;
+
 				synchronized (dateTimeFormat) {
-					lastCommandOn = dateTimeFormat.format(new Date(c.protocol.getData().lastCommandReceived));
+					lastCommandOn = dateTimeFormat.format(new Date(data.lastCommandReceived));
 					connectedOn = dateTimeFormat.format(new Date(c.since));
 				}
 
 				json.beginObject(2);
-				writeField(json, 2, "id", c.id);
-				writeField(json, 2, "id", c.id);
+				writeField(json, 2, "connectionId", c.id);
 				writeField(json, 2, "remoteAddress", c.protocol.getChannel() != null ? c.protocol.getChannel().toString() : "Disconnected");
 				writeField(json, 2, "db", c.database != null ? c.database.getName() : "-");
 				writeField(json, 2, "user", c.database != null && c.database.getUser() != null ? c.database.getUser().getName() : "-");
-				writeField(json, 2, "protocol", c.protocol.getName());
-				writeField(json, 2, "totalRequests", c.protocol.getData().totalRequests);
-				writeField(json, 2, "commandInfo", c.protocol.getData().commandInfo);
-				writeField(json, 2, "commandDetail", c.protocol.getData().commandDetail);
+				writeField(json, 2, "totalRequests", data.totalRequests);
+				writeField(json, 2, "commandInfo", data.commandInfo);
+				writeField(json, 2, "commandDetail", data.commandDetail);
 				writeField(json, 2, "lastCommandOn", lastCommandOn);
-				writeField(json, 2, "lastCommandInfo", c.protocol.getData().lastCommandInfo);
-				writeField(json, 2, "lastCommandDetail", c.protocol.getData().lastCommandDetail);
-				writeField(json, 2, "lastExecutionTime", c.protocol.getData().lastCommandExecutionTime);
-				writeField(json, 2, "totalWorkingTime", c.protocol.getData().totalCommandExecutionTime);
+				writeField(json, 2, "lastCommandInfo", data.lastCommandInfo);
+				writeField(json, 2, "lastCommandDetail", data.lastCommandDetail);
+				writeField(json, 2, "lastExecutionTime", data.lastCommandExecutionTime);
+				writeField(json, 2, "totalWorkingTime", data.totalCommandExecutionTime);
 				writeField(json, 2, "connectedOn", connectedOn);
+				writeField(json, 2, "protocol", c.protocol.getType());
+				writeField(json, 2, "clientId", data.clientId);
+
+				final StringBuilder driver = new StringBuilder();
+				if (data.driverName != null) {
+					driver.append(data.driverName);
+					driver.append(" v");
+					driver.append(data.driverVersion);
+					driver.append(" Protocol v");
+					driver.append(data.protocolVersion);
+				}
+
+				writeField(json, 2, "driver", driver.toString());
 				json.endObject(2);
 			}
 			json.endCollection(1, false);
@@ -135,7 +149,7 @@ public class OServerCommandGetServer extends OServerCommandAuthenticatedServerAb
 				json.endObject(3);
 			}
 			json.endCollection(2, false);
-			
+
 			json.beginCollection(2, true, "counters");
 			for (String c : OProfiler.getInstance().getCounters()) {
 				json.beginObject(3);

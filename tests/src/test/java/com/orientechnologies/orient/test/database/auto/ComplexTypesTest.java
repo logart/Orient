@@ -15,6 +15,8 @@
  */
 package com.orientechnologies.orient.test.database.auto;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -25,6 +27,8 @@ import java.util.Map;
 import java.util.Set;
 
 import org.testng.Assert;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Parameters;
 import org.testng.annotations.Test;
 
@@ -45,16 +49,45 @@ public class ComplexTypesTest {
 		url = iURL;
 	}
 
+	@BeforeMethod
+	public void init() {
+		database = ODatabaseDocumentPool.global().acquire(url, "admin", "admin");
+	}
+
+	@AfterMethod
+	public void deinit() {
+		if (database != null)
+			database.close();
+	}
+
 	@Test
-	public void testEmbeddedList() {
+	public void testBigDecimal() {
+		ODocument newDoc = new ODocument();
+		newDoc.field("integer", new BigInteger("10"));
+		newDoc.field("decimal_integer", new BigDecimal(10));
+		newDoc.field("decimal_float", new BigDecimal("10.34"));
+		database.save(newDoc);
+
+		final ORID rid = newDoc.getIdentity();
+
+		database.close();
+
 		database = ODatabaseDocumentPool.global().acquire(url, "admin", "admin");
 
+		ODocument loadedDoc = database.load(rid);
+		Assert.assertEquals(((Number) loadedDoc.field("integer")).intValue(), 10);
+		Assert.assertEquals(loadedDoc.field("decimal_integer"), new BigDecimal(10));
+		Assert.assertEquals(loadedDoc.field("decimal_float"), new BigDecimal("10.34"));
+	}
+
+	@Test
+	public void testEmbeddedList() {
 		ODocument newDoc = new ODocument();
 
 		final ArrayList<ODocument> list = new ArrayList<ODocument>();
 		newDoc.field("embeddedList", list, OType.EMBEDDEDLIST);
 		list.add(new ODocument().field("name", "Luca"));
-		list.add(new ODocument(database, "Account").field("name", "Marcus"));
+		list.add(new ODocument("Account").field("name", "Marcus"));
 
 		database.save(newDoc);
 		final ORID rid = newDoc.getIdentity();
@@ -73,20 +106,16 @@ public class ComplexTypesTest {
 		d = ((List<ODocument>) loadedDoc.field("embeddedList")).get(1);
 		Assert.assertEquals(d.getClassName(), "Account");
 		Assert.assertEquals(d.field("name"), "Marcus");
-
-		database.close();
 	}
 
 	@Test
 	public void testLinkList() {
-		database = ODatabaseDocumentPool.global().acquire(url, "admin", "admin");
-
 		ODocument newDoc = new ODocument();
 
 		final ArrayList<ODocument> list = new ArrayList<ODocument>();
 		newDoc.field("linkedList", list, OType.LINKLIST);
 		list.add(new ODocument().field("name", "Luca"));
-		list.add(new ODocument(database, "Account").field("name", "Marcus"));
+		list.add(new ODocument("Account").field("name", "Marcus"));
 
 		database.save(newDoc);
 		final ORID rid = newDoc.getIdentity();
@@ -106,20 +135,16 @@ public class ComplexTypesTest {
 		d = ((List<ODocument>) loadedDoc.field("linkedList")).get(1);
 		Assert.assertEquals(d.getClassName(), "Account");
 		Assert.assertEquals(d.field("name"), "Marcus");
-
-		database.close();
 	}
 
 	@Test
 	public void testEmbeddedSet() {
-		database = ODatabaseDocumentPool.global().acquire(url, "admin", "admin");
-
 		ODocument newDoc = new ODocument();
 
 		final Set<ODocument> set = new HashSet<ODocument>();
 		newDoc.field("embeddedSet", set, OType.EMBEDDEDSET);
 		set.add(new ODocument().field("name", "Luca"));
-		set.add(new ODocument(database, "Account").field("name", "Marcus"));
+		set.add(new ODocument("Account").field("name", "Marcus"));
 
 		database.save(newDoc);
 		final ORID rid = newDoc.getIdentity();
@@ -146,20 +171,16 @@ public class ComplexTypesTest {
 		}
 
 		Assert.assertEquals(tot, 2);
-
-		database.close();
 	}
 
 	@Test
 	public void testLinkSet() {
-		database = ODatabaseDocumentPool.global().acquire(url, "admin", "admin");
-
 		ODocument newDoc = new ODocument();
 
 		final Set<ODocument> set = new HashSet<ODocument>();
 		newDoc.field("linkedSet", set, OType.LINKSET);
 		set.add(new ODocument().field("name", "Luca"));
-		set.add(new ODocument(database, "Account").field("name", "Marcus"));
+		set.add(new ODocument("Account").field("name", "Marcus"));
 
 		database.save(newDoc);
 		final ORID rid = newDoc.getIdentity();
@@ -186,21 +207,17 @@ public class ComplexTypesTest {
 		}
 
 		Assert.assertEquals(tot, 2);
-
-		database.close();
 	}
 
 	@Test
 	public void testEmbeddedMap() {
-		database = ODatabaseDocumentPool.global().acquire(url, "admin", "admin");
-
 		ODocument newDoc = new ODocument();
 
 		final Map<String, ODocument> map = new HashMap<String, ODocument>();
 		newDoc.field("embeddedMap", map, OType.EMBEDDEDMAP);
 		map.put("Luca", new ODocument().field("name", "Luca"));
 		map.put("Marcus", new ODocument().field("name", "Marcus"));
-		map.put("Cesare", new ODocument(database, "Account").field("name", "Cesare"));
+		map.put("Cesare", new ODocument("Account").field("name", "Cesare"));
 
 		database.save(newDoc);
 		final ORID rid = newDoc.getIdentity();
@@ -223,14 +240,10 @@ public class ComplexTypesTest {
 		d = ((Map<String, ODocument>) loadedDoc.field("embeddedMap")).get("Cesare");
 		Assert.assertEquals(d.field("name"), "Cesare");
 		Assert.assertEquals(d.getClassName(), "Account");
-
-		database.close();
 	}
 
 	@Test
 	public void testEmptyEmbeddedMap() {
-		database = ODatabaseDocumentPool.global().acquire(url, "admin", "admin");
-
 		ODocument newDoc = new ODocument();
 
 		final Map<String, ODocument> map = new HashMap<String, ODocument>();
@@ -250,21 +263,17 @@ public class ComplexTypesTest {
 
 		final Map<String, ODocument> loadedMap = loadedDoc.field("embeddedMap");
 		Assert.assertEquals(loadedMap.size(), 0);
-
-		database.close();
 	}
 
 	@Test
 	public void testLinkMap() {
-		database = ODatabaseDocumentPool.global().acquire(url, "admin", "admin");
-
 		ODocument newDoc = new ODocument();
 
 		final Map<String, ODocument> map = new HashMap<String, ODocument>();
 		newDoc.field("linkedMap", map, OType.LINKMAP);
 		map.put("Luca", new ODocument().field("name", "Luca"));
 		map.put("Marcus", new ODocument().field("name", "Marcus"));
-		map.put("Cesare", new ODocument(database, "Account").field("name", "Cesare"));
+		map.put("Cesare", new ODocument("Account").field("name", "Cesare"));
 
 		database.save(newDoc);
 		final ORID rid = newDoc.getIdentity();
@@ -287,7 +296,5 @@ public class ComplexTypesTest {
 		d = ((Map<String, ODocument>) loadedDoc.field("linkedMap")).get("Cesare");
 		Assert.assertEquals(d.field("name"), "Cesare");
 		Assert.assertEquals(d.getClassName(), "Account");
-
-		database.close();
 	}
 }

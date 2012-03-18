@@ -28,7 +28,7 @@ import com.orientechnologies.orient.core.index.OIndex;
  */
 public interface OProperty extends Comparable<OProperty> {
 	public static enum ATTRIBUTES {
-		LINKEDTYPE, LINKEDCLASS, MIN, MAX, MANDATORY, NAME, NOTNULL, REGEXP, TYPE
+		LINKEDTYPE, LINKEDCLASS, MIN, MAX, MANDATORY, NAME, NOTNULL, REGEXP, TYPE, CUSTOM
 	}
 
 	public String getName();
@@ -54,12 +54,50 @@ public interface OProperty extends Comparable<OProperty> {
 
 	public OProperty setMandatory(boolean mandatory);
 
+	/**
+	 * Min behavior depends on the Property OType.
+	 * <p>
+	 * <ul>
+	 * <li>String : minimum length</li>
+	 * <li>Number : minimum value</li>
+	 * <li>date and time : minimum time in millisecond, date must be written in the storage date format</li>
+	 * <li>binary : minimum size of the byte array</li>
+	 * <li>List,Set,Collection : minimum size of the collection</li>
+	 * </ul>
+	 * 
+	 * @return String, can be null
+	 */
 	public String getMin();
 
+	/**
+	 * @see OProperty#getMin()
+	 * @param min
+	 *          can be null
+	 * @return this property
+	 */
 	public OProperty setMin(String min);
 
+	/**
+	 * Max behavior depends on the Property OType.
+	 * <p>
+	 * <ul>
+	 * <li>String : maximum length</li>
+	 * <li>Number : maximum value</li>
+	 * <li>date and time : maximum time in millisecond, date must be written in the storage date format</li>
+	 * <li>binary : maximum size of the byte array</li>
+	 * <li>List,Set,Collection : maximum size of the collection</li>
+	 * </ul>
+	 * 
+	 * @return String, can be null
+	 */
 	public String getMax();
 
+	/**
+	 * @see OProperty#getMax()
+	 * @param max
+	 *          can be null
+	 * @return this property
+	 */
 	public OProperty setMax(String max);
 
 	/**
@@ -128,6 +166,10 @@ public interface OProperty extends Comparable<OProperty> {
 	 * @param iType
 	 */
 	public OPropertyImpl setType(final OType iType);
+
+	public String getCustom(final String iName);
+
+	public OPropertyImpl setCustom(final String iName, final String iValue);
 
 	public Object get(ATTRIBUTES iAttribute);
 

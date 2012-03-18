@@ -74,9 +74,9 @@ public abstract class OMVRBTree<K, V> extends AbstractMap<K, V> implements ONavi
 	protected boolean													lastSearchFound			= false;
 	protected int															lastSearchIndex			= -1;
 
-/**
-	 * Indicates search behaviour in case of {@link OCompositeKey) keys that have less amount of internal keys are used, whether
-	 * lowest or highest partially matched key should be used. Such keys is allowed to use only in
+	/**
+	 * Indicates search behavior in case of {@link OCompositeKey} keys that have less amount of internal keys are used, whether lowest
+	 * or highest partially matched key should be used. Such keys is allowed to use only in
 	 * 
 	 * @link OMVRBTree#subMap(K, boolean, K, boolean)}, {@link OMVRBTree#tailMap(K, boolean, K, boolean)} and
 	 *       {@link OMVRBTree#headMap(K, boolean, K, boolean)} .
@@ -421,7 +421,8 @@ public abstract class OMVRBTree<K, V> extends AbstractMap<K, V> implements ONavi
 				// SEARCH INSIDE THE NODE
 				final V value = lastNode.search(k);
 
-				setLastSearchNode(key, lastNode);
+				if(value != null)
+					setLastSearchNode(key, lastNode);
 
 				// PROBABLY PARTIAL KEY IS FOUND USE SEARCH MODE TO FIND PREFERRED ONE
 				if (value != null && key instanceof OCompositeKey)
@@ -1766,9 +1767,13 @@ public abstract class OMVRBTree<K, V> extends AbstractMap<K, V> implements ONavi
 					e = new OMVRBTreeEntryPosition<K, V>(next);
 				else
 					e = null;
-				final K k = e.getKey();
-				if (e == null || e.entry == null || k == fenceKey || k.equals(fenceKey))
+				if (e == null || e.entry == null)
 					throw new NoSuchElementException();
+
+				final K k = e.getKey();
+				if (k == fenceKey || k.equals(fenceKey))
+					throw new NoSuchElementException();
+
 				if (m.modCount != expectedModCount)
 					throw new ConcurrentModificationException();
 				next.assign(OMVRBTree.next(e));
@@ -1782,9 +1787,14 @@ public abstract class OMVRBTree<K, V> extends AbstractMap<K, V> implements ONavi
 					e = new OMVRBTreeEntryPosition<K, V>(next);
 				else
 					e = null;
-				final K k = e.getKey();
-				if (e == null || e.entry == null || k == fenceKey || k.equals(fenceKey))
+
+				if (e == null || e.entry == null)
 					throw new NoSuchElementException();
+
+				final K k = e.getKey();
+				if (k == fenceKey || k.equals(fenceKey))
+					throw new NoSuchElementException();
+
 				if (m.modCount != expectedModCount)
 					throw new ConcurrentModificationException();
 				next.assign(OMVRBTree.previous(e));
@@ -2389,8 +2399,11 @@ public abstract class OMVRBTree<K, V> extends AbstractMap<K, V> implements ONavi
 	 * 
 	 * @param p
 	 *          Node to remove
+	 * 
+	 * @return Node that was removed. Passed and removed nodes may be different in case node to remove contains two children. In this
+	 *         case node successor will be found and removed but it's content will be copied to the node that was passed in method.
 	 */
-	protected void removeNode(OMVRBTreeEntry<K, V> p) {
+	protected OMVRBTreeEntry<K, V> removeNode(OMVRBTreeEntry<K, V> p) {
 		modCount++;
 		// If strictly internal, copy successor's element to p and then make p
 		// point to successor.
@@ -2435,6 +2448,8 @@ public abstract class OMVRBTree<K, V> extends AbstractMap<K, V> implements ONavi
 				p.setParent(null);
 			}
 		}
+
+		return p;
 	}
 
 	/** From CLR */
@@ -2783,6 +2798,9 @@ public abstract class OMVRBTree<K, V> extends AbstractMap<K, V> implements ONavi
 				return comparator.compare((K) key, (K) lastSearchKey) == 0 ? lastSearchNode : null;
 			else
 				try {
+					if(key instanceof OCompositeKey)
+						return key.equals(lastSearchKey) ? lastSearchNode : null;
+
 					return ((Comparable<? super K>) key).compareTo((K) lastSearchKey) == 0 ? lastSearchNode : null;
 				} catch (Exception e) {
 					// IGNORE IT

@@ -15,6 +15,7 @@
  */
 package com.orientechnologies.orient.core.serialization.serializer;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -83,6 +84,11 @@ public abstract class OStringSerializerHelper {
 			if (iValue instanceof Boolean)
 				return iValue;
 			return new Boolean(getStringContent(iValue));
+
+		case DECIMAL:
+			if (iValue instanceof BigDecimal)
+				return iValue;
+			return new BigDecimal(getStringContent(iValue));
 
 		case FLOAT:
 			if (iValue instanceof Float)
@@ -307,7 +313,8 @@ public abstract class OStringSerializerHelper {
 
 	public static List<String> split(final String iSource, final int iStartPosition, final int iEndPosition,
 			final char iRecordSeparator, final char... iJumpCharacters) {
-		return (List<String>) split(new ArrayList<String>(), iSource, 0, iSource.length(), iRecordSeparator, iJumpCharacters);
+		return (List<String>) split(new ArrayList<String>(), iSource, iStartPosition, iSource.length(), iRecordSeparator,
+				iJumpCharacters);
 	}
 
 	public static Collection<String> split(final Collection<String> iParts, final String iSource, final int iStartPosition,
@@ -435,7 +442,8 @@ public abstract class OStringSerializerHelper {
 			}
 		}
 
-		iCollection.add(buffer.toString().trim());
+		if (buffer.length() > 0)
+			iCollection.add(buffer.toString().trim());
 
 		return --currentPos;
 	}
@@ -458,6 +466,21 @@ public abstract class OStringSerializerHelper {
 		for (int i = 0; i < pars.size(); ++i)
 			iParameters.add(pars.get(i).trim());
 
+		return iBeginPosition + buffer.length();
+	}
+
+	public static int getEmbedded(final String iText, final int iBeginPosition, int iEndPosition, final StringBuilder iEmbedded) {
+		final int openPos = iText.indexOf(EMBEDDED_BEGIN, iBeginPosition);
+		if (openPos == -1 || (iEndPosition > -1 && openPos > iEndPosition))
+			return iBeginPosition;
+
+		final StringBuilder buffer = new StringBuilder();
+		parse(iText, buffer, openPos, iEndPosition, PARAMETER_EXT_SEPARATOR, true);
+		if (buffer.length() == 0)
+			return iBeginPosition;
+
+		final String t = buffer.substring(1, buffer.length() - 1).trim();
+		iEmbedded.append(t);
 		return iBeginPosition + buffer.length();
 	}
 
@@ -570,7 +593,7 @@ public abstract class OStringSerializerHelper {
 		return buffer.toString();
 	}
 
-	public static OClass getRecordClassName(String iValue, OClass iLinkedClass) {
+	public static OClass getRecordClassName(final String iValue, OClass iLinkedClass) {
 		// EXTRACT THE CLASS NAME
 		int classSeparatorPos = iValue.indexOf(OStringSerializerHelper.CLASS_SEPARATOR);
 		if (classSeparatorPos > -1) {
@@ -578,8 +601,6 @@ public abstract class OStringSerializerHelper {
 			final ODatabaseRecord database = ODatabaseRecordThreadLocal.INSTANCE.get();
 			if (className != null && database != null)
 				iLinkedClass = database.getMetadata().getSchema().getClass(className);
-
-			iValue = iValue.substring(classSeparatorPos + 1);
 		}
 		return iLinkedClass;
 	}
@@ -639,8 +660,9 @@ public abstract class OStringSerializerHelper {
 					|| (s.charAt(0) == '\'' && s.charAt(s.length() - 1) == '\''))
 				// @COMPATIBILITY 1.0rc7-SNAPSHOT ' TO SUPPORT OLD DATABASES
 				s = s.substring(1, s.length() - 1);
-			else
-				throw new IllegalArgumentException("Not binary type: " + iValue);
+// IN CASE OF JSON BINARY IMPORT THIS EXEPTION IS WRONG
+//			else
+//				throw new IllegalArgumentException("Not binary type: " + iValue);
 
 			return OBase64Utils.decode(s);
 		} else
@@ -690,5 +712,21 @@ public abstract class OStringSerializerHelper {
 				return false;
 		}
 		return true;
+	}
+
+	public static int indexOf(final String iSource, final int iBegin, char... iChars) {
+		if (iChars.length == 1)
+			// ONE CHAR: USE JAVA INDEXOF
+			return iSource.indexOf(iChars[0], iBegin);
+
+		final int len = iSource.length();
+		for (int i = iBegin; i < len; ++i) {
+			for (int k = 0; k < iChars.length; ++k) {
+				final char c = iSource.charAt(i);
+				if (c == iChars[k])
+					return i;
+			}
+		}
+		return -1;
 	}
 }

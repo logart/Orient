@@ -53,10 +53,19 @@ public abstract class ODatabaseRecordWrapperAbstract<DB extends ODatabaseRecord>
 		return (THISDB) super.create();
 	}
 
+	/**
+	 * Uses drop() instead.
+	 */
+	@Deprecated
 	@Override
 	public void delete() {
+		drop();
+	}
+
+	@Override
+	public void drop() {
 		checkSecurity(ODatabaseSecurityResources.DATABASE, ORole.PERMISSION_DELETE);
-		super.delete();
+		super.drop();
 	}
 
 	public int addCluster(final String iClusterName, final CLUSTER_TYPE iType) {
@@ -172,6 +181,11 @@ public abstract class ODatabaseRecordWrapperAbstract<DB extends ODatabaseRecord>
 		return (RET) underlying.newInstance();
 	}
 
+	public ODatabaseComplex<ORecordInternal<?>> delete(final ORID iRid) {
+		underlying.delete(iRid);
+		return this;
+	}
+
 	public ODatabaseComplex<ORecordInternal<?>> delete(final ORecordInternal<?> iRecord) {
 		underlying.delete(iRecord);
 		return this;
@@ -214,13 +228,24 @@ public abstract class ODatabaseRecordWrapperAbstract<DB extends ODatabaseRecord>
 		underlying.reload(iRecord, iFetchPlan, iIgnoreCache);
 	}
 
+	public ODatabaseComplex<ORecordInternal<?>> save(final ORecordInternal<?> iRecord) {
+		underlying.save(iRecord);
+		return this;
+	}
+
 	public ODatabaseComplex<ORecordInternal<?>> save(final ORecordInternal<?> iRecord, final String iClusterName) {
 		underlying.save(iRecord, iClusterName);
 		return this;
 	}
 
-	public ODatabaseComplex<ORecordInternal<?>> save(final ORecordInternal<?> iRecord) {
-		underlying.save(iRecord);
+	public ODatabaseComplex<ORecordInternal<?>> save(final ORecordInternal<?> iRecord, final OPERATION_MODE iMode) {
+		underlying.save(iRecord, iMode);
+		return this;
+	}
+
+	public ODatabaseComplex<ORecordInternal<?>> save(final ORecordInternal<?> iRecord, final String iClusterName,
+			final OPERATION_MODE iMode) {
+		underlying.save(iRecord, iClusterName, iMode);
 		return this;
 	}
 

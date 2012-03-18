@@ -27,6 +27,7 @@ import org.testng.annotations.Test;
 
 import com.orientechnologies.orient.core.db.document.ODatabaseDocument;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
+import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.metadata.schema.OType;
@@ -43,17 +44,11 @@ public class SQLFindReferencesTest {
 	private ODatabaseDocument		database;
 
 	private ORID								carID;
-
 	private ORID								johnDoeID;
-
 	private ORID								janeDoeID;
-
 	private ORID								chuckNorrisID;
-
 	private ORID								jackBauerID;
-
 	private ORID								ctuID;
-
 	private ORID								fbiID;
 
 	@Parameters(value = "url")
@@ -61,26 +56,28 @@ public class SQLFindReferencesTest {
 		database = new ODatabaseDocumentTx(iURL);
 	}
 
+	@SuppressWarnings("unchecked")
 	@Test
 	public void findSimpleReference() {
 		if (database.isClosed())
 			database.open("admin", "admin");
 
-		Collection<ORID> result = database.command(new OCommandSQL("find references " + carID.toString())).execute();
+		Collection<ODocument> result = database.command(new OCommandSQL("find references " + carID)).execute();
 
-		Assert.assertTrue(result.size() == 1);
-		Assert.assertTrue(result.iterator().next().toString().equals(johnDoeID.toString()));
+		Assert.assertEquals(result.size(), 1);
+		Assert.assertEquals(((Collection<OIdentifiable>) result.iterator().next().field("referredBy")).iterator().next(), johnDoeID);
 
-		result = database.command(new OCommandSQL("find references " + chuckNorrisID.toString())).execute();
+		result = database.command(new OCommandSQL("find references " + chuckNorrisID)).execute();
+		Assert.assertEquals(result.size(), 1);
+		Assert.assertEquals(((Collection<OIdentifiable>) result.iterator().next().field("referredBy")).size(), 2);
 
-		Assert.assertTrue(result.size() == 2);
-		ORID rid = result.iterator().next();
-		Assert.assertTrue(rid.toString().equals(ctuID.toString()) || rid.toString().equals(fbiID.toString()));
-		rid = result.iterator().next();
-		Assert.assertTrue(rid.toString().equals(ctuID.toString()) || rid.toString().equals(fbiID.toString()));
+		for (OIdentifiable rid : ((Collection<OIdentifiable>) result.iterator().next().field("referredBy"))) {
+			Assert.assertTrue(rid.equals(ctuID) || rid.equals(fbiID));
+		}
 
-		result = database.command(new OCommandSQL("find references " + johnDoeID.toString())).execute();
-		Assert.assertTrue(result.size() == 0);
+		result = database.command(new OCommandSQL("find references " + johnDoeID)).execute();
+		Assert.assertEquals(result.size(), 1);
+		Assert.assertEquals(((Collection<OIdentifiable>) result.iterator().next().field("referredBy")).size(), 0);
 
 		result.clear();
 		result = null;
@@ -88,36 +85,33 @@ public class SQLFindReferencesTest {
 		database.close();
 	}
 
+	@SuppressWarnings("unchecked")
 	@Test
 	public void findReferenceByClassAndClusters() {
 		if (database.isClosed())
 			database.open("admin", "admin");
 
-		Collection<ORID> result = database.command(new OCommandSQL("find references " + janeDoeID.toString() + " [" + WORKPLACE + "]"))
+		Collection<ODocument> result = database.command(new OCommandSQL("find references " + janeDoeID + " [" + WORKPLACE + "]"))
 				.execute();
 
 		Assert.assertEquals(result.size(), 1);
-		Assert.assertTrue(result.iterator().next().toString().equals(ctuID.toString()));
+		Assert.assertTrue(((Collection<OIdentifiable>) result.iterator().next().field("referredBy")).iterator().next().equals(ctuID));
 
-		result = database.command(
-				new OCommandSQL("find references " + jackBauerID.toString() + " [" + WORKPLACE + ",cluster:" + CAR + "]")).execute();
-
-		Assert.assertTrue(result.size() == 3);
-		ORID rid = result.iterator().next();
-		Assert.assertTrue(rid.toString().equals(ctuID.toString()) || rid.toString().equals(fbiID.toString())
-				|| rid.toString().equals(carID.toString()));
-		rid = result.iterator().next();
-		Assert.assertTrue(rid.toString().equals(ctuID.toString()) || rid.toString().equals(fbiID.toString())
-				|| rid.toString().equals(carID.toString()));
-		rid = result.iterator().next();
-		Assert.assertTrue(rid.toString().equals(ctuID.toString()) || rid.toString().equals(fbiID.toString())
-				|| rid.toString().equals(carID.toString()));
-
-		result = database.command(
-				new OCommandSQL("find references " + johnDoeID.toString() + " [" + WORKPLACE + "," + CAR + ",cluster:" + WORKER + "]"))
+		result = database.command(new OCommandSQL("find references " + jackBauerID + " [" + WORKPLACE + ",cluster:" + CAR + "]"))
 				.execute();
 
-		Assert.assertTrue(result.size() == 0);
+		Assert.assertEquals(result.size(), 1);
+		Assert.assertEquals(((Collection<OIdentifiable>) result.iterator().next().field("referredBy")).size(), 3);
+
+		for (OIdentifiable rid : ((Collection<OIdentifiable>) result.iterator().next().field("referredBy"))) {
+			Assert.assertTrue(rid.equals(ctuID) || rid.equals(fbiID) || rid.equals(carID));
+		}
+
+		result = database.command(
+				new OCommandSQL("find references " + johnDoeID + " [" + WORKPLACE + "," + CAR + ",cluster:" + WORKER + "]")).execute();
+
+		Assert.assertEquals(result.size(), 1);
+		Assert.assertEquals(((Collection<OIdentifiable>) result.iterator().next().field("referredBy")).size(), 0);
 
 		result.clear();
 		result = null;
@@ -155,35 +149,35 @@ public class SQLFindReferencesTest {
 	}
 
 	private void populateDatabase() {
-		ODocument car = new ODocument(database, CAR);
+		ODocument car = new ODocument(CAR);
 		car.field("plate", "JINF223S");
 
-		ODocument johnDoe = new ODocument(database, WORKER);
+		ODocument johnDoe = new ODocument(WORKER);
 		johnDoe.field("name", "John");
 		johnDoe.field("surname", "Doe");
 		johnDoe.field("car", car);
 		johnDoe.save();
 		johnDoeID = johnDoe.getIdentity().copy();
 
-		ODocument janeDoe = new ODocument(database, WORKER);
+		ODocument janeDoe = new ODocument(WORKER);
 		janeDoe.field("name", "Jane");
 		janeDoe.field("surname", "Doe");
 		janeDoe.save();
 		janeDoeID = janeDoe.getIdentity().copy();
 
-		ODocument chuckNorris = new ODocument(database, WORKER);
+		ODocument chuckNorris = new ODocument(WORKER);
 		chuckNorris.field("name", "Chuck");
 		chuckNorris.field("surname", "Norris");
 		chuckNorris.save();
 		chuckNorrisID = chuckNorris.getIdentity().copy();
 
-		ODocument jackBauer = new ODocument(database, WORKER);
+		ODocument jackBauer = new ODocument(WORKER);
 		jackBauer.field("name", "Jack");
 		jackBauer.field("surname", "Bauer");
 		jackBauer.save();
 		jackBauerID = jackBauer.getIdentity().copy();
 
-		ODocument ctu = new ODocument(database, WORKPLACE);
+		ODocument ctu = new ODocument(WORKPLACE);
 		ctu.field("name", "CTU");
 		ctu.field("boss", jackBauer);
 		List<ODocument> workplace1Workers = new ArrayList<ODocument>();
@@ -193,7 +187,7 @@ public class SQLFindReferencesTest {
 		ctu.save();
 		ctuID = ctu.getIdentity().copy();
 
-		ODocument fbi = new ODocument(database, WORKPLACE);
+		ODocument fbi = new ODocument(WORKPLACE);
 		fbi.field("name", "FBI");
 		fbi.field("boss", chuckNorris);
 		List<ODocument> workplace2Workers = new ArrayList<ODocument>();

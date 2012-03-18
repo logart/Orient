@@ -15,13 +15,22 @@
  */
 package com.orientechnologies.orient.core.tx;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map.Entry;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
+import com.orientechnologies.orient.core.db.ODatabaseComplex.OPERATION_MODE;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecordTx;
+import com.orientechnologies.orient.core.db.record.ORecordOperation;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
+import com.orientechnologies.orient.core.index.OIndex;
+import com.orientechnologies.orient.core.index.OIndexMVRBTreeAbstract;
 import com.orientechnologies.orient.core.record.ORecordInternal;
+import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.OStorageEmbedded;
 
 public class OTransactionOptimistic extends OTransactionRealAbstract {
@@ -40,7 +49,54 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
 	public void commit() {
 		checkTransaction();
 		status = TXSTATUS.COMMITTING;
-		database.executeCommit();
+
+		if (!(database.getStorage() instanceof OStorageEmbedded))
+			database.getStorage().commit(this);
+		else {
+			database.getStorage().callInLock(new Callable<Void>() {
+
+				public Void call() throws Exception {
+					final List<String> involvedIndexes = getInvolvedIndexes();
+
+					// LOCK INVOLVED INDEXES
+					List<OIndexMVRBTreeAbstract<?>> lockedIndexes = null;
+					try {
+						if (involvedIndexes != null)
+							for (String indexName : involvedIndexes) {
+								final OIndexMVRBTreeAbstract<?> index = (OIndexMVRBTreeAbstract<?>) database.getMetadata().getIndexManager()
+										.getIndexInternal(indexName);
+								if (lockedIndexes == null)
+									lockedIndexes = new ArrayList<OIndexMVRBTreeAbstract<?>>();
+
+								index.acquireExclusiveLock();
+								lockedIndexes.add(index);
+							}
+
+						database.getStorage().commit(OTransactionOptimistic.this);
+
+						// COMMIT INDEX CHANGES
+						final ODocument indexEntries = getIndexChanges();
+						if (indexEntries != null) {
+							for (Entry<String, Object> indexEntry : indexEntries) {
+								final OIndex<?> index = database.getMetadata().getIndexManager().getIndexInternal(indexEntry.getKey());
+								index.commit((ODocument) indexEntry.getValue());
+							}
+						}
+						return null;
+
+					} finally {
+						// RELEASE INDEX LOCKS IF ANY
+						if (lockedIndexes != null)
+							// DON'T USE GENERICS TO AVOID OpenJDK CRASH :-(
+							for (OIndexMVRBTreeAbstract<?> index : lockedIndexes) {
+								index.releaseExclusiveLock();
+							}
+					}
+				}
+
+			}, true);
+
+		}
 	}
 
 	public void rollback() {
@@ -48,20 +104,17 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
 
 		status = TXSTATUS.ROLLBACKING;
 
-		// ROLLBACK AT STORAGE LEVEL DONE IN THE COMMIT PHASE ONLY
-		// database.getStorage().rollback(this);
-
-		// INVALIDATE THE CACHE
-		database.getLevel1Cache().invalidate();
+		// CLEAR THE CACHE MOVING GOOD RECORDS TO LEVEL-2 CACHE
+		database.getLevel1Cache().clear();
 
 		// REMOVE ALL THE ENTRIES AND INVALIDATE THE DOCUMENTS TO AVOID TO BE RE-USED DIRTY AT USER-LEVEL. IN THIS WAY RE-LOADING MUST
 		// EXECUTED
-		for (OTransactionRecordEntry v : recordEntries.values())
+		for (ORecordOperation v : recordEntries.values())
 			v.getRecord().unload();
 
-		for (OTransactionRecordEntry v : allEntries.values())
+		for (ORecordOperation v : allEntries.values())
 			v.getRecord().unload();
-				
+
 		indexEntries.clear();
 	}
 
@@ -69,6 +122,9 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
 		checkTransaction();
 
 		final ORecordInternal<?> txRecord = getRecord(iRid);
+		if (txRecord == OTransactionRealAbstract.DELETED_RECORD)
+			// DELETED IN TX
+			return null;
 
 		if (txRecord != null)
 			return txRecord;
@@ -77,27 +133,34 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
 		return database.executeReadRecord((ORecordId) iRid, iRecord, iFetchPlan, false);
 	}
 
-	public void deleteRecord(final ORecordInternal<?> iRecord) {
-		addRecord(iRecord, OTransactionRecordEntry.DELETED, null);
+	public void deleteRecord(final ORecordInternal<?> iRecord, final OPERATION_MODE iMode) {
+		if (!iRecord.getIdentity().isValid())
+			return;
+
+		addRecord(iRecord, ORecordOperation.DELETED, null);
 	}
 
-	public void saveRecord(final ORecordInternal<?> iRecord, final String iClusterName) {
-		addRecord(iRecord, iRecord.getIdentity().isValid() ? OTransactionRecordEntry.UPDATED : OTransactionRecordEntry.CREATED,
-				iClusterName);
+	public void saveRecord(final ORecordInternal<?> iRecord, final String iClusterName, final OPERATION_MODE iMode) {
+		addRecord(iRecord, iRecord.getIdentity().isValid() ? ORecordOperation.UPDATED : ORecordOperation.CREATED, iClusterName);
 	}
 
 	private void addRecord(final ORecordInternal<?> iRecord, final byte iStatus, final String iClusterName) {
 		checkTransaction();
 
 		if ((status == OTransaction.TXSTATUS.COMMITTING) && database.getStorage() instanceof OStorageEmbedded) {
-			// I'M COMMITTING OR IT'S AN INDEX: BYPASS LOCAL BUFFER
+			// && iRecord.getIdentity().isValid() && allEntries.containsKey(iRecord.getIdentity())) {
+			// if ((OStorage.CLUSTER_INDEX_NAME.equals(iClusterName) || iRecord.getIdentity().getClusterId() == database.getStorage()
+			// .getClusterIdByName(OStorage.CLUSTER_INDEX_NAME)) && database.getStorage() instanceof OStorageEmbedded) {
+			
+			// I'M COMMITTING: BYPASS LOCAL BUFFER
 			switch (iStatus) {
-			case OTransactionRecordEntry.CREATED:
-			case OTransactionRecordEntry.UPDATED:
-				database.executeSaveRecord(iRecord, iClusterName, iRecord.getVersion(), iRecord.getRecordType());
+			case ORecordOperation.CREATED:
+			case ORecordOperation.UPDATED:
+				database
+						.executeSaveRecord(iRecord, iClusterName, iRecord.getVersion(), iRecord.getRecordType(), OPERATION_MODE.SYNCHRONOUS);
 				break;
-			case OTransactionRecordEntry.DELETED:
-				database.executeDeleteRecord(iRecord, iRecord.getVersion());
+			case ORecordOperation.DELETED:
+				database.executeDeleteRecord(iRecord, iRecord.getVersion(), false, OPERATION_MODE.SYNCHRONOUS);
 				break;
 			}
 		} else {
@@ -123,40 +186,40 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
 				// REMOVE FROM THE DB'S CACHE
 				database.getLevel1Cache().freeRecord(rid);
 
-			OTransactionRecordEntry txEntry = getRecordEntry(rid);
+			ORecordOperation txEntry = getRecordEntry(rid);
 
 			if (txEntry == null) {
 				// NEW ENTRY: JUST REGISTER IT
-				txEntry = new OTransactionRecordEntry(iRecord, iStatus, iClusterName);
+				txEntry = new ORecordOperation(iRecord, iStatus);
 
 				recordEntries.put(rid, txEntry);
 			} else {
 				// UPDATE PREVIOUS STATUS
-				txEntry.setRecord(iRecord);
+				txEntry.record = iRecord;
 
-				switch (txEntry.status) {
-				case OTransactionRecordEntry.LOADED:
+				switch (txEntry.type) {
+				case ORecordOperation.LOADED:
 					switch (iStatus) {
-					case OTransactionRecordEntry.UPDATED:
-						txEntry.status = OTransactionRecordEntry.UPDATED;
+					case ORecordOperation.UPDATED:
+						txEntry.type = ORecordOperation.UPDATED;
 						break;
-					case OTransactionRecordEntry.DELETED:
-						txEntry.status = OTransactionRecordEntry.DELETED;
-						break;
-					}
-					break;
-				case OTransactionRecordEntry.UPDATED:
-					switch (iStatus) {
-					case OTransactionRecordEntry.DELETED:
-						txEntry.status = OTransactionRecordEntry.DELETED;
+					case ORecordOperation.DELETED:
+						txEntry.type = ORecordOperation.DELETED;
 						break;
 					}
 					break;
-				case OTransactionRecordEntry.DELETED:
-					break;
-				case OTransactionRecordEntry.CREATED:
+				case ORecordOperation.UPDATED:
 					switch (iStatus) {
-					case OTransactionRecordEntry.DELETED:
+					case ORecordOperation.DELETED:
+						txEntry.type = ORecordOperation.DELETED;
+						break;
+					}
+					break;
+				case ORecordOperation.DELETED:
+					break;
+				case ORecordOperation.CREATED:
+					switch (iStatus) {
+					case ORecordOperation.DELETED:
 						recordEntries.remove(rid);
 						break;
 					}

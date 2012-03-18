@@ -16,6 +16,8 @@
 package com.orientechnologies.orient.core.serialization.serializer.record.string;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Set;
@@ -92,63 +94,19 @@ public abstract class ORecordSerializerStringAbstract implements ORecordSerializ
 
 		switch (iType) {
 		case STRING:
-			if (iValue instanceof String) {
-				final String s = OStringSerializerHelper.getStringContent(iValue);
-				return OStringSerializerHelper.decode(s);
-			}
-			return iValue.toString();
-
 		case INTEGER:
-			if (iValue instanceof Integer)
-				return iValue;
-			return new Integer(iValue.toString());
-
 		case BOOLEAN:
-			if (iValue instanceof Boolean)
-				return iValue;
-			return new Boolean(iValue.toString());
-
 		case FLOAT:
-			if (iValue instanceof Float)
-				return iValue;
-			return convertValue((String) iValue, iType);
-
+		case DECIMAL:
 		case LONG:
-			if (iValue instanceof Long)
-				return iValue;
-			return convertValue((String) iValue, iType);
-
 		case DOUBLE:
-			if (iValue instanceof Double)
-				return iValue;
-			return convertValue((String) iValue, iType);
-
 		case SHORT:
-			if (iValue instanceof Short)
-				return iValue;
-			return convertValue((String) iValue, iType);
-
 		case BYTE:
-			if (iValue instanceof Byte)
-				return iValue;
-			return convertValue((String) iValue, iType);
-
 		case BINARY:
-			return OStringSerializerHelper.getBinaryContent(iValue);
-
 		case DATE:
 		case DATETIME:
-			if (iValue instanceof Date)
-				return iValue;
-			return convertValue((String) iValue, iType);
-
 		case LINK:
-			if (iValue instanceof ORID)
-				return iValue.toString();
-			else if (iValue instanceof String)
-				return new ORecordId((String) iValue);
-			else
-				return ((ORecord<?>) iValue).getIdentity().toString();
+			return simpleValueFromStream(iValue, iType);
 
 		case EMBEDDED:
 		case CUSTOM:
@@ -210,6 +168,11 @@ public abstract class ORecordSerializerStringAbstract implements ORecordSerializ
 		case FLOAT:
 			simpleValueToStream(iBuffer, iType, iValue);
 			OProfiler.getInstance().stopChrono("serializer.rec.str.float2string", timer);
+			break;
+
+		case DECIMAL:
+			simpleValueToStream(iBuffer, iType, iValue);
+			OProfiler.getInstance().stopChrono("serializer.rec.str.decimal2string", timer);
 			break;
 
 		case LONG:
@@ -343,6 +306,8 @@ public abstract class ORecordSerializerStringAbstract implements ORecordSerializ
 								continue;
 						} else if (c == 'f')
 							return OType.FLOAT;
+						else if (c == 'c')
+							return OType.DECIMAL;
 						else if (c == 'l')
 							return OType.LONG;
 						else if (c == 'd')
@@ -368,6 +333,40 @@ public abstract class ORecordSerializerStringAbstract implements ORecordSerializ
 		}
 
 		return integer ? OType.INTEGER : OType.FLOAT;
+	}
+
+	/**
+	 * Parses the field type char returning the closer type. Default is STRING. b=binary if iValue.lenght() >= 4 b=byte if
+	 * iValue.lenght() <= 3 s=short, l=long f=float d=double a=date t=datetime
+	 * 
+	 * @param iValue
+	 *          Value to parse
+	 * @param iCharType
+	 *          Char value indicating the type
+	 * @return The closest type recognized
+	 */
+	public static OType getType(final String iValue, final char iCharType) {
+		if (iCharType == 'f')
+			return OType.FLOAT;
+		else if (iCharType == 'c')
+			return OType.DECIMAL;
+		else if (iCharType == 'l')
+			return OType.LONG;
+		else if (iCharType == 'd')
+			return OType.DOUBLE;
+		else if (iCharType == 'b') {
+			if (iValue.length() >= 1 && iValue.length() <= 3)
+				return OType.BYTE;
+			else
+				return OType.BINARY;
+		} else if (iCharType == 'a')
+			return OType.DATE;
+		else if (iCharType == 't')
+			return OType.DATETIME;
+		else if (iCharType == 's')
+			return OType.SHORT;
+
+		return OType.STRING;
 	}
 
 	/**
@@ -397,6 +396,17 @@ public abstract class ORecordSerializerStringAbstract implements ORecordSerializ
 					&& iValue.charAt(iValue.length() - 1) == OStringSerializerHelper.BINARY_BEGINEND)
 				// STRING
 				return OStringSerializerHelper.getBinaryContent(iValue);
+			else if (iValue.charAt(0) == OStringSerializerHelper.COLLECTION_BEGIN
+					&& iValue.charAt(iValue.length() - 1) == OStringSerializerHelper.COLLECTION_END) {
+				// COLLECTION
+				final ArrayList<String> coll = new ArrayList<String>();
+				OStringSerializerHelper.getCollection(iValue, 0, coll);
+				return coll;
+			} else if (iValue.charAt(0) == OStringSerializerHelper.MAP_BEGIN
+					&& iValue.charAt(iValue.length() - 1) == OStringSerializerHelper.MAP_END) {
+				// MAP
+				return OStringSerializerHelper.getMap(iValue);
+			}
 
 		if (iValue.charAt(0) == ORID.PREFIX)
 			// RID
@@ -426,6 +436,8 @@ public abstract class ORecordSerializerStringAbstract implements ORecordSerializ
 
 						if (c == 'f')
 							return new Float(v);
+						else if (c == 'c')
+							return new BigDecimal(v);
 						else if (c == 'l')
 							return new Long(v);
 						else if (c == 'd')
@@ -441,10 +453,84 @@ public abstract class ORecordSerializerStringAbstract implements ORecordSerializ
 				}
 		}
 
-		if (integer)
-			return new Integer(iValue);
-		else
-			return new Float(iValue);
+		if (integer) {
+			try {
+				return new Integer(iValue);
+			} catch (NumberFormatException e) {
+				return new Long(iValue);
+			}
+		} else
+			return new BigDecimal(iValue);
+	}
+
+	public static Object simpleValueFromStream(final Object iValue, final OType iType) {
+		switch (iType) {
+		case STRING:
+			if (iValue instanceof String) {
+				final String s = OStringSerializerHelper.getStringContent(iValue);
+				return OStringSerializerHelper.decode(s);
+			}
+			return iValue.toString();
+
+		case INTEGER:
+			if (iValue instanceof Integer)
+				return iValue;
+			return new Integer(iValue.toString());
+
+		case BOOLEAN:
+			if (iValue instanceof Boolean)
+				return iValue;
+			return new Boolean(iValue.toString());
+
+		case FLOAT:
+			if (iValue instanceof Float)
+				return iValue;
+			return convertValue((String) iValue, iType);
+
+		case DECIMAL:
+			if (iValue instanceof BigDecimal)
+				return iValue;
+			return convertValue((String) iValue, iType);
+
+		case LONG:
+			if (iValue instanceof Long)
+				return iValue;
+			return convertValue((String) iValue, iType);
+
+		case DOUBLE:
+			if (iValue instanceof Double)
+				return iValue;
+			return convertValue((String) iValue, iType);
+
+		case SHORT:
+			if (iValue instanceof Short)
+				return iValue;
+			return convertValue((String) iValue, iType);
+
+		case BYTE:
+			if (iValue instanceof Byte)
+				return iValue;
+			return convertValue((String) iValue, iType);
+
+		case BINARY:
+			return OStringSerializerHelper.getBinaryContent(iValue);
+
+		case DATE:
+		case DATETIME:
+			if (iValue instanceof Date)
+				return iValue;
+			return convertValue((String) iValue, iType);
+
+		case LINK:
+			if (iValue instanceof ORID)
+				return iValue.toString();
+			else if (iValue instanceof String)
+				return new ORecordId((String) iValue);
+			else
+				return ((ORecord<?>) iValue).getIdentity().toString();
+		}
+
+		throw new IllegalArgumentException("Type " + iType + " is not simple type.");
 	}
 
 	public static void simpleValueToStream(final StringBuilder iBuffer, final OType iType, final Object iValue) {
@@ -468,6 +554,11 @@ public abstract class ORecordSerializerStringAbstract implements ORecordSerializ
 		case FLOAT:
 			iBuffer.append(String.valueOf(iValue));
 			iBuffer.append('f');
+			break;
+
+		case DECIMAL:
+			iBuffer.append(String.valueOf(iValue));
+			iBuffer.append('c');
 			break;
 
 		case LONG:

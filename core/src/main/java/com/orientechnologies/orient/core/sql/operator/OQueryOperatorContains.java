@@ -15,11 +15,9 @@
  */
 package com.orientechnologies.orient.core.sql.operator;
 
-import java.util.Collection;
-
+import com.orientechnologies.orient.core.command.OCommandContext;
+import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORID;
-import com.orientechnologies.orient.core.record.ORecordInternal;
-import com.orientechnologies.orient.core.record.ORecordSchemaAware;
 import com.orientechnologies.orient.core.sql.filter.OSQLFilterCondition;
 
 /**
@@ -36,8 +34,8 @@ public class OQueryOperatorContains extends OQueryOperatorEqualityNotNulls {
 
 	@Override
 	@SuppressWarnings("unchecked")
-	protected boolean evaluateExpression(final ORecordInternal<?> iRecord, final OSQLFilterCondition iCondition, final Object iLeft,
-			final Object iRight) {
+	protected boolean evaluateExpression(final OIdentifiable iRecord, final OSQLFilterCondition iCondition, final Object iLeft,
+			final Object iRight, OCommandContext iContext) {
 		final OSQLFilterCondition condition;
 		if (iCondition.getLeft() instanceof OSQLFilterCondition)
 			condition = (OSQLFilterCondition) iCondition.getLeft();
@@ -46,36 +44,36 @@ public class OQueryOperatorContains extends OQueryOperatorEqualityNotNulls {
 		else
 			condition = null;
 
-		if (iLeft instanceof Collection<?>) {
+		if (iLeft instanceof Iterable<?>) {
 
-			final Collection<Object> collection = (Collection<Object>) iLeft;
+			final Iterable<Object> iterable = (Iterable<Object>) iLeft;
 
 			if (condition != null) {
 				// CHECK AGAINST A CONDITION
-				for (final Object o : collection) {
-					if ((Boolean) condition.evaluate((ORecordSchemaAware<?>) o) == Boolean.TRUE)
+				for (final Object o : iterable) {
+					if ((Boolean) condition.evaluate((OIdentifiable) o, iContext) == Boolean.TRUE)
 						return true;
 				}
 			} else {
 				// CHECK AGAINST A SINGLE VALUE
-				for (final Object o : collection) {
+				for (final Object o : iterable) {
 					if (OQueryOperatorEquals.equals(iRight, o))
 						return true;
 				}
 			}
-		} else if (iRight instanceof Collection<?>) {
+		} else if (iRight instanceof Iterable<?>) {
 
 			// CHECK AGAINST A CONDITION
-			final Collection<ORecordSchemaAware<?>> collection = (Collection<ORecordSchemaAware<?>>) iRight;
+			final Iterable<OIdentifiable> iterable = (Iterable<OIdentifiable>) iRight;
 
 			if (condition != null) {
-				for (final ORecordSchemaAware<?> o : collection) {
-					if ((Boolean) condition.evaluate(o) == Boolean.TRUE)
+				for (final OIdentifiable o : iterable) {
+					if ((Boolean) condition.evaluate(o, iContext) == Boolean.TRUE)
 						return true;
 				}
 			} else {
 				// CHECK AGAINST A SINGLE VALUE
-				for (final Object o : collection) {
+				for (final Object o : iterable) {
 					if (OQueryOperatorEquals.equals(iLeft, o))
 						return true;
 				}
@@ -86,21 +84,20 @@ public class OQueryOperatorContains extends OQueryOperatorEqualityNotNulls {
 
 	@Override
 	public OIndexReuseType getIndexReuseType(final Object iLeft, final Object iRight) {
-    if(!(iLeft instanceof OSQLFilterCondition) && !(iRight instanceof OSQLFilterCondition))
-      return OIndexReuseType.INDEX_METHOD;
+		if (!(iLeft instanceof OSQLFilterCondition) && !(iRight instanceof OSQLFilterCondition))
+			return OIndexReuseType.INDEX_METHOD;
 
 		return OIndexReuseType.NO_INDEX;
 	}
 
+	@Override
+	public ORID getBeginRidRange(Object iLeft, Object iRight) {
+		return null;
+	}
 
-  @Override
-  public ORID getBeginRidRange(Object iLeft, Object iRight) {
-    return null;
-  }
-
-  @Override
-  public ORID getEndRidRange(Object iLeft, Object iRight) {
-    return null;
-  }
+	@Override
+	public ORID getEndRidRange(Object iLeft, Object iRight) {
+		return null;
+	}
 
 }

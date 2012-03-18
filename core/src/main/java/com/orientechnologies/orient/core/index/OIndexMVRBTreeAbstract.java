@@ -35,7 +35,6 @@ import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.annotation.ODocumentInstance;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.db.ODatabase;
-import com.orientechnologies.orient.core.db.ODatabaseListener;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
@@ -61,8 +60,7 @@ import com.orientechnologies.orient.core.type.tree.provider.OMVRBTreeProviderAbs
  * @author Luca Garulli
  * 
  */
-public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveExternal implements OIndexInternal<T>,
-		ODatabaseListener {
+public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveExternal implements OIndexInternal<T> {
 	protected static final String										CONFIG_MAP_RID	= "mapRid";
 	protected static final String										CONFIG_CLUSTERS	= "clusters";
 	protected String																name;
@@ -76,7 +74,7 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
 	private final Listener													watchDog;
 
 	public OIndexMVRBTreeAbstract(final String iType) {
-		super(true, OGlobalConfiguration.MVRBTREE_TIMEOUT.getValueAsInteger());
+		super(true, OGlobalConfiguration.MVRBTREE_TIMEOUT.getValueAsInteger(), true);
 
 		type = iType;
 		watchDog = new Listener() {
@@ -106,7 +104,7 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
 		try {
 
 			name = iName;
-			configuration = new ODocument(iDatabase);
+			configuration = new ODocument();
 
 			indexDefinition = iIndexDefinition;
 
@@ -115,7 +113,7 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
 					clustersToIndex.add(iDatabase.getClusterNameById(id));
 
 			final OStreamSerializer keySerializer;
-			if (indexDefinition instanceof OCompositeIndexDefinition)
+			if (indexDefinition != null && indexDefinition.getTypes().length > 1)
 				keySerializer = OCompositeKeySerializer.INSTANCE;
 			else
 				keySerializer = OStreamSerializerLiteral.INSTANCE;
@@ -146,7 +144,7 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
 
 			final ORID rid = (ORID) iConfig.field(CONFIG_MAP_RID, ORID.class);
 			if (rid == null)
-				return null;
+				throw new OIndexException("Error during deserialization of index definition: '" + CONFIG_MAP_RID + "' attribute is null");
 
 			configuration = iConfig;
 			name = configuration.field(OIndexInternal.CONFIG_NAME);
@@ -490,7 +488,15 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
 
 	@Override
 	public String toString() {
-		return name + " (" + (type != null ? type : "?") + ")" + (map != null ? " " + map : "");
+		if (tryAcquireExclusiveLock())
+			try {
+
+				return name + " (" + (type != null ? type : "?") + ")" + (map != null ? " " + map : "");
+
+			} finally {
+				releaseExclusiveLock();
+			}
+		return "!Locked resource";
 	}
 
 	public OIndexInternal<T> getInternal() {
@@ -685,9 +691,21 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
 	}
 
 	public void onBeforeTxBegin(final ODatabase iDatabase) {
+		acquireExclusiveLock();
+		try {
+
+			map.commitChanges(true);
+
+		} finally {
+			releaseExclusiveLock();
+		}
 	}
 
 	public void onBeforeTxRollback(final ODatabase iDatabase) {
+	}
+
+	public boolean onCorruptionRepairDatabase(final ODatabase iDatabase, final String iReason, String iWhatWillbeFixed) {
+		return false;
 	}
 
 	public void onAfterTxRollback(final ODatabase iDatabase) {
@@ -703,14 +721,6 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
 	}
 
 	public void onBeforeTxCommit(final ODatabase iDatabase) {
-		acquireExclusiveLock();
-		try {
-
-			map.commitChanges();
-
-		} finally {
-			releaseExclusiveLock();
-		}
 	}
 
 	public void onAfterTxCommit(final ODatabase iDatabase) {

@@ -241,6 +241,11 @@ public abstract class ODatabasePojoAbstract<T extends Object> extends ODatabaseW
 		return this;
 	}
 
+	public ODatabaseComplex<T> delete(final ORID iRID) {
+		underlying.delete(iRID);
+		return this;
+	}
+
 	public <DBTYPE extends ODatabaseComplex<?>> DBTYPE registerHook(final ORecordHook iHookImpl) {
 		underlying.registerHook(iHookImpl);
 		return (DBTYPE) this;
@@ -457,7 +462,7 @@ public abstract class ODatabasePojoAbstract<T extends Object> extends ODatabaseW
 	}
 
 	/**
-	 * Convert an array of parameters: if a POJO is used, then replace it with its record id.
+	 * Converts an array of parameters: if a POJO is used, then replace it with its record id.
 	 * 
 	 * @param iArgs
 	 *          Array of parameters as Object

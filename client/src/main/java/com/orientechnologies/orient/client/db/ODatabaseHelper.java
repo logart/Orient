@@ -33,7 +33,7 @@ public class ODatabaseHelper {
 
 	public static void createDatabase(ODatabase database, final String iURL, String iDirectory) throws IOException {
 		if (iURL.startsWith(OEngineRemote.NAME)) {
-			new OServerAdmin(iURL).connect("root", getServerRootPassword(iDirectory)).createDatabase("local").close();
+			new OServerAdmin(iURL).connect("root", getServerRootPassword(iDirectory)).createDatabase("document", "local").close();
 		} else {
 			database.create();
 			database.close();
@@ -44,11 +44,20 @@ public class ODatabaseHelper {
 		deleteDatabase(database, "server");
 	}
 
-	public static void deleteDatabase(final ODatabase database, String iDirectory) throws IOException {
+	@Deprecated
+	public static void deleteDatabase(final ODatabase database, final String iDirectory) throws IOException {
+		dropDatabase(database, iDirectory);
+	}
+
+	public static void dropDatabase(final ODatabase database) throws IOException {
+		dropDatabase(database, "server");
+	}
+
+	public static void dropDatabase(final ODatabase database, final String iDirectory) throws IOException {
 		if (database.getURL().startsWith("remote:")) {
 			new OServerAdmin(database.getURL()).connect("root", getServerRootPassword(iDirectory)).dropDatabase();
 		} else {
-			database.delete();
+			database.drop();
 		}
 	}
 

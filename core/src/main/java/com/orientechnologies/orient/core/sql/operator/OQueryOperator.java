@@ -17,8 +17,9 @@ package com.orientechnologies.orient.core.sql.operator;
 
 import java.util.List;
 
+import com.orientechnologies.orient.core.command.OCommandContext;
+import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORID;
-import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.sql.filter.OSQLFilterCondition;
 
 /**
@@ -28,24 +29,27 @@ import com.orientechnologies.orient.core.sql.filter.OSQLFilterCondition;
  * 
  */
 public abstract class OQueryOperator {
-	public final String	keyword;
-	public final int		precedence;
-	public final int		expectedRightWords;
+	public final String		keyword;
+	public final int			precedence;
+	public final int			expectedRightWords;
+	public final boolean	unary;
 
-	protected OQueryOperator(final String iKeyword, final int iPrecedence, final boolean iLogical) {
+	protected OQueryOperator(final String iKeyword, final int iPrecedence, final boolean iUnary) {
 		keyword = iKeyword;
 		precedence = iPrecedence;
+		unary = iUnary;
 		expectedRightWords = 1;
 	}
 
-	protected OQueryOperator(final String iKeyword, final int iPrecedence, final boolean iLogical, final int iExpectedRightWords) {
+	protected OQueryOperator(final String iKeyword, final int iPrecedence, final boolean iUnary, final int iExpectedRightWords) {
 		keyword = iKeyword;
 		precedence = iPrecedence;
+		unary = iUnary;
 		expectedRightWords = iExpectedRightWords;
 	}
 
-	public abstract Object evaluateRecord(final ORecordInternal<?> iRecord, final OSQLFilterCondition iCondition, final Object iLeft,
-			final Object iRight);
+	public abstract Object evaluateRecord(final OIdentifiable iRecord, final OSQLFilterCondition iCondition, final Object iLeft,
+			final Object iRight, OCommandContext iContext);
 
 	public abstract OIndexReuseType getIndexReuseType(Object iLeft, Object iRight);
 
@@ -66,9 +70,13 @@ public abstract class OQueryOperator {
 
 	public String getSyntax() {
 		return "<left> " + keyword + " <right>";
-  }
+	}
 
-  public abstract ORID getBeginRidRange(final Object iLeft, final Object iRight);
+	public abstract ORID getBeginRidRange(final Object iLeft, final Object iRight);
 
-  public abstract ORID getEndRidRange(final Object iLeft, final Object iRight);
+	public abstract ORID getEndRidRange(final Object iLeft, final Object iRight);
+
+	public boolean isUnary() {
+		return unary;
+	}
 }

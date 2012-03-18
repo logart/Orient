@@ -40,6 +40,8 @@ public class OMVRBTreeRIDSet implements Set<OIdentifiable>, OStringBuilderSerial
 
 	private final OMVRBTreeRID	tree;
 
+	public static final String	OCLASS_NAME				= "ORIDs";
+
 	public OMVRBTreeRIDSet() {
 		this(new OMVRBTreeRID());
 	}
@@ -70,8 +72,9 @@ public class OMVRBTreeRIDSet implements Set<OIdentifiable>, OStringBuilderSerial
 	 * @param iSource
 	 *          Source object
 	 */
-	public OMVRBTreeRIDSet(final OMVRBTreeRIDSet iSource) {
+	public OMVRBTreeRIDSet(final OMVRBTreeRIDSet iSource, final ODocument iClone) {
 		tree = new OMVRBTreeRID(iSource.tree);
+		tree.setOwner(iClone);
 	}
 
 	public int size() {
@@ -150,8 +153,8 @@ public class OMVRBTreeRIDSet implements Set<OIdentifiable>, OStringBuilderSerial
 		return ((OMVRBTreeRIDProvider) tree.getProvider()).toDocument();
 	}
 
-	public OMVRBTreeRIDSet copy() {
-		final OMVRBTreeRIDSet clone = new OMVRBTreeRIDSet(this);
+	public OMVRBTreeRIDSet copy(final ODocument iCloned) {
+		final OMVRBTreeRIDSet clone = new OMVRBTreeRIDSet(this, iCloned);
 		return clone;
 	}
 

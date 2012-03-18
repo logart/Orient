@@ -16,6 +16,7 @@
 package com.orientechnologies.orient.test.database.auto;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,12 @@ public class JSONTest {
 	@Parameters(value = "url")
 	public JSONTest(final String iURL) {
 		url = iURL;
+	}
+
+	@Test
+	public void testAlmostLink() {
+		ODocument doc = new ODocument();
+		doc.fromJSON("{'title': '#330: Dollar Coins Are Done':}");
 	}
 
 	@Test
@@ -124,6 +131,66 @@ public class JSONTest {
 
 		d = ((Map<String, ODocument>) loadedDoc.field("map")).get("Cesare");
 		Assert.assertEquals(d.field("name"), "Cesare");
+	}
+
+	@Test
+	public void testMultiLevelTypes() {
+		ODocument newDoc = new ODocument();
+		newDoc.field("long", 100000000000l);
+		newDoc.field("date", new Date());
+		newDoc.field("byte", (byte) 12);
+		ODocument firstLevelDoc = new ODocument();
+		firstLevelDoc.field("long", 200000000000l);
+		firstLevelDoc.field("date", new Date());
+		firstLevelDoc.field("byte", (byte) 13);
+		ODocument secondLevelDoc = new ODocument();
+		secondLevelDoc.field("long", 300000000000l);
+		secondLevelDoc.field("date", new Date());
+		secondLevelDoc.field("byte", (byte) 14);
+		ODocument thirdLevelDoc = new ODocument();
+		thirdLevelDoc.field("long", 400000000000l);
+		thirdLevelDoc.field("date", new Date());
+		thirdLevelDoc.field("byte", (byte) 15);
+		newDoc.field("doc", firstLevelDoc);
+		firstLevelDoc.field("doc", secondLevelDoc);
+		secondLevelDoc.field("doc", thirdLevelDoc);
+
+		String json = newDoc.toJSON();
+		ODocument loadedDoc = new ODocument().fromJSON(json);
+
+		Assert.assertTrue(newDoc.hasSameContentOf(loadedDoc));
+		Assert.assertTrue(loadedDoc.field("long") instanceof Long);
+		Assert.assertEquals(((Long) newDoc.field("long")).longValue(), ((Long) loadedDoc.field("long")).longValue());
+		Assert.assertTrue(loadedDoc.field("date") instanceof Date);
+		Assert.assertTrue(loadedDoc.field("byte") instanceof Byte);
+		Assert.assertEquals(((Byte) newDoc.field("byte")).byteValue(), ((Byte) loadedDoc.field("byte")).byteValue());
+		Assert.assertTrue(loadedDoc.field("doc") instanceof ODocument);
+
+		ODocument firstDoc = loadedDoc.field("doc");
+		Assert.assertTrue(firstLevelDoc.hasSameContentOf(firstDoc));
+		Assert.assertTrue(firstDoc.field("long") instanceof Long);
+		Assert.assertEquals(((Long) firstLevelDoc.field("long")).longValue(), ((Long) firstDoc.field("long")).longValue());
+		Assert.assertTrue(firstDoc.field("date") instanceof Date);
+		Assert.assertTrue(firstDoc.field("byte") instanceof Byte);
+		Assert.assertEquals(((Byte) firstLevelDoc.field("byte")).byteValue(), ((Byte) firstDoc.field("byte")).byteValue());
+		Assert.assertTrue(firstDoc.field("doc") instanceof ODocument);
+
+		ODocument secondDoc = firstDoc.field("doc");
+		Assert.assertTrue(secondLevelDoc.hasSameContentOf(secondDoc));
+		Assert.assertTrue(secondDoc.field("long") instanceof Long);
+		Assert.assertEquals(((Long) secondLevelDoc.field("long")).longValue(), ((Long) secondDoc.field("long")).longValue());
+		Assert.assertTrue(secondDoc.field("date") instanceof Date);
+		Assert.assertTrue(secondDoc.field("byte") instanceof Byte);
+		Assert.assertEquals(((Byte) secondLevelDoc.field("byte")).byteValue(), ((Byte) secondDoc.field("byte")).byteValue());
+		Assert.assertTrue(secondDoc.field("doc") instanceof ODocument);
+
+		ODocument thirdDoc = secondDoc.field("doc");
+		Assert.assertTrue(thirdLevelDoc.hasSameContentOf(thirdDoc));
+		Assert.assertTrue(thirdDoc.field("long") instanceof Long);
+		Assert.assertEquals(((Long) thirdLevelDoc.field("long")).longValue(), ((Long) thirdDoc.field("long")).longValue());
+		Assert.assertTrue(thirdDoc.field("date") instanceof Date);
+		Assert.assertTrue(thirdDoc.field("byte") instanceof Byte);
+		Assert.assertEquals(((Byte) thirdLevelDoc.field("byte")).byteValue(), ((Byte) thirdDoc.field("byte")).byteValue());
 	}
 
 	@Test
@@ -232,8 +299,7 @@ public class JSONTest {
 		ODatabaseDocumentTx database = new ODatabaseDocumentTx(url);
 		database.open("admin", "admin");
 
-		ODocument doc = new ODocument(database)
-				.fromJSON("{name:{\"%Field\":[\"value1\",\"value2\"],\"%Field2\":{},\"%Field3\":\"value3\"}}");
+		ODocument doc = new ODocument().fromJSON("{name:{\"%Field\":[\"value1\",\"value2\"],\"%Field2\":{},\"%Field3\":\"value3\"}}");
 		doc.save();
 
 		ODocument doc2 = database.load(doc.getIdentity());
@@ -244,7 +310,7 @@ public class JSONTest {
 		ODatabaseDocumentTx database = new ODatabaseDocumentTx(url);
 		database.open("admin", "admin");
 
-		ODocument newDoc = new ODocument(database);
+		ODocument newDoc = new ODocument();
 
 		newDoc
 				.fromJSON("{\"@type\": \"d\",\"@class\": \"Track\",\"type\": \"LineString\",\"coordinates\": [ [ 100,  0 ],  [ 101, 1 ] ]}");
@@ -261,7 +327,7 @@ public class JSONTest {
 		ODatabaseDocumentTx database = new ODatabaseDocumentTx(url);
 		database.open("admin", "admin");
 
-		ODocument doc = new ODocument(database)
+		ODocument doc = new ODocument()
 				.fromJSON("{Field:{\"Key1\":[\"Value1\",\"Value2\"],\"Key2\":{\"%%dummy%%\":null},\"Key3\":\"Value3\"}}");
 		doc.save();
 

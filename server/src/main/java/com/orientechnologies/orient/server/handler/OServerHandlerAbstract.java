@@ -19,11 +19,20 @@ import com.orientechnologies.orient.server.OClientConnection;
 import com.orientechnologies.orient.server.OServer;
 import com.orientechnologies.orient.server.config.OServerParameterConfiguration;
 
+/**
+ * Abstract class to make OServerHandler implementation easier.
+ * 
+ * @author Luca Garulli (l.garulli--at--orientechnologies.com)
+ * 
+ */
 public abstract class OServerHandlerAbstract implements OServerHandler {
 	public void startup() {
 	}
 
 	public void shutdown() {
+	}
+
+	public void sendShutdown() {
 	}
 
 	public void config(OServer oServer, OServerParameterConfiguration[] iParams) {

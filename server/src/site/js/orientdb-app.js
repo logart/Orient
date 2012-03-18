@@ -15,7 +15,7 @@
  */
 
 function defaultSimpleRequestError(msg) {
-	jQuery("#output").text("Command response: " + msg);
+	$("#output").text("Command response: " + msg);
 }
 
 function executeSimpleRequest(iRequest, iSuccessCallback, iErrorCallback) {
@@ -53,9 +53,6 @@ function fillDynaTable(iTable, iTitle, iColumnsNames, iColumnsModel, iData,
 		multiselect : false,
 		viewrecords : true,
 		gridview : true,
-		sortname : "@rid",
-		sortorder : "asc",
-		caption : iTitle,
 		loadonce : true,
 		colNames : iColumnsNames,
 		colModel : columnModel
@@ -69,13 +66,13 @@ function fillDynaTable(iTable, iTitle, iColumnsNames, iColumnsModel, iData,
 		for (property in iCustomConfig)
 			config[property] = iCustomConfig[property];
 
-	jQuery(iTable).jqGrid(config);
+	$(iTable).jqGrid(config);
 
 	if (iToolBar) {
 		if (navBar)
-			jQuery(iTable).jqGrid("navGrid", navBar);
+			$(iTable).jqGrid("navGrid", navBar);
 
-		jQuery(iTable).jqGrid('filterToolbar', {
+		$(iTable).jqGrid('filterToolbar', {
 			stringResult : true,
 			searchOnEnter : false
 		});
@@ -85,11 +82,11 @@ function fillDynaTable(iTable, iTitle, iColumnsNames, iColumnsModel, iData,
 }
 
 function fillDynaTableRows(iTable, iData) {
-	jQuery(iTable).jqGrid('clearGridData');
+	$(iTable).jqGrid('clearGridData');
 
 	if (iData)
 		for ( var i = 0; i <= iData.length; i++)
-			jQuery(iTable).jqGrid('addRowData', i + 1, iData[i]);
+			$(iTable).jqGrid('addRowData', i + 1, iData[i]);
 }
 
 function fillStaticTable(iTable, iColumns, iData) {
@@ -97,7 +94,8 @@ function fillStaticTable(iTable, iColumns, iData) {
 
 	var line = "";
 	for (col in iColumns) {
-		line += '<td><b>' + iColumns[col] + '</b></td>';
+		line += '<td style=\'font-size: 8pt;\'><b>' + iColumns[col]
+				+ '</b></td>';
 	}
 	$(iTable).append('<tr>' + line + '</tr>');
 
@@ -110,12 +108,12 @@ function fillStaticTable(iTable, iColumns, iData) {
 			if (i++ >= iColumns.length)
 				break;
 
-			line += '<td>' + values[col] + '</td>';
+			line += '<td style=\'font-size: 8pt;\'>' + values[col] + '</td>';
 		}
 		$(iTable).append('<tr>' + line + '</tr>');
 	}
 
-	jQuery("#output").text("Command executed");
+	$("#output").text("Command executed");
 }
 
 function buildColumnNames(table) {
@@ -131,9 +129,26 @@ function buildColumnNames(table) {
 	return columnNames;
 }
 
+function dynaFormatter(cellvalue, options, rowObject) {
+	if (typeof cellvalue == 'string' && cellvalue.charAt(0) == '#'
+			&& cellvalue.indexOf(':') > -1) {
+		// LINK
+		return linkFormatter(cellvalue, options, rowObject);
+	}
+	return cellvalue;
+}
+
+function dynaUnformatter(cellvalue, options, rowObject) {
+	return cellvalue;
+}
+function classFormatter(cellvalue, options, rowObject) {
+	return "<a onclick=\"openClass('" + cellvalue + "');\" class='className'>"
+			+ cellvalue + "</a>";
+}
+
 function linkFormatter(cellvalue, options, rowObject) {
-	return cellvalue + " <img src='images/link.png' onclick=\"openLink('"
-			+ cellvalue + "');\" />";
+	return "<a onclick=\"openLink('" + cellvalue + "');\" class='link'>"
+			+ cellvalue + "</a>";
 }
 function linkUnformatter(cellvalue, options) {
 	if (cellvalue)
@@ -141,16 +156,54 @@ function linkUnformatter(cellvalue, options) {
 
 	return "";
 }
+function linksFormatter(cellvalue, options, rowObject) {
+	if (typeof cellvalue == 'string') {
+		cellvalue = cellvalue.substring(1, cellvalue.length - 1);
+		if (cellvalue.length == 0)
+			return "[]";
+		cellvalue = cellvalue.split(',');
+	}
+
+	var buffer = "[";
+	for (i in cellvalue) {
+		if (buffer.length > 1)
+			buffer += ",";
+		buffer += linkFormatter(cellvalue[i]);
+	}
+	buffer += "]";
+	return buffer;
+}
+function linksUnformatter(cellvalue, options, rowObject) {
+	var buffer = "[";
+	if (cellvalue.length > 2) {
+		var entries = cellvalue.substring(1, cellvalue.length - 1).split(',');
+		for (i in entries) {
+			if (buffer.length > 1)
+				buffer += ",";
+			buffer += entries[i].split(' ')[0];
+		}
+	}
+	buffer += "]";
+	return buffer;
+}
 function embeddedFormatter(cellvalue, options, rowObject) {
 	return "<img src='images/embedded.png' />";
 }
 
-function openLink(cellvalue) {
-	alert(cellvalue);
+function openClass(clsName) {
+	controller.loadFragment("panelDatabase.htm", function() {
+		displayClass(clsName);
+	});
+}
+function openLink(rid) {
+	displayDocument(rid, orientServer);
 }
 
-function displayResultSet(result, schema) {
-	jQuery("#output").val(
+function displayResultSet(result) {
+	if (!result || result.constructor != Array)
+		return;
+
+	$("#output").val(
 			"Query executed in " + stopTimer() + " sec. Returned "
 					+ result.length + " record(s)");
 
@@ -159,12 +212,27 @@ function displayResultSet(result, schema) {
 
 	// CREATE COLUMN MODEL
 	var columnModel = new Array();
+	var schema;
+
+	if (result.length > 0) {
+		for (cls in databaseInfo['classes']) {
+			if (databaseInfo['classes'][cls].name == result[0]["@class"]) {
+				schema = databaseInfo['classes'][cls];
+				break;
+			}
+		}
+
+	}
 
 	columnModel.push({
 		"name" : "@rid",
 		"index" : "@rid",
-		"width" : 30,
+		"align" : "center",
 		"classes" : "cell_readonly",
+		"width" : "70px",
+		formatter : linkFormatter,
+		unformatter : linkUnformatter,
+		fixed : true,
 		searchoptions : {
 			sopt : [ "cn" ]
 		}
@@ -172,8 +240,9 @@ function displayResultSet(result, schema) {
 	columnModel.push({
 		"name" : "@version",
 		"index" : "@version",
-		"width" : 30,
 		"classes" : "cell_readonly",
+		"width" : "40px",
+		fixed : true,
 		searchoptions : {
 			sopt : [ "cn" ]
 		}
@@ -181,24 +250,12 @@ function displayResultSet(result, schema) {
 	columnModel.push({
 		"name" : "@class",
 		"index" : "@class",
-		"width" : 30,
 		"classes" : "cell_readonly",
+		"width" : "100px",
+		fixed : true,
+		formatter : classFormatter,
 		searchoptions : {
 			sopt : [ "cn" ]
-		}
-	});
-	columnModel.push({
-		"name" : "@class",
-		"index" : "_className",
-		edittype : "select",
-		editoptions : {
-			value : classEnumeration
-		},
-		hidden : true,
-		editable : true,
-		search : false,
-		editrules : {
-			edithidden : true
 		}
 	});
 
@@ -210,8 +267,17 @@ function displayResultSet(result, schema) {
 		editOptions = null;
 		unformatter = null;
 
-		if (schema && schema.properties && schema.properties[columnNames[col]]) {
-			var type = schema.properties[columnNames[col]].type;
+		var type = null;
+
+		if (schema && columnNames[col].charAt(0) != '@') {
+
+			for (p in schema.properties) {
+				if (schema.properties[p].name == columnNames[col]) {
+					type = schema.properties[p].type;
+					break;
+				}
+			}
+
 			switch (type) {
 			case 'STRING':
 				formatter = "text";
@@ -233,19 +299,24 @@ function displayResultSet(result, schema) {
 				formatter = "embeddedListFormatter";
 				break;
 			case 'LINKLIST':
-				formatter = "linkListFormatter";
+				formatter = linksFormatter;
+				unformatter = linksUnformatter;
 				break;
 			case 'EMBEDDEDSET':
 				formatter = "embeddedSetFormatter";
 				break;
 			case 'LINKSET':
-				formatter = "linkSetFormatter";
+				formatter = linksFormatter;
+				unformatter = linksUnformatter;
 				break;
-			default:
-				formatter = "text";
 			}
-		} else
-			formatter = "text";
+		}
+
+		if (!type) {
+			// UNKNOWN: USE DYNAMIC FORMATTER
+			formatter = dynaFormatter;
+			unformatter = dynaUnformatter;
+		}
 
 		editFormatter = formatter;
 
@@ -254,7 +325,6 @@ function displayResultSet(result, schema) {
 				name : columnNames[col],
 				editable : true,
 				index : columnNames[col],
-				width : 80,
 				formatter : formatter,
 				unformat : unformatter,
 				// edittype : editFormatter,
@@ -269,65 +339,74 @@ function displayResultSet(result, schema) {
 
 	var lastsel;
 
-	jQuery($('#queryResultTable')).jqGrid('GridUnload');
+	$($('#queryResultTable')).jqGrid('GridUnload');
 	fillDynaTable($('#queryResultTable'), "Resultset", columnNames,
 			columnModel, result, {
 				sortname : '@rid',
-				width : 400,
 				height : 300,
 				editurl : getStudioURL('document'),
 				onSelectRow : function(id) {
 					if (id && id !== lastsel) {
-						jQuery('#queryResultTable').jqGrid('restoreRow',
-								lastsel);
+						$('#queryResultTable').jqGrid('restoreRow', lastsel);
 						lastsel = id;
 					}
 
-					var recId = jQuery('#queryResultTable').jqGrid(
-							'getRowData', id)["@rid"];
-					jQuery('#queryResultTable').jqGrid('editRow', id, true,
-							null, function(response, postdata) {
-								jQuery("#output").val(response.responseText);
+					var recId = getRid(id);
+
+					$('#queryResultTable').jqGrid('editRow', id, true, null,
+							function(response, postdata) {
+								$("#output").val(response.responseText);
 								return true;
 							}, getStudioURL('document'), [ recId ]);
 				}
 			}, true);
 
 	$("#newRecord").click(function() {
-		jQuery("#queryResultTable").jqGrid('editGridRow', "new", {
+		$("#queryResultTable").jqGrid('editGridRow', "new", {
 			height : 280,
 			reloadAfterSubmit : false,
 			closeAfterAdd : true,
 			closeOnEscape : true,
 			afterSubmit : function(response, postdata) {
-				jQuery("#output").val(response.responseText);
+				$("#output").val(response.responseText);
 				return true;
 			}
 		});
 	});
 	$("#deleteRecord").click(
 			function() {
-				var selectedRow = jQuery("#queryResultTable").jqGrid(
-						'getGridParam', 'selrow');
+				var selectedRow = $("#queryResultTable").jqGrid('getGridParam',
+						'selrow');
 				if (selectedRow != null) {
-					var recId = jQuery('#queryResultTable').jqGrid(
-							'getRowData', selectedRow)["@rid"];
-					jQuery("#queryResultTable").jqGrid(
-							'delGridRow',
-							selectedRow,
-							{
-								reloadAfterSubmit : false,
-								closeAfterDelete : true,
-								closeOnEscape : true,
-								delData : [ recId ],
-								afterSubmit : function(response, postdata) {
-									jQuery("#output")
-											.val(response.responseText);
-									return [ true, response.responseText ];
-								}
-							});
+					var recId = getRid(selectedRow);
+					$("#queryResultTable").jqGrid('delGridRow', selectedRow, {
+						reloadAfterSubmit : false,
+						closeAfterDelete : true,
+						closeOnEscape : true,
+						delData : [ recId ],
+						afterSubmit : function(response, postdata) {
+							$("#output").val(response.responseText);
+							return [ true, response.responseText ];
+						}
+					});
 				} else
 					alert("Please Select Row to delete!");
 			});
 
+}
+
+function getRid(id) {
+	var obj = $('#queryResultTable').jqGrid('getRowData', id);
+	if (!obj)
+		return null;
+
+	var recId = obj["@rid"];
+	var begin = recId.indexOf('>#');
+	if (begin > -1) {
+		var end = recId.indexOf('<', begin);
+		recId = recId.substring(begin + 1, end);
+	}
+
+	selectedObject = recId;
+	return recId;
 }

@@ -22,12 +22,14 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 import com.orientechnologies.common.concur.OTimeoutException;
+import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.common.util.OPair;
 import com.orientechnologies.orient.core.config.OContextConfiguration;
@@ -51,13 +53,16 @@ public abstract class OChannelBinary extends OChannel {
 		maxChunkSize = iConfig.getValueAsInteger(OGlobalConfiguration.NETWORK_BINARY_MAX_CONTENT_LENGTH);
 		debug = iConfig.getValueAsBoolean(OGlobalConfiguration.NETWORK_BINARY_DEBUG);
 		buffer = new byte[maxChunkSize];
+
+		if (debug)
+			OLogManager.instance().debug(this, "%s - Connected", socket.getRemoteSocketAddress());
 	}
 
 	public byte readByte() throws IOException {
 		if (debug) {
-			OLogManager.instance().debug(this, "Reading byte (1 byte)...");
+			OLogManager.instance().debug(this, "%s - Reading byte (1 byte)...", socket.getRemoteSocketAddress());
 			final byte value = in.readByte();
-			OLogManager.instance().debug(this, "Read byte: " + (int) value);
+			OLogManager.instance().debug(this, "%s - Read byte: %d", socket.getRemoteSocketAddress(), (int) value);
 			return value;
 		}
 
@@ -66,9 +71,9 @@ public abstract class OChannelBinary extends OChannel {
 
 	public int readInt() throws IOException {
 		if (debug) {
-			OLogManager.instance().debug(this, "Reading int (4 bytes)...");
+			OLogManager.instance().debug(this, "%s - Reading int (4 bytes)...", socket.getRemoteSocketAddress());
 			final int value = in.readInt();
-			OLogManager.instance().debug(this, "Read int: " + value);
+			OLogManager.instance().debug(this, "%s - Read int: %d", socket.getRemoteSocketAddress(), value);
 			return value;
 		}
 
@@ -77,9 +82,9 @@ public abstract class OChannelBinary extends OChannel {
 
 	public long readLong() throws IOException {
 		if (debug) {
-			OLogManager.instance().debug(this, "Reading long (8 bytes)...");
+			OLogManager.instance().debug(this, "%s - Reading long (8 bytes)...", socket.getRemoteSocketAddress());
 			final long value = in.readLong();
-			OLogManager.instance().debug(this, "Read long: " + value);
+			OLogManager.instance().debug(this, "%s - Read long: %d", socket.getRemoteSocketAddress(), value);
 			return value;
 		}
 
@@ -88,9 +93,9 @@ public abstract class OChannelBinary extends OChannel {
 
 	public short readShort() throws IOException {
 		if (debug) {
-			OLogManager.instance().debug(this, "Reading short (2 bytes)...");
+			OLogManager.instance().debug(this, "%s - Reading short (2 bytes)...", socket.getRemoteSocketAddress());
 			final short value = in.readShort();
-			OLogManager.instance().debug(this, "Read short: " + value);
+			OLogManager.instance().debug(this, "%s - Read short: %d", socket.getRemoteSocketAddress(), value);
 			return value;
 		}
 
@@ -99,12 +104,12 @@ public abstract class OChannelBinary extends OChannel {
 
 	public String readString() throws IOException {
 		if (debug) {
-			OLogManager.instance().debug(this, "Reading string (4+N bytes)...");
+			OLogManager.instance().debug(this, "%s - Reading string (4+N bytes)...", socket.getRemoteSocketAddress());
 			byte[] buffer = readBytes();
 			if (buffer == null)
 				return null;
 			String value = new String(buffer);
-			OLogManager.instance().debug(this, "Read string: " + value);
+			OLogManager.instance().debug(this, "%s - Read string: %s", socket.getRemoteSocketAddress(), value);
 			return value;
 		}
 
@@ -117,36 +122,38 @@ public abstract class OChannelBinary extends OChannel {
 
 	public byte[] readBytes() throws IOException {
 		if (debug)
-			OLogManager.instance().debug(this, "Reading chunk of bytes. Reading chunk length as int (4 bytes)...");
+			OLogManager.instance().debug(this, "%s - Reading chunk of bytes. Reading chunk length as int (4 bytes)...",
+					socket.getRemoteSocketAddress());
 
 		final int len = in.readInt();
 
 		if (debug)
-			OLogManager.instance().debug(this, "Read chunk lenght: " + len);
+			OLogManager.instance().debug(this, "%s - Read chunk lenght: %d", socket.getRemoteSocketAddress(), len);
 
 		if (len < 0)
 			return null;
 
 		if (debug)
-			OLogManager.instance().debug(this, "Reading " + len + " bytes...");
+			OLogManager.instance().debug(this, "%s - Reading %d bytes...", socket.getRemoteSocketAddress(), len);
 
 		final byte[] tmp = new byte[len];
 		in.readFully(tmp);
 
 		if (debug)
-			OLogManager.instance().debug(this, "Read " + len + " bytes: " + new String(tmp));
+			OLogManager.instance().debug(this, "%s - Read %d bytes: %s", socket.getRemoteSocketAddress(), len, new String(tmp));
 
 		return tmp;
 	}
 
 	public List<String> readStringList() throws IOException {
 		if (debug)
-			OLogManager.instance().debug(this, "Reading string list. Reading string list items as int (4 bytes)...");
+			OLogManager.instance().debug(this, "%s - Reading string list. Reading string list items as int (4 bytes)...",
+					socket.getRemoteSocketAddress());
 
 		final int items = in.readInt();
 
 		if (debug)
-			OLogManager.instance().debug(this, "Read string list items: " + items);
+			OLogManager.instance().debug(this, "%s - Read string list items: %d", socket.getRemoteSocketAddress(), items);
 
 		if (items < 0)
 			return null;
@@ -156,19 +163,20 @@ public abstract class OChannelBinary extends OChannel {
 			result.add(readString());
 
 		if (debug)
-			OLogManager.instance().debug(this, "Read string list with %d items: ", items);
+			OLogManager.instance().debug(this, "%s - Read string list with %d items: %d", socket.getRemoteSocketAddress(), items);
 
 		return result;
 	}
 
 	public Set<String> readStringSet() throws IOException {
 		if (debug)
-			OLogManager.instance().debug(this, "Reading string set. Reading string set items as int (4 bytes)...");
+			OLogManager.instance().debug(this, "%s - Reading string set. Reading string set items as int (4 bytes)...",
+					socket.getRemoteSocketAddress());
 
 		int items = in.readInt();
 
 		if (debug)
-			OLogManager.instance().debug(this, "Read string set items: " + items);
+			OLogManager.instance().debug(this, "%s - Read string set items: %d", socket.getRemoteSocketAddress(), items);
 
 		if (items < 0)
 			return null;
@@ -178,7 +186,7 @@ public abstract class OChannelBinary extends OChannel {
 			result.add(readString());
 
 		if (debug)
-			OLogManager.instance().debug(this, "Read string set with %d items: ", items);
+			OLogManager.instance().debug(this, "%s - Read string set with %d items: %d", socket.getRemoteSocketAddress(), items, result);
 
 		return result;
 	}
@@ -187,38 +195,42 @@ public abstract class OChannelBinary extends OChannel {
 		return new ORecordId(readShort(), readLong());
 	}
 
-	public void writeByte(final byte iContent) throws IOException {
+	public OChannelBinary writeByte(final byte iContent) throws IOException {
 		if (debug)
-			OLogManager.instance().debug(this, "Writing byte (1 byte): %d", iContent);
+			OLogManager.instance().debug(this, "%s - Writing byte (1 byte): %d", socket.getRemoteSocketAddress(), iContent);
 
 		out.write(iContent);
+		return this;
 	}
 
-	public void writeInt(final int iContent) throws IOException {
+	public OChannelBinary writeInt(final int iContent) throws IOException {
 		if (debug)
-			OLogManager.instance().debug(this, "Writing int (4 bytes): %d", iContent);
+			OLogManager.instance().debug(this, "%s - Writing int (4 bytes): %d", socket.getRemoteSocketAddress(), iContent);
 
 		out.writeInt(iContent);
+		return this;
 	}
 
-	public void writeLong(final long iContent) throws IOException {
+	public OChannelBinary writeLong(final long iContent) throws IOException {
 		if (debug)
-			OLogManager.instance().debug(this, "Writing long (8 bytes): %d", iContent);
+			OLogManager.instance().debug(this, "%s - Writing long (8 bytes): %d", socket.getRemoteSocketAddress(), iContent);
 
 		out.writeLong(iContent);
+		return this;
 	}
 
-	public void writeShort(final short iContent) throws IOException {
+	public OChannelBinary writeShort(final short iContent) throws IOException {
 		if (debug)
-			OLogManager.instance().debug(this, "Writing long (2 bytes): %d", iContent);
+			OLogManager.instance().debug(this, "%s - Writing short (2 bytes): %d", socket.getRemoteSocketAddress(), iContent);
 
 		out.writeShort(iContent);
+		return this;
 	}
 
 	public OChannelBinary writeString(final String iContent) throws IOException {
 		if (debug)
-			OLogManager.instance().debug(this, "Writing string (4+%d=%d bytes): %s", iContent != null ? iContent.length() : 0,
-					iContent != null ? iContent.length() + 4 : 4, iContent);
+			OLogManager.instance().debug(this, "%s - Writing string (4+%d=%d bytes): %s", socket.getRemoteSocketAddress(),
+					iContent != null ? iContent.length() : 0, iContent != null ? iContent.length() + 4 : 4, iContent);
 
 		if (iContent == null)
 			out.writeInt(-1);
@@ -234,7 +246,8 @@ public abstract class OChannelBinary extends OChannel {
 
 	public OChannelBinary writeBytes(final byte[] iContent, final int iLength) throws IOException {
 		if (debug)
-			OLogManager.instance().debug(this, "Writing bytes (4+%d=%d bytes): %s", iLength, iLength + 4, iContent);
+			OLogManager.instance().debug(this, "%s - Writing bytes (4+%d=%d bytes): %s", socket.getRemoteSocketAddress(), iLength,
+					iLength + 4, Arrays.toString(iContent));
 
 		if (iContent == null) {
 			out.writeInt(-1);
@@ -247,8 +260,8 @@ public abstract class OChannelBinary extends OChannel {
 
 	public OChannelBinary writeCollectionString(final Collection<String> iCollection) throws IOException {
 		if (debug)
-			OLogManager.instance().debug(this, "Writing strings (4+%d=%d items): %s", iCollection != null ? iCollection.size() : 0,
-					iCollection != null ? iCollection.size() + 4 : 4, iCollection.toString());
+			OLogManager.instance().debug(this, "%s - Writing strings (4+%d=%d items): %s", socket.getRemoteSocketAddress(),
+					iCollection != null ? iCollection.size() : 0, iCollection != null ? iCollection.size() + 4 : 4, iCollection.toString());
 
 		if (iCollection == null)
 			writeInt(-1);
@@ -275,12 +288,18 @@ public abstract class OChannelBinary extends OChannel {
 
 	@Override
 	public void flush() throws IOException {
+		if (debug)
+			OLogManager.instance().debug(this, "%s - Flush", socket.getRemoteSocketAddress());
+
 		super.flush();
 		out.flush();
 	}
 
 	@Override
 	public void close() {
+		if (debug)
+			OLogManager.instance().debug(this, "%s - Closing socket...", socket.getRemoteSocketAddress());
+
 		boolean lockAcquired = false;
 		try {
 			acquireExclusiveLock();
@@ -373,10 +392,16 @@ public abstract class OChannelBinary extends OChannel {
 
 		if (c != null)
 			try {
+				final Exception e;
 				if (c.getParameterTypes().length > 1)
-					rootException = (RuntimeException) c.newInstance(iMessage, iPrevious);
+					e = (Exception) c.newInstance(iMessage, iPrevious);
 				else
-					rootException = (RuntimeException) c.newInstance(iMessage);
+					e = (Exception) c.newInstance(iMessage);
+
+				if (e instanceof RuntimeException)
+					rootException = (RuntimeException) e;
+				else
+					rootException = new OException(e);
 			} catch (InstantiationException e) {
 			} catch (IllegalAccessException e) {
 			} catch (InvocationTargetException e) {
@@ -392,5 +417,4 @@ public abstract class OChannelBinary extends OChannel {
 	public int getMaxChunkSize() {
 		return maxChunkSize;
 	}
-
 }

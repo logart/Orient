@@ -31,7 +31,6 @@ import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.enterprise.channel.binary.OChannelBinaryClient;
 import com.orientechnologies.orient.enterprise.channel.binary.OChannelBinaryProtocol;
-import com.orientechnologies.orient.enterprise.channel.distributed.OChannelDistributedProtocol;
 
 /**
  * Remote administration class of OrientDB Server instances.
@@ -54,7 +53,7 @@ public class OServerAdmin {
 		if (!iURL.contains("/"))
 			iURL += "/";
 
-		storage = new OStorageRemote(iURL, "");
+		storage = new OStorageRemote(null, iURL, "");
 	}
 
 	/**
@@ -78,9 +77,13 @@ public class OServerAdmin {
 	 */
 	public synchronized OServerAdmin connect(final String iUserName, final String iUserPassword) throws IOException {
 		storage.createConnectionPool();
+		storage.setSessionId(-1);
 
 		try {
 			final OChannelBinaryClient network = storage.beginRequest(OChannelBinaryProtocol.REQUEST_CONNECT);
+
+			storage.sendClientInfo(network);
+
 			try {
 				network.writeString(iUserName);
 				network.writeString(iUserPassword);
@@ -115,7 +118,7 @@ public class OServerAdmin {
 	 */
 	@SuppressWarnings("unchecked")
 	public synchronized Map<String, String> listDatabases() throws IOException {
-		storage.createConnectionPool();
+		storage.checkConnection();
 		final ODocument result = new ODocument();
 		try {
 			final OChannelBinaryClient network = storage.beginRequest(OChannelBinaryProtocol.REQUEST_DB_LIST);
@@ -140,14 +143,24 @@ public class OServerAdmin {
 	}
 
 	/**
+	 * Deprecated. Use the {@link #createDatabase(String, String)} instead.
+	 */
+	@Deprecated
+	public synchronized OServerAdmin createDatabase(final String iStorageMode) throws IOException {
+		return createDatabase("document", iStorageMode);
+	}
+
+	/**
 	 * Creates a database in a remote server.
 	 * 
+	 * @param iDatabaseType
+	 *          'document' or 'graph'
 	 * @param iStorageMode
-	 *          Storage mode. Null to use the default ("CSV")
+	 *          local or memory
 	 * @return The instance itself. Useful to execute method in chain
 	 * @throws IOException
 	 */
-	public synchronized OServerAdmin createDatabase(String iStorageMode) throws IOException {
+	public synchronized OServerAdmin createDatabase(final String iDatabaseType, String iStorageMode) throws IOException {
 		storage.checkConnection();
 
 		try {
@@ -160,6 +173,8 @@ public class OServerAdmin {
 				final OChannelBinaryClient network = storage.beginRequest(OChannelBinaryProtocol.REQUEST_DB_CREATE);
 				try {
 					network.writeString(storage.getName());
+					if (network.getSrvProtocolVersion() >= 8)
+						network.writeString(iDatabaseType);
 					network.writeString(iStorageMode);
 				} finally {
 					storage.endRequest(network);
@@ -231,7 +246,7 @@ public class OServerAdmin {
 
 		try {
 
-			final OChannelBinaryClient network = storage.beginRequest(OChannelBinaryProtocol.REQUEST_DB_DELETE);
+			final OChannelBinaryClient network = storage.beginRequest(OChannelBinaryProtocol.REQUEST_DB_DROP);
 			try {
 				network.writeString(storage.getName());
 			} finally {
@@ -242,7 +257,6 @@ public class OServerAdmin {
 
 		} catch (Exception e) {
 			OLogManager.instance().exception("Cannot delete the remote storage: " + storage.getName(), e, OStorageException.class);
-			storage.close(true);
 		}
 
 		for (OStorage s : Orient.instance().getStorages()) {
@@ -264,31 +278,31 @@ public class OServerAdmin {
 	 * @param iDatabaseUserName
 	 * @param iDatabaseUserPassword
 	 * @param iRemoteName
+	 * @param iRemoteEngine
 	 * @param iSynchronousMode
 	 * @return The instance itself. Useful to execute method in chain
 	 * @throws IOException
 	 */
 	public synchronized OServerAdmin shareDatabase(final String iDatabaseName, final String iDatabaseUserName,
-			final String iDatabaseUserPassword, final String iRemoteName, final boolean iSynchronousMode) throws IOException {
+			final String iDatabaseUserPassword, final String iRemoteName, final String iRemoteEngine) throws IOException {
 		storage.checkConnection();
 
 		try {
 
-			final OChannelBinaryClient network = storage.beginRequest(OChannelDistributedProtocol.REQUEST_DISTRIBUTED_DB_SHARE_SENDER);
+			final OChannelBinaryClient network = storage.beginRequest(OChannelBinaryProtocol.REQUEST_DB_COPY);
 			try {
 				network.writeString(iDatabaseName);
 				network.writeString(iDatabaseUserName);
 				network.writeString(iDatabaseUserPassword);
 				network.writeString(iRemoteName);
-				network.writeByte((byte) (iSynchronousMode ? 1 : 0));
+				network.writeString(iRemoteEngine);
 			} finally {
 				storage.endRequest(network);
 			}
 
 			storage.getResponse(network);
 
-			OLogManager.instance().debug(this, "Database '%s' has been shared in mode '%s' with the server '%s'", iDatabaseName,
-					iSynchronousMode, iRemoteName);
+			OLogManager.instance().debug(this, "Database '%s' has been shared with the server '%s'", iDatabaseName, iRemoteName);
 
 		} catch (Exception e) {
 			OLogManager.instance().exception("Cannot share the database: " + iDatabaseName, e, OStorageException.class);
@@ -328,9 +342,9 @@ public class OServerAdmin {
 		try {
 			final OChannelBinaryClient network = storage.beginRequest(OChannelBinaryProtocol.REQUEST_CONFIG_GET);
 			network.writeString(iConfig.getKey());
-			storage.beginResponse(network);
 
 			try {
+				storage.beginResponse(network);
 				return network.readString();
 			} finally {
 				storage.endResponse(network);

@@ -78,9 +78,17 @@ public interface ODatabase {
 	public void reload();
 
 	/**
-	 * Deletes a database.
+	 * Drops a database.
 	 * 
 	 */
+	public void drop();
+
+	/**
+	 * Deletes a database.
+	 * 
+	 * @see #drop()
+	 */
+	@Deprecated
 	public void delete();
 
 	/**

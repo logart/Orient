@@ -27,7 +27,6 @@ import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.exception.OSerializationException;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
-import com.orientechnologies.orient.core.memory.OMemoryWatchDog.Listener;
 import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.record.impl.ODocument;
@@ -54,7 +53,6 @@ public class OMVRBTreeRIDProvider extends OMVRBTreeProviderAbstract<OIdentifiabl
 	private boolean							embeddedStreaming			= true;								// KEEP THE STREAMING MODE
 	private final StringBuilder	buffer								= new StringBuilder();
 	private boolean							marshalling						= true;
-	private Listener						watchDog;
 
 	/**
 	 * Copy constructor
@@ -90,7 +88,7 @@ public class OMVRBTreeRIDProvider extends OMVRBTreeProviderAbstract<OIdentifiabl
 	}
 
 	protected OMVRBTreeRIDProvider(final OStorage iStorage, final String iClusterName) {
-		super(new ODocument(getDatabase()), iStorage, iClusterName);
+		super(new ODocument(), iStorage, iClusterName);
 		((ODocument) record).field("pageSize", pageSize);
 	}
 
@@ -101,13 +99,6 @@ public class OMVRBTreeRIDProvider extends OMVRBTreeProviderAbstract<OIdentifiabl
 	public OMVRBTreeRIDEntryProvider createEntry() {
 		return new OMVRBTreeRIDEntryProvider(this);
 	}
-
-	//
-	// @Override
-	// protected void finalize() throws Throwable {
-	// if (watchDog != null)
-	// Orient.instance().getMemoryWatchDog().removeListener(watchDog);
-	// }
 
 	public OStringBuilderSerializable toStream(final StringBuilder iBuffer) throws OSerializationException {
 		final long timer = OProfiler.getInstance().startChrono();
@@ -131,6 +122,12 @@ public class OMVRBTreeRIDProvider extends OMVRBTreeProviderAbstract<OIdentifiabl
 					// PERSISTENT RIDS
 					boolean first = true;
 					for (OIdentifiable rid : tree.keySet()) {
+						if (rid instanceof ORecord<?>) {
+							final ORecord<?> record = (ORecord<?>) rid;
+							if (record.isDirty())
+								record.save();
+						}
+
 						if (!first)
 							buffer.append(OStringSerializerHelper.COLLECTION_SEPARATOR);
 						else
@@ -247,7 +244,8 @@ public class OMVRBTreeRIDProvider extends OMVRBTreeProviderAbstract<OIdentifiabl
 			final OMVRBTreeEntryPersistent<OIdentifiable, OIdentifiable> r = (OMVRBTreeEntryPersistent<OIdentifiable, OIdentifiable>) tree
 					.getRoot();
 			if (r != null) {
-				if (((OMVRBTreeRIDEntryProvider) r.getProvider()).setTreeSize(iSize))
+				final OMVRBTreeRIDEntryProvider provider = (OMVRBTreeRIDEntryProvider) r.getProvider();
+				if (provider != null && provider.setTreeSize(iSize))
 					r.markDirty();
 				return true;
 			}
@@ -260,6 +258,10 @@ public class OMVRBTreeRIDProvider extends OMVRBTreeProviderAbstract<OIdentifiabl
 		if (!marshalling) {
 			if (buffer != null)
 				buffer.setLength(0);
+
+			if (tree.getOwner() != null)
+				tree.getOwner().setDirty();
+
 			return super.setDirty();
 		}
 		return false;
@@ -306,16 +308,6 @@ public class OMVRBTreeRIDProvider extends OMVRBTreeProviderAbstract<OIdentifiabl
 			if (!iValue)
 				// ASSURE TO SAVE THE SIZE IN THE ROOT NODE
 				setSize(size);
-			//
-			// if (!iValue) {
-			// // INSTALL WATCHDOG TO CONTROL TREE SIZE IN MEMORY
-			// watchDog = new Listener() {
-			// public void memoryUsageLow(final long iFreeMemory, final long iFreeMemoryPercentage) {
-			// tree.setOptimization(iFreeMemoryPercentage < 10 ? 2 : 1);
-			// }
-			// };
-			// }
-			// Orient.instance().getMemoryWatchDog().addListener(watchDog);
 		}
 	}
 

@@ -21,17 +21,27 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.db.record.ODetachable;
+import com.orientechnologies.orient.core.db.record.OMultiValueChangeEvent;
+import com.orientechnologies.orient.core.db.record.OMultiValueChangeListener;
+import com.orientechnologies.orient.core.db.record.OMultiValueChangeTimeLine;
 import com.orientechnologies.orient.core.db.record.ORecordElement;
+import com.orientechnologies.orient.core.db.record.ORecordLazyMultiValue;
+import com.orientechnologies.orient.core.db.record.OTrackedList;
+import com.orientechnologies.orient.core.db.record.OTrackedMap;
+import com.orientechnologies.orient.core.db.record.OTrackedMultiValue;
+import com.orientechnologies.orient.core.db.record.OTrackedSet;
 import com.orientechnologies.orient.core.exception.ORecordNotFoundException;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
@@ -54,18 +64,20 @@ import com.orientechnologies.orient.core.serialization.serializer.record.string.
  */
 @SuppressWarnings({ "unchecked", "serial" })
 public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Iterable<Entry<String, Object>>, ODetachable {
-	public static final byte											RECORD_TYPE				= 'd';
-	public static final char[]										INDEX_SEPARATOR		= { ',', '-' };
-	protected Map<String, Object>									_fieldValues;
-	protected Map<String, Object>									_fieldOriginalValues;
-	protected Map<String, OType>									_fieldTypes;
-	protected boolean															_trackingChanges	= true;
-	protected boolean															_ordered					= true;
-	protected boolean															_lazyLoad					= true;
+	public static final byte																RECORD_TYPE				= 'd';
+	protected Map<String, Object>														_fieldValues;
+	protected Map<String, Object>														_fieldOriginalValues;
+	protected Map<String, OType>														_fieldTypes;
+	protected Map<String, OSimpleMultiValueChangeListener>	_fieldChangeListeners;
+	protected Map<String, OMultiValueChangeTimeLine>				_fieldCollectionChangeTimeLines;
 
-	protected List<WeakReference<ORecordElement>>	_owners						= null;
+	protected boolean																				_trackingChanges	= true;
+	protected boolean																				_ordered					= true;
+	protected boolean																				_lazyLoad					= true;
 
-	private static final String[]									EMPTY_STRINGS			= new String[] {};
+	protected List<WeakReference<ORecordElement>>						_owners						= null;
+
+	protected static final String[]													EMPTY_STRINGS			= new String[] {};
 
 	/**
 	 * Internal constructor used on unmarshalling.
@@ -87,26 +99,27 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 	}
 
 	/**
-	 * Creates a new instance and binds to the specified database. New instances are not persistent until {@link #save()} is called.
-	 * 
-	 * @param iDatabase
-	 *          Database instance
+	 * Deprecated: use {@link #ODocument()} instead. ODocument instances always refer to the thread-local database and not anymore to
+	 * the passed database as parameter.
 	 */
+	@Deprecated
 	public ODocument(final ODatabaseRecord iDatabase) {
-		setup();
+		this();
 	}
 
+	/**
+	 * Deprecated: use {@link #ODocument(ORID)} instead. ODocument instances always refer to the thread-local database and not anymore
+	 * to the passed database as parameter.
+	 */
+	@Deprecated
 	public ODocument(final ODatabaseRecord iDatabase, final ORID iRID) {
 		this(iRID);
-		ODatabaseRecordThreadLocal.INSTANCE.set(iDatabase);
 	}
 
 	/**
 	 * Creates a new instance in memory linked by the Record Id to the persistent one. New instances are not persistent until
 	 * {@link #save()} is called.
 	 * 
-	 * @param iDatabase
-	 *          Database instance
 	 * @param iRID
 	 *          Record Id
 	 */
@@ -117,17 +130,19 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 		_dirty = false;
 	}
 
+	/**
+	 * Deprecated: use {@link #ODocument(String, ORID)} instead. ODocument instances always refer to the thread-local database and not
+	 * anymore to the passed database as parameter.
+	 */
+	@Deprecated
 	public ODocument(final ODatabaseRecord iDatabase, final String iClassName, final ORID iRID) {
 		this(iClassName, iRID);
-		ODatabaseRecordThreadLocal.INSTANCE.set(iDatabase);
 	}
 
 	/**
 	 * Creates a new instance in memory of the specified class, linked by the Record Id to the persistent one. New instances are not
 	 * persistent until {@link #save()} is called.
 	 * 
-	 * @param iDatabase
-	 *          Database instance
 	 * @param iClassName
 	 *          Class name
 	 * @param iRID
@@ -140,17 +155,18 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 		_status = STATUS.NOT_LOADED;
 	}
 
+	/**
+	 * Deprecated: use {@link #ODocument(String)} instead. ODocument instances always refer to the thread-local database and not
+	 * anymore to the passed database as parameter.
+	 */
+	@Deprecated
 	public ODocument(final ODatabaseRecord iDatabase, final String iClassName) {
-		ODatabaseRecordThreadLocal.INSTANCE.set(iDatabase);
-		setClassName(iClassName);
-		setup();
+		this(iClassName);
 	}
 
 	/**
 	 * Creates a new instance in memory of the specified class. New instances are not persistent until {@link #save()} is called.
 	 * 
-	 * @param iDatabase
-	 *          Database instance
 	 * @param iClassName
 	 *          Class name
 	 */
@@ -201,7 +217,6 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 
 	/**
 	 * Fills a document passing the field names/values pair, where the first pair is mandatory.
-	 * 
 	 */
 	public ODocument(final String iFieldName, final Object iFieldValue, final Object... iFields) {
 		this(iFields);
@@ -238,7 +253,11 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 		if (_fieldTypes != null)
 			iDestination._fieldTypes = new HashMap<String, OType>(_fieldTypes);
 
+		iDestination._fieldChangeListeners = null;
+		iDestination._fieldCollectionChangeTimeLines = null;
 		iDestination._fieldOriginalValues = null;
+		iDestination.addAllMultiValueChangeListeners();
+
 		iDestination._dirty = _dirty; // LEAVE IT AS LAST TO AVOID SOMETHING SET THE FLAG TO TRUE
 
 		return iDestination;
@@ -268,6 +287,12 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 		return cloned;
 	}
 
+	/**
+	 * Detaches all the connected records. If new records are linked to the document the detaching can't be completed and false will
+	 * be returned.
+	 * 
+	 * @return true if the record has been detached, otherwise false
+	 */
 	public boolean detach() {
 		boolean fullyDetached = true;
 
@@ -377,7 +402,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 			if (!first)
 				buffer.append('}');
 
-			if (_recordId.isValid()) {
+			if (_recordId != null && _recordId.isValid()) {
 				buffer.append(" v");
 				buffer.append(_version);
 			}
@@ -397,9 +422,9 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 	 * record.reset();<br/>
 	 * record.setClassName("Account");<br/>
 	 * record.fromString(new String("Account@id:" + data.getCyclesDone() + ",name:'Luca',surname:'Garulli',birthDate:" + date.getTime()<br/>
-	 * 		+ ",salary:" + 3000f + i));<br/>
+	 * + ",salary:" + 3000f + i));<br/>
 	 * record.save();<br/>
-</code>
+	 * </code>
 	 * </p>
 	 * 
 	 * @param iValue
@@ -407,6 +432,10 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 	public void fromString(final String iValue) {
 		_dirty = true;
 		_source = OBinaryProtocol.string2bytes(iValue);
+
+		removeAllCollectionChangeListeners();
+
+		_fieldCollectionChangeTimeLines = null;
 		_fieldOriginalValues = null;
 		_fieldTypes = null;
 		_fieldValues = null;
@@ -447,7 +476,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 			return null;
 
 		// OPTIMIZATION
-		if (iFieldName.charAt(0) != '@' && iFieldName.indexOf('.') == -1 && iFieldName.indexOf('[') == -1)
+		if (iFieldName.charAt(0) != '@' && OStringSerializerHelper.indexOf(iFieldName, 0, '.', '[') == -1)
 			return (RET) _fieldValues.get(iFieldName);
 
 		// NOT FOUND, PARSE THE FIELD NAME
@@ -469,7 +498,10 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 		if (_lazyLoad && value instanceof ORID && t != OType.LINK && ODatabaseRecordThreadLocal.INSTANCE.isDefined()) {
 			// CREATE THE DOCUMENT OBJECT IN LAZY WAY
 			value = (RET) getDatabase().load((ORID) value);
+			removeCollectionChangeListener(iFieldName);
+			removeCollectionTimeLine(iFieldName);
 			_fieldValues.put(iFieldName, value);
+			addCollectionChangeListener(iFieldName, value);
 		}
 
 		// CHECK FOR CONVERSION
@@ -478,12 +510,22 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 
 			if (t == OType.BINARY && value instanceof String)
 				newValue = OStringSerializerHelper.getBinaryContent(value);
-			else if ((t == OType.DATE || t == OType.DATE) && value instanceof Long)
+			else if (t == OType.DATE && value instanceof Long)
 				newValue = (RET) new Date(((Long) value).longValue());
+			else if ((t == OType.EMBEDDEDSET || t == OType.LINKSET) && value instanceof List)
+				// CONVERT LIST TO SET
+				newValue = (RET) ODocumentHelper.convertField(this, iFieldName, Set.class, value);
+			else if ((t == OType.EMBEDDEDLIST || t == OType.LINKLIST) && value instanceof Set)
+				// CONVERT SET TO LIST
+				newValue = (RET) ODocumentHelper.convertField(this, iFieldName, List.class, value);
 
 			if (newValue != null) {
 				// VALUE CHANGED: SET THE NEW ONE
+				removeCollectionChangeListener(iFieldName);
+				removeCollectionTimeLine(iFieldName);
 				_fieldValues.put(iFieldName, newValue);
+				addCollectionChangeListener(iFieldName, newValue);
+
 				value = (RET) newValue;
 			}
 		}
@@ -539,7 +581,6 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 
 	/**
 	 * Fill a document passing the field names/values
-	 * 
 	 */
 	public ODocument fields(final String iFieldName, final Object iFieldValue, final Object... iFields) {
 		field(iFieldName, iFieldValue);
@@ -610,7 +651,10 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 			else if (iPropertyValue instanceof Enum)
 				iPropertyValue = iPropertyValue.toString();
 
+		removeCollectionChangeListener(iFieldName);
+		removeCollectionTimeLine(iFieldName);
 		_fieldValues.put(iFieldName, iPropertyValue);
+		addCollectionChangeListener(iFieldName, iPropertyValue);
 
 		if (_status != STATUS.UNMARSHALLING) {
 			setDirty();
@@ -645,10 +689,13 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 				_fieldOriginalValues = new HashMap<String, Object>();
 
 			// INSERT IT ONLY IF NOT EXISTS TO AVOID LOOSE OF THE ORIGINAL VALUE (FUNDAMENTAL FOR INDEX HOOK)
-			if (!_fieldOriginalValues.containsKey(iFieldName))
+			if (!_fieldOriginalValues.containsKey(iFieldName)) {
 				_fieldOriginalValues.put(iFieldName, oldValue);
+			}
 		}
 
+		removeCollectionTimeLine(iFieldName);
+		removeCollectionChangeListener(iFieldName);
 		_fieldValues.remove(iFieldName);
 		_source = null;
 
@@ -665,6 +712,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 	 * @param iConflictsOtherWins
 	 *          if true, the other document wins in case of conflicts, otherwise the current document wins
 	 * @param iMergeSingleItemsOfMultiValueFields
+	 * 
 	 * @return
 	 */
 	public ODocument merge(final ODocument iOther, boolean iConflictsOtherWins, boolean iMergeSingleItemsOfMultiValueFields) {
@@ -684,9 +732,10 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 	 * @param iOther
 	 *          Other ODocument instance to merge
 	 * @param iAddOnlyMode
-	 *          if true, the other document properties will be always added. If false, the missed propertie in the "other" document
+	 *          if true, the other document properties will be always added. If false, the missed properties in the "other" document
 	 *          will be removed by original too
 	 * @param iMergeSingleItemsOfMultiValueFields
+	 * 
 	 * @return
 	 */
 	public ODocument merge(final Map<String, Object> iOther, final boolean iAddOnlyMode, boolean iMergeSingleItemsOfMultiValueFields) {
@@ -711,8 +760,10 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 					final Collection<Object> otherColl = (Collection<Object>) iOther.get(f);
 
 					for (Object item : otherColl) {
-						if (!coll.contains(item))
-							coll.add(item);
+						if (coll.contains(item))
+							// REMOVE PREVIOUS ITEM BECAUSE THIS COULD BE UPDATED INSIDE OF IT
+							coll.remove(item);
+						coll.add(item);
 					}
 
 					// JUMP RAW REPLACE
@@ -735,16 +786,27 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 	}
 
 	/**
-	 * Returns the original value of a field before it has been changed.
+	 * Returns list of changed fields. There are two types of changes:
+	 * <ol>
+	 * <li>Value of field itself was changed by calling of {@link #field(String, Object)} method for example.</li>
+	 * <li>Internal state of field was changed but was not saved. This case currently is applicable for for collections only.</li>
+	 * </ol>
 	 * 
-	 * @param iFieldName
-	 *          Property name to retrieve the original value
+	 * @return List of fields, values of which were changed.
 	 */
 	public String[] getDirtyFields() {
-		if (_fieldOriginalValues == null || _fieldOriginalValues.size() == 0)
+		if ((_fieldOriginalValues == null || _fieldOriginalValues.isEmpty())
+				&& (_fieldCollectionChangeTimeLines == null || _fieldCollectionChangeTimeLines.isEmpty()))
 			return EMPTY_STRINGS;
 
-		return _fieldOriginalValues.keySet().toArray(new String[_fieldOriginalValues.keySet().size()]);
+		final Set<String> dirtyFields = new HashSet<String>();
+		if (_fieldOriginalValues != null)
+			dirtyFields.addAll(_fieldOriginalValues.keySet());
+
+		if (_fieldCollectionChangeTimeLines != null)
+			dirtyFields.addAll(_fieldCollectionChangeTimeLines.keySet());
+
+		return dirtyFields.toArray(new String[dirtyFields.size()]);
 	}
 
 	/**
@@ -757,8 +819,12 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 		return _fieldOriginalValues != null ? _fieldOriginalValues.get(iFieldName) : null;
 	}
 
+	public OMultiValueChangeTimeLine getCollectionTimeLine(final String iFieldName) {
+		return _fieldCollectionChangeTimeLines != null ? _fieldCollectionChangeTimeLines.get(iFieldName) : null;
+	}
+
 	/**
-	 * Returns the iterator against only the changed fields if tracking was enabled
+	 * Returns the iterator fields
 	 */
 	public Iterator<Entry<String, Object>> iterator() {
 		checkForLoading();
@@ -767,7 +833,37 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 		if (_fieldValues == null)
 			return OEmptyIterator.INSTANCE;
 
-		return _fieldValues.entrySet().iterator();
+		final Iterator<Entry<String, Object>> iterator = _fieldValues.entrySet().iterator();
+		return new Iterator<Entry<String, Object>>() {
+			private Entry<String, Object>	current;
+
+			public boolean hasNext() {
+				return iterator.hasNext();
+			}
+
+			public Entry<String, Object> next() {
+				current = iterator.next();
+				return current;
+			}
+
+			public void remove() {
+				iterator.remove();
+
+				if (_trackingChanges) {
+					// SAVE THE OLD VALUE IN A SEPARATE MAP
+					if (_fieldOriginalValues == null)
+						_fieldOriginalValues = new HashMap<String, Object>();
+
+					// INSERT IT ONLY IF NOT EXISTS TO AVOID LOOSE OF THE ORIGINAL VALUE (FUNDAMENTAL FOR INDEX HOOK)
+					if (!_fieldOriginalValues.containsKey(current.getKey())) {
+						_fieldOriginalValues.put(current.getKey(), current.getValue());
+					}
+				}
+
+				removeCollectionChangeListener(current.getKey());
+				removeCollectionTimeLine(current.getKey());
+			}
+		};
 	}
 
 	/**
@@ -872,6 +968,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 
 	@Override
 	public void onAfterIdentityChanged(final ORecord<?> iRecord) {
+		super.onAfterIdentityChanged(iRecord);
 		if (_owners != null) {
 			final List<WeakReference<ORecordElement>> temp = new ArrayList<WeakReference<ORecordElement>>(_owners);
 
@@ -886,15 +983,21 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 
 	@Override
 	public ODocument fromStream(final byte[] iRecordBuffer) {
+		removeAllCollectionChangeListeners();
+
 		_fieldValues = null;
 		_fieldTypes = null;
 		_fieldOriginalValues = null;
+		_fieldChangeListeners = null;
+		_fieldCollectionChangeTimeLines = null;
+
 		return (ODocument) super.fromStream(iRecordBuffer);
 	}
 
 	@Override
 	public void unsetDirty() {
 		_fieldOriginalValues = null;
+		_fieldCollectionChangeTimeLines = null;
 		super.unsetDirty();
 	}
 
@@ -910,8 +1013,15 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 	@Override
 	public ODocument unload() {
 		super.unload();
+
+		removeAllCollectionChangeListeners();
+
+		if (_fieldCollectionChangeTimeLines != null)
+			_fieldCollectionChangeTimeLines.clear();
+
 		if (_fieldValues != null)
 			_fieldValues.clear();
+
 		return this;
 	}
 
@@ -921,8 +1031,15 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 	@Override
 	public ODocument clear() {
 		super.clear();
+
+		removeAllCollectionChangeListeners();
+
+		if (_fieldCollectionChangeTimeLines != null)
+			_fieldCollectionChangeTimeLines.clear();
+
 		if (_fieldValues != null)
 			_fieldValues.clear();
+
 		_owners = null;
 		return this;
 	}
@@ -933,8 +1050,17 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 	@Override
 	public ODocument reset() {
 		super.reset();
+		removeAllCollectionChangeListeners();
+
 		if (_fieldValues != null)
 			_fieldValues.clear();
+
+		if (_fieldOriginalValues != null)
+			_fieldOriginalValues.clear();
+
+		if (_fieldCollectionChangeTimeLines != null)
+			_fieldCollectionChangeTimeLines.clear();
+
 		return this;
 	}
 
@@ -944,6 +1070,14 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 
 	public void setLazyLoad(final boolean iLazyLoad) {
 		this._lazyLoad = iLazyLoad;
+
+		if (_fieldValues != null) {
+			// PROPAGATE LAZINESS TO THE FIELDS
+			for (Entry<String, Object> field : _fieldValues.entrySet()) {
+				if (field.getValue() instanceof ORecordLazyMultiValue)
+					((ORecordLazyMultiValue) field.getValue()).setAutoConvertToRecord(false);
+			}
+		}
 	}
 
 	public boolean isTrackingChanges() {
@@ -960,9 +1094,15 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 	 */
 	public ODocument setTrackingChanges(final boolean iTrackingChanges) {
 		this._trackingChanges = iTrackingChanges;
-		if (!iTrackingChanges)
+		if (!iTrackingChanges) {
 			// FREE RESOURCES
 			this._fieldOriginalValues = null;
+			removeAllCollectionChangeListeners();
+			_fieldChangeListeners = null;
+			_fieldCollectionChangeTimeLines = null;
+		} else {
+			addAllMultiValueChangeListeners();
+		}
 		return this;
 	}
 
@@ -1041,11 +1181,179 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 		return this;
 	}
 
+	@Override
+	public ODocument save() {
+		if (_clazz != null)
+			return save(getDatabase().getClusterNameById(_clazz.getDefaultClusterId()));
+
+		convertAllMultiValuesToTrackedVersions();
+		validate();
+		return (ODocument) super.save();
+	}
+
+	@Override
+	public ODocument save(final String iClusterName) {
+		convertAllMultiValuesToTrackedVersions();
+		validate();
+		return (ODocument) super.save(iClusterName);
+	}
+
 	protected String checkFieldName(final String iFieldName) {
 		final Character c = OSchemaShared.checkNameIfValid(iFieldName);
 		if (c != null)
 			throw new IllegalArgumentException("Invalid field name '" + iFieldName + "'. Character '" + c + "' is invalid");
 
 		return iFieldName;
+	}
+
+	private void addCollectionChangeListener(final String fieldName) {
+		final Object fieldValue = _fieldValues.get(fieldName);
+		addCollectionChangeListener(fieldName, fieldValue);
+	}
+
+	private void addCollectionChangeListener(final String fieldName, final Object fieldValue) {
+		OType fieldType = fieldType(fieldName);
+		if (fieldType == null && _clazz != null) {
+			final OProperty prop = _clazz.getProperty(fieldName);
+			fieldType = prop != null ? prop.getType() : null;
+		}
+
+		if (fieldType == null
+				|| !(OType.EMBEDDEDLIST.equals(fieldType) || OType.EMBEDDEDMAP.equals(fieldType) || OType.EMBEDDEDSET.equals(fieldType)))
+			return;
+
+		if (!(fieldValue instanceof OTrackedMultiValue))
+			return;
+
+		final OTrackedMultiValue multiValue = (OTrackedMultiValue) fieldValue;
+
+		if (_fieldChangeListeners == null)
+			_fieldChangeListeners = new HashMap<String, OSimpleMultiValueChangeListener>();
+
+		if (!_fieldChangeListeners.containsKey(fieldName)) {
+			final OSimpleMultiValueChangeListener listener = new OSimpleMultiValueChangeListener(fieldName);
+			multiValue.addChangeListener(listener);
+			_fieldChangeListeners.put(fieldName, listener);
+		}
+	}
+
+	private void removeAllCollectionChangeListeners() {
+		if (_fieldValues == null)
+			return;
+
+		for (final String fieldName : _fieldValues.keySet()) {
+			removeCollectionChangeListener(fieldName);
+		}
+		_fieldChangeListeners = null;
+	}
+
+	private void addAllMultiValueChangeListeners() {
+		if (_fieldValues == null)
+			return;
+
+		for (final String fieldName : _fieldValues.keySet()) {
+			addCollectionChangeListener(fieldName);
+		}
+	}
+
+	private void removeCollectionChangeListener(final String fieldName) {
+		if (_fieldChangeListeners == null)
+			return;
+
+		final OMultiValueChangeListener changeListener = _fieldChangeListeners.remove(fieldName);
+
+		final Object fieldValue;
+		if (_fieldValues == null)
+			return;
+
+		fieldValue = _fieldValues.get(fieldName);
+
+		if (!(fieldValue instanceof OTrackedMultiValue))
+			return;
+
+		if (changeListener != null) {
+			final OTrackedMultiValue multiValue = (OTrackedMultiValue) fieldValue;
+			multiValue.removeRecordChangeListener(changeListener);
+		}
+	}
+
+	private void removeCollectionTimeLine(final String fieldName) {
+		if (_fieldCollectionChangeTimeLines == null)
+			return;
+
+		_fieldCollectionChangeTimeLines.remove(fieldName);
+	}
+
+	/**
+	 * Converts all non-tracked collections implementations contained in document fields to tracked once.
+	 * 
+	 * @see OTrackedMultiValue
+	 */
+	public void convertAllMultiValuesToTrackedVersions() {
+		if (_fieldValues == null)
+			return;
+
+		final Map<String, Object> fieldsToUpdate = new HashMap<String, Object>();
+
+		for (Map.Entry<String, Object> fieldEntry : _fieldValues.entrySet()) {
+			final Object fieldValue = fieldEntry.getValue();
+			OType fieldType = fieldType(fieldEntry.getKey());
+			if (fieldType == null && _clazz != null) {
+				final OProperty prop = _clazz.getProperty(fieldEntry.getKey());
+				fieldType = prop != null ? prop.getType() : null;
+			}
+
+			if (fieldType == null
+					|| !(OType.EMBEDDEDLIST.equals(fieldType) || OType.EMBEDDEDMAP.equals(fieldType) || OType.EMBEDDEDSET.equals(fieldType)))
+				continue;
+			if (fieldValue instanceof List && !(fieldValue instanceof OTrackedMultiValue))
+				fieldsToUpdate.put(fieldEntry.getKey(), new OTrackedList(this, (List) fieldValue, null));
+			else if (fieldValue instanceof Set && !(fieldValue instanceof OTrackedMultiValue))
+				fieldsToUpdate.put(fieldEntry.getKey(), new OTrackedSet(this, (Set) fieldValue, null));
+			else if (fieldValue instanceof Map && !(fieldValue instanceof OTrackedMultiValue))
+				fieldsToUpdate.put(fieldEntry.getKey(), new OTrackedMap(this, (Map) fieldValue, null));
+		}
+
+		_fieldValues.putAll(fieldsToUpdate);
+		addAllMultiValueChangeListeners();
+	}
+
+	/**
+	 * Perform gathering of all operations performed on tracked collection and create mapping between list of collection operations
+	 * and field name that contains collection that was changed.
+	 * 
+	 * @param <K>
+	 *          Value that uniquely identifies position of item in collection
+	 * @param <V>
+	 *          Item value.
+	 */
+	private final class OSimpleMultiValueChangeListener<K, V> implements OMultiValueChangeListener<K, V> {
+		private final String	fieldName;
+
+		private OSimpleMultiValueChangeListener(final String fieldName) {
+			this.fieldName = fieldName;
+		}
+
+		public void onAfterRecordChanged(final OMultiValueChangeEvent<K, V> event) {
+			if (_status != STATUS.UNMARSHALLING)
+				setDirty();
+
+			if (!(_trackingChanges && _recordId.isValid()) || _status == STATUS.UNMARSHALLING)
+				return;
+
+			if (_fieldOriginalValues != null && _fieldOriginalValues.containsKey(fieldName))
+				return;
+
+			if (_fieldCollectionChangeTimeLines == null)
+				_fieldCollectionChangeTimeLines = new HashMap<String, OMultiValueChangeTimeLine>();
+
+			OMultiValueChangeTimeLine timeLine = _fieldCollectionChangeTimeLines.get(fieldName);
+			if (timeLine == null) {
+				timeLine = new OMultiValueChangeTimeLine();
+				_fieldCollectionChangeTimeLines.put(fieldName, timeLine);
+			}
+
+			timeLine.addCollectionChangeEvent(event);
+		}
 	}
 }

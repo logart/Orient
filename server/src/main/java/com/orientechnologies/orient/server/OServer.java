@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import javax.management.InstanceAlreadyExistsException;
 import javax.management.MBeanRegistrationException;
@@ -64,7 +64,7 @@ import com.orientechnologies.orient.server.network.OServerNetworkListener;
 import com.orientechnologies.orient.server.network.protocol.ONetworkProtocol;
 
 public class OServer {
-	protected ReentrantReadWriteLock													lock					= new ReentrantReadWriteLock();
+	protected ReentrantLock																		lock					= new ReentrantLock();
 
 	protected volatile boolean																running				= true;
 	protected OServerConfigurationLoaderXml										configurationLoader;
@@ -80,6 +80,8 @@ public class OServer {
 	private ObjectName																				onProfiler		= new ObjectName("OrientDB:type=Profiler");
 	private ObjectName																				onServer			= new ObjectName("OrientDB:type=Server");
 	private final CountDownLatch															startupLatch	= new CountDownLatch(1);
+
+	private Random																						random				= new Random();
 
 	public OServer() throws ClassNotFoundException, MalformedObjectNameException, NullPointerException,
 			InstanceAlreadyExistsException, MBeanRegistrationException, NotCompliantMBeanException {
@@ -118,6 +120,7 @@ public class OServer {
 
 	public void startup(final File iConfigurationFile) throws InstantiationException, IllegalAccessException, ClassNotFoundException,
 			IllegalArgumentException, SecurityException, InvocationTargetException, NoSuchMethodException {
+		// Startup function split to allow pre-activation changes
 		startup(loadConfigurationFromFile(iConfigurationFile));
 	}
 
@@ -127,19 +130,21 @@ public class OServer {
 		configurationLoader = new OServerConfigurationLoaderXml(OServerConfiguration.class, iConfiguration);
 		configuration = configurationLoader.load();
 
+		// Startup function split to allow pre-activation changes
 		startup(configuration);
 	}
 
-	@SuppressWarnings("unchecked")
-	public void startup(final OServerConfiguration iConfiguration) throws InstantiationException, IllegalAccessException,
-			ClassNotFoundException, IllegalArgumentException, SecurityException, InvocationTargetException, NoSuchMethodException {
+	public void startup(final OServerConfiguration iConfiguration) throws IllegalArgumentException, SecurityException,
+			InvocationTargetException, NoSuchMethodException {
 		OLogManager.instance().info(this, "OrientDB Server v" + OConstants.getVersion() + " is starting up...");
 
 		Orient.instance();
-		Orient.instance().removeShutdownHook();
 
 		loadConfiguration(iConfiguration);
+	}
 
+	@SuppressWarnings("unchecked")
+	public void activate() throws ClassNotFoundException, InstantiationException, IllegalAccessException {
 		// REGISTER PROTOCOLS
 		for (OServerNetworkProtocolConfiguration p : configuration.network.protocols)
 			protocols.put(p.name, (Class<? extends ONetworkProtocol>) Class.forName(p.implementation));
@@ -161,28 +166,36 @@ public class OServer {
 
 		running = false;
 
+		shutdownHook.cancel();
+
 		OLogManager.instance().info(this, "OrientDB Server is shutdowning...");
 
 		try {
-			lock.writeLock().lock();
+			Orient.instance().shutdown();
+		} catch (Throwable e) {
+		}
 
-			// SHUTDOWN LISTENERS
-			for (OServerNetworkListener l : listeners) {
-				OLogManager.instance().info(this, "Shutdowning connection listener '" + l + "'...");
-				l.shutdown();
-			}
+		try {
+			lock.lock();
 
-			// SHUTDOWN HANDLERS
-			for (OServerHandler h : handlers) {
-				OLogManager.instance().info(this, "Shutdowning handler %s...", h.getName());
-				try {
-					h.shutdown();
-				} catch (Throwable t) {
+			if (handlers.size() > 0) {
+				// SHUTDOWN HANDLERS
+				OLogManager.instance().info(this, "Shutdowning handlers:");
+				for (OServerHandler h : handlers) {
+					OLogManager.instance().info(this, "- %s", h.getName());
+					try {
+						h.sendShutdown();
+					} catch (Throwable t) {
+					}
 				}
 			}
 
-			// PROTOCOL HANDLERS
-			protocols.clear();
+			if (protocols.size() > 0) {
+				// PROTOCOL HANDLERS
+				OLogManager.instance().info(this, "Shutdowning protocols");
+				protocols.clear();
+			}
+
 			try {
 				MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
 				mBeanServer.unregisterMBean(onProfiler);
@@ -190,10 +203,22 @@ public class OServer {
 			} catch (Exception e) {
 				OLogManager.instance().error(this, "OrientDB Server v" + OConstants.ORIENT_VERSION + " unregisterMBean error.", e);
 			}
-			Orient.instance().shutdown();
+
+			if (listeners.size() > 0) {
+				// PROTOCOL HANDLERS
+				OLogManager.instance().info(this, "Shutdowning listeners:");
+				// SHUTDOWN LISTENERS
+				for (OServerNetworkListener l : listeners) {
+					OLogManager.instance().info(this, "- %s", l);
+					try {
+						l.shutdown();
+					} catch (Throwable e) {
+					}
+				}
+			}
 
 		} finally {
-			lock.writeLock().unlock();
+			lock.unlock();
 		}
 
 		OLogManager.instance().info(this, "OrientDB Server shutdown complete");
@@ -439,8 +464,7 @@ public class OServer {
 
 		if (iPassword == null)
 			// AUTO GENERATE PASSWORD
-			iPassword = OSecurityManager.instance().digest2String(String.valueOf(new Random(System.currentTimeMillis()).nextLong()),
-					false);
+			iPassword = OSecurityManager.instance().digest2String(String.valueOf(random.nextLong()), false);
 
 		configuration.users[configuration.users.length - 1] = new OServerUserConfiguration(iName, iPassword, iPermissions);
 
@@ -470,8 +494,8 @@ public class OServer {
 	protected void defaultSettings() {
 		// OGlobalConfiguration.CACHE_LEVEL2_ENABLED.setValue(Boolean.FALSE);
 		// OGlobalConfiguration.CACHE_LEVEL2_SIZE.setValue(0);
-		OGlobalConfiguration.CACHE_LEVEL1_ENABLED.setValue(Boolean.FALSE);
-		OGlobalConfiguration.CACHE_LEVEL1_SIZE.setValue(0);
+		// OGlobalConfiguration.CACHE_LEVEL1_ENABLED.setValue(Boolean.FALSE);
+		// OGlobalConfiguration.CACHE_LEVEL1_SIZE.setValue(0);
 		OGlobalConfiguration.FILE_LOCK.setValue(true);
 		// OGlobalConfiguration.MVRBTREE_LAZY_UPDATES.setValue(1);
 		// OGlobalConfiguration.LAZYSET_WORK_ON_STREAM.setValue(false);

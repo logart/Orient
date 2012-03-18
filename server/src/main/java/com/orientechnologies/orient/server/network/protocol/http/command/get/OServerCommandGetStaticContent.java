@@ -35,8 +35,8 @@ import com.orientechnologies.orient.server.network.protocol.http.command.OServer
 
 public class OServerCommandGetStaticContent extends OServerCommandAbstract {
 	private static final String[]										DEF_PATTERN				= { "GET|www", "GET|studio/", "GET|", "GET|*.htm",
-			"GET|*.html", "GET|*.xml", "GET|*.jpeg", "GET|*.jpg", "GET|*.png", "GET|*.gif", "GET|*.js", "GET|*.css", "GET|*.swf",
-			"GET|favicon.ico", "GET|robots.txt"													};
+			"GET|*.html", "GET|*.xml", "GET|*.jpeg", "GET|*.jpg", "GET|*.png", "GET|*.gif", "GET|*.js", "GET|*.otf", "GET|*.css",
+			"GET|*.swf", "GET|favicon.ico", "GET|robots.txt"							};
 
 	private static final String											CONFIG_HTTP_CACHE	= "http.cache:";
 
@@ -74,8 +74,15 @@ public class OServerCommandGetStaticContent extends OServerCommandAbstract {
 		iRequest.data.commandInfo = "Get static content";
 		iRequest.data.commandDetail = iRequest.url;
 
-		if (wwwPath == null)
+		if (wwwPath == null) {
 			wwwPath = iRequest.configuration.getValueAsString("orientdb.www.path", "src/site");
+
+			final File wwwPathDirectory = new File(wwwPath);
+			if (!wwwPathDirectory.exists())
+				OLogManager.instance().warn(this, "orientdb.www.path variable points to '%s' but it doesn't exists", wwwPath);
+			if (!wwwPathDirectory.isDirectory())
+				OLogManager.instance().warn(this, "orientdb.www.path variable points to '%s' but it isn't a directory", wwwPath);
+		}
 
 		if (cacheContents == null && OGlobalConfiguration.SERVER_CACHE_FILE_STATIC.getValueAsBoolean())
 			// CREATE THE CACHE IF ENABLED
@@ -126,16 +133,22 @@ public class OServerCommandGetStaticContent extends OServerCommandAbstract {
 					}
 				}
 
-				if (url.endsWith(".htm") || url.endsWith(".html"))
+				if (filePath.endsWith(".htm") || filePath.endsWith(".html"))
 					type = "text/html";
-				else if (url.endsWith(".png"))
+				else if (filePath.endsWith(".png"))
 					type = "image/png";
-				else if (url.endsWith(".jpeg"))
+				else if (filePath.endsWith(".jpeg"))
 					type = "image/jpeg";
-				else if (url.endsWith(".js"))
+				else if (filePath.endsWith(".js"))
 					type = "application/x-javascript";
-				else if (url.endsWith(".css"))
+				else if (filePath.endsWith(".css"))
 					type = "text/css";
+				else if (filePath.endsWith(".ico"))
+					type = "image/x-icon";
+				else if (filePath.endsWith(".otf"))
+					type = "font/opentype";
+				else
+					type = "text/plain";
 
 				is = new BufferedInputStream(new FileInputStream(inputFile));
 				contentSize = inputFile.length();

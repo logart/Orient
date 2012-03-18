@@ -48,6 +48,9 @@ import com.orientechnologies.orient.core.tx.OTransaction.TXTYPE;
  * @param <T>
  */
 public interface ODatabaseComplex<T extends Object> extends ODatabase, OUserObject2RecordHandler {
+	public enum OPERATION_MODE {
+		SYNCHRONOUS, ASYNCHRONOUS
+	}
 
 	/**
 	 * Creates a new entity instance.
@@ -149,8 +152,8 @@ public interface ODatabaseComplex<T extends Object> extends ODatabase, OUserObje
 	public <RET extends T> RET load(ORID iRecordId, String iFetchPlan, boolean iIgnoreCache);
 
 	/**
-	 * Saves an entity. If the entity is not dirty, then the operation will be ignored. For custom entity implementations assure to
-	 * set the entity as dirty.
+	 * Saves an entity in synchronous mode. If the entity is not dirty, then the operation will be ignored. For custom entity
+	 * implementations assure to set the entity as dirty.
 	 * 
 	 * @param iObject
 	 *          The entity to save
@@ -159,8 +162,20 @@ public interface ODatabaseComplex<T extends Object> extends ODatabase, OUserObje
 	public ODatabaseComplex<T> save(T iObject);
 
 	/**
-	 * Saves an entity in the specified cluster. If the entity is not dirty, then the operation will be ignored. For custom entity
+	 * Saves an entity specifying the mode. If the entity is not dirty, then the operation will be ignored. For custom entity
 	 * implementations assure to set the entity as dirty. If the cluster does not exist, an error will be thrown.
+	 * 
+	 * @param iObject
+	 *          The entity to save
+	 * @param iMode
+	 *          Mode of save: synchronous (default) or asynchronous
+	 * @return The Database instance itself giving a "fluent interface". Useful to call multiple methods in chain.
+	 */
+	public ODatabaseComplex<T> save(T iObject, OPERATION_MODE iMode);
+
+	/**
+	 * Saves an entity in the specified cluster in synchronous mode. If the entity is not dirty, then the operation will be ignored.
+	 * For custom entity implementations assure to set the entity as dirty. If the cluster does not exist, an error will be thrown.
 	 * 
 	 * @param iObject
 	 *          The entity to save
@@ -171,13 +186,36 @@ public interface ODatabaseComplex<T extends Object> extends ODatabase, OUserObje
 	public ODatabaseComplex<T> save(T iObject, String iClusterName);
 
 	/**
-	 * Deletes an entity from the database.
+	 * Saves an entity in the specified cluster specifying the mode. If the entity is not dirty, then the operation will be ignored.
+	 * For custom entity implementations assure to set the entity as dirty. If the cluster does not exist, an error will be thrown.
+	 * 
+	 * @param iObject
+	 *          The entity to save
+	 * @param iClusterName
+	 *          Name of the cluster where to save
+	 * @param iMode
+	 *          Mode of save: synchronous (default) or asynchronous
+	 * @return The Database instance itself giving a "fluent interface". Useful to call multiple methods in chain.
+	 */
+	public ODatabaseComplex<T> save(T iObject, String iClusterName, OPERATION_MODE iMode);
+
+	/**
+	 * Deletes an entity from the database in synchronous mode.
 	 * 
 	 * @param iObject
 	 *          The entity to delete.
 	 * @return The Database instance itself giving a "fluent interface". Useful to call multiple methods in chain.
 	 */
 	public ODatabaseComplex<T> delete(T iObject);
+
+	/**
+	 * Deletes the entity with the received RID from the database.
+	 * 
+	 * @param iRID
+	 *          The RecordID to delete.
+	 * @return The Database instance itself giving a "fluent interface". Useful to call multiple methods in chain.
+	 */
+	public ODatabaseComplex<T> delete(ORID iRID);
 
 	/**
 	 * Return active transaction. Cannot be null. If no transaction is active, then a OTransactionNoTx instance is returned.
@@ -334,4 +372,6 @@ public interface ODatabaseComplex<T extends Object> extends ODatabase, OUserObje
 	 * @return The Database instance itself giving a "fluent interface". Useful to call multiple methods in chain.
 	 */
 	public <DB extends ODatabaseComplex<?>> DB setMVCC(boolean iValue);
+
+	public String getType();
 }

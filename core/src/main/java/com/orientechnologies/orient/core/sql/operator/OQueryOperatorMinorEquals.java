@@ -15,9 +15,10 @@
  */
 package com.orientechnologies.orient.core.sql.operator;
 
+import com.orientechnologies.orient.core.command.OCommandContext;
+import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.metadata.schema.OType;
-import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.record.impl.ODocumentHelper;
 import com.orientechnologies.orient.core.sql.filter.OSQLFilterCondition;
 import com.orientechnologies.orient.core.sql.filter.OSQLFilterItemField;
@@ -37,8 +38,8 @@ public class OQueryOperatorMinorEquals extends OQueryOperatorEqualityNotNulls {
 
 	@Override
 	@SuppressWarnings("unchecked")
-	protected boolean evaluateExpression(final ORecordInternal<?> iRecord, final OSQLFilterCondition iCondition, final Object iLeft,
-			final Object iRight) {
+	protected boolean evaluateExpression(final OIdentifiable iRecord, final OSQLFilterCondition iCondition, final Object iLeft,
+			final Object iRight, OCommandContext iContext) {
 		final Object right = OType.convert(iRight, iLeft.getClass());
 		if (right == null)
 			return false;
@@ -65,8 +66,8 @@ public class OQueryOperatorMinorEquals extends OQueryOperatorEqualityNotNulls {
         return (ORID) iRight;
       else {
         if (iRight instanceof OSQLFilterItemParameter &&
-                ((OSQLFilterItemParameter) iRight).getValue(null) instanceof ORID)
-          return (ORID) ((OSQLFilterItemParameter) iRight).getValue(null);
+                ((OSQLFilterItemParameter) iRight).getValue(null, null) instanceof ORID)
+          return (ORID) ((OSQLFilterItemParameter) iRight).getValue(null, null);
       }
 
     return null;

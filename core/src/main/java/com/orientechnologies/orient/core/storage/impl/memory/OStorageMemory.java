@@ -28,6 +28,7 @@ import com.orientechnologies.common.concur.lock.OLockManager.LOCK;
 import com.orientechnologies.common.profiler.OProfiler;
 import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.config.OStorageConfiguration;
+import com.orientechnologies.orient.core.db.record.ORecordOperation;
 import com.orientechnologies.orient.core.engine.memory.OEngineMemory;
 import com.orientechnologies.orient.core.exception.OConcurrentModificationException;
 import com.orientechnologies.orient.core.exception.ORecordNotFoundException;
@@ -35,18 +36,15 @@ import com.orientechnologies.orient.core.exception.OStorageException;
 import com.orientechnologies.orient.core.hook.ORecordHook;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
-import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.storage.OCluster;
 import com.orientechnologies.orient.core.storage.OPhysicalPosition;
 import com.orientechnologies.orient.core.storage.ORawBuffer;
-import com.orientechnologies.orient.core.storage.ORecordBrowsingListener;
 import com.orientechnologies.orient.core.storage.ORecordCallback;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.OStorageEmbedded;
 import com.orientechnologies.orient.core.storage.impl.local.OStorageConfigurationSegment;
 import com.orientechnologies.orient.core.tx.OTransaction;
 import com.orientechnologies.orient.core.tx.OTransactionAbstract;
-import com.orientechnologies.orient.core.tx.OTransactionRecordEntry;
 import com.orientechnologies.orient.core.tx.OTxListener;
 
 /**
@@ -216,7 +214,8 @@ public class OStorageMemory extends OStorageEmbedded {
 		return addDataSegment(iSegmentName);
 	}
 
-	public long createRecord(final ORecordId iRid, final byte[] iContent, final byte iRecordType, ORecordCallback<Long> iCallback) {
+	public long createRecord(final ORecordId iRid, final byte[] iContent, final byte iRecordType, final int iMode,
+			ORecordCallback<Long> iCallback) {
 		final long timer = OProfiler.getInstance().startChrono();
 
 		lock.acquireSharedLock();
@@ -236,7 +235,7 @@ public class OStorageMemory extends OStorageEmbedded {
 		}
 	}
 
-	public ORawBuffer readRecord(final ORecordId iRid, String iFetchPlan, ORecordCallback<ORawBuffer> iCallback) {
+	public ORawBuffer readRecord(final ORecordId iRid, String iFetchPlan, boolean iIgnoreCache, ORecordCallback<ORawBuffer> iCallback) {
 		return readRecord(getClusterById(iRid.clusterId), iRid, true);
 	}
 
@@ -274,7 +273,7 @@ public class OStorageMemory extends OStorageEmbedded {
 		}
 	}
 
-	public int updateRecord(final ORecordId iRid, final byte[] iContent, final int iVersion, final byte iRecordType,
+	public int updateRecord(final ORecordId iRid, final byte[] iContent, final int iVersion, final byte iRecordType, final int iMode,
 			ORecordCallback<Integer> iCallback) {
 		final long timer = OProfiler.getInstance().startChrono();
 
@@ -321,7 +320,7 @@ public class OStorageMemory extends OStorageEmbedded {
 		}
 	}
 
-	public boolean deleteRecord(final ORecordId iRid, final int iVersion, ORecordCallback<Boolean> iCallback) {
+	public boolean deleteRecord(final ORecordId iRid, final int iVersion, final int iMode, ORecordCallback<Boolean> iCallback) {
 		final long timer = OProfiler.getInstance().startChrono();
 
 		final OCluster cluster = getClusterById(iRid.clusterId);
@@ -485,15 +484,15 @@ public class OStorageMemory extends OStorageEmbedded {
 		lock.acquireExclusiveLock();
 		try {
 
-			final List<OTransactionRecordEntry> tmpEntries = new ArrayList<OTransactionRecordEntry>();
+			final List<ORecordOperation> tmpEntries = new ArrayList<ORecordOperation>();
 
 			while (iTx.getCurrentRecordEntries().iterator().hasNext()) {
-				for (OTransactionRecordEntry txEntry : iTx.getCurrentRecordEntries())
+				for (ORecordOperation txEntry : iTx.getCurrentRecordEntries())
 					tmpEntries.add(txEntry);
 
 				iTx.clearRecordEntries();
 
-				for (OTransactionRecordEntry txEntry : tmpEntries)
+				for (ORecordOperation txEntry : tmpEntries)
 					// COMMIT ALL THE SINGLE ENTRIES ONE BY ONE
 					commitEntry(iTx, txEntry);
 
@@ -514,9 +513,6 @@ public class OStorageMemory extends OStorageEmbedded {
 	}
 
 	public void synch() {
-	}
-
-	public void browse(final int[] iClusterId, final ORecordBrowsingListener iListener, final ORecord<?> iRecord) {
 	}
 
 	public boolean exists() {
@@ -605,21 +601,21 @@ public class OStorageMemory extends OStorageEmbedded {
 		return true;
 	}
 
-	private void commitEntry(final OTransaction iTx, final OTransactionRecordEntry txEntry) throws IOException {
+	private void commitEntry(final OTransaction iTx, final ORecordOperation txEntry) throws IOException {
 
 		final ORecordId rid = (ORecordId) txEntry.getRecord().getIdentity();
 
-		final OCluster cluster = txEntry.clusterName != null ? getClusterByName(txEntry.clusterName) : getClusterById(rid.clusterId);
+		final OCluster cluster = getClusterById(rid.clusterId);
 		rid.clusterId = cluster.getId();
 
 		if (txEntry.getRecord() instanceof OTxListener)
 			((OTxListener) txEntry.getRecord()).onEvent(txEntry, OTxListener.EVENT.BEFORE_COMMIT);
 
-		switch (txEntry.status) {
-		case OTransactionRecordEntry.LOADED:
+		switch (txEntry.type) {
+		case ORecordOperation.LOADED:
 			break;
 
-		case OTransactionRecordEntry.CREATED:
+		case ORecordOperation.CREATED:
 			if (rid.isNew()) {
 				// CHECK 2 TIMES TO ASSURE THAT IT'S A CREATE OR AN UPDATE BASED ON RECURSIVE TO-STREAM METHOD
 				byte[] stream = txEntry.getRecord().toStream();
@@ -629,18 +625,20 @@ public class OStorageMemory extends OStorageEmbedded {
 						// RECORD CHANGED: RE-STREAM IT
 						stream = txEntry.getRecord().toStream();
 
-					createRecord(rid, stream, txEntry.getRecord().getRecordType(), null);
+				  txEntry.getRecord().onBeforeIdentityChanged(rid);
+					createRecord(rid, stream, txEntry.getRecord().getRecordType(), 0, null);
+					txEntry.getRecord().onAfterIdentityChanged(txEntry.getRecord());
 
 					iTx.getDatabase().callbackHooks(ORecordHook.TYPE.AFTER_CREATE, txEntry.getRecord());
 
 				} else {
 					txEntry.getRecord().setVersion(
-							updateRecord(rid, stream, txEntry.getRecord().getVersion(), txEntry.getRecord().getRecordType(), null));
+							updateRecord(rid, stream, txEntry.getRecord().getVersion(), txEntry.getRecord().getRecordType(), 0, null));
 				}
 			}
 			break;
 
-		case OTransactionRecordEntry.UPDATED:
+		case ORecordOperation.UPDATED:
 			byte[] stream = txEntry.getRecord().toStream();
 
 			if (iTx.getDatabase().callbackHooks(ORecordHook.TYPE.BEFORE_UPDATE, txEntry.getRecord()))
@@ -648,16 +646,18 @@ public class OStorageMemory extends OStorageEmbedded {
 				stream = txEntry.getRecord().toStream();
 
 			txEntry.getRecord().setVersion(
-					updateRecord(rid, stream, txEntry.getRecord().getVersion(), txEntry.getRecord().getRecordType(), null));
+					updateRecord(rid, stream, txEntry.getRecord().getVersion(), txEntry.getRecord().getRecordType(), 0, null));
 			iTx.getDatabase().callbackHooks(ORecordHook.TYPE.AFTER_UPDATE, txEntry.getRecord());
 			break;
 
-		case OTransactionRecordEntry.DELETED:
+		case ORecordOperation.DELETED:
 			iTx.getDatabase().callbackHooks(ORecordHook.TYPE.BEFORE_DELETE, txEntry.getRecord());
-			deleteRecord(rid, txEntry.getRecord().getVersion(), null);
+			deleteRecord(rid, txEntry.getRecord().getVersion(), 0, null);
 			iTx.getDatabase().callbackHooks(ORecordHook.TYPE.AFTER_DELETE, txEntry.getRecord());
 			break;
 		}
+
+		txEntry.getRecord().unsetDirty();
 
 		if (txEntry.getRecord() instanceof OTxListener)
 			((OTxListener) txEntry.getRecord()).onEvent(txEntry, OTxListener.EVENT.AFTER_COMMIT);

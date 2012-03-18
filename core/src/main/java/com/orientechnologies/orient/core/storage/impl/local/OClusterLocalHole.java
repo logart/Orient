@@ -79,7 +79,7 @@ public class OClusterLocalHole extends OSingleFileSegment {
 	}
 
 	/**
-	 * Return and remove the recycled position if any.
+	 * Returns and remove the recycled position if any.
 	 * 
 	 * @return the recycled position if found, otherwise -1 that usually means to request more space.
 	 * @throws IOException
@@ -105,7 +105,7 @@ public class OClusterLocalHole extends OSingleFileSegment {
 	}
 
 	/**
-	 * Return the recycled position if any.
+	 * Returns the recycled position if any.
 	 * 
 	 * @return the recycled position if found, otherwise -1 that usually means to request more space.
 	 * @throws IOException
@@ -115,7 +115,7 @@ public class OClusterLocalHole extends OSingleFileSegment {
 	}
 
 	/**
-	 * Remove a hole. Called on transaction recover to invalidate a delete for a record. Try to shrink the file if the invalidated
+	 * Removes a hole. Called on transaction recover to invalidate a delete for a record. Try to shrink the file if the invalidated
 	 * entry is not in the middle of valid entries.
 	 * 
 	 * @param iPosition
@@ -149,20 +149,20 @@ public class OClusterLocalHole extends OSingleFileSegment {
 	}
 
 	public void rename(String iOldName, String iNewName) {
-		final File osFile = file.getOsFile();
-		if (osFile.getName().startsWith(iOldName)) {
+		final String osFileName = file.getName();
+		if (osFileName.startsWith(iOldName)) {
 			final File newFile = new File(storage.getStoragePath() + "/" + iNewName
-					+ osFile.getName().substring(osFile.getName().lastIndexOf(iOldName) + iOldName.length()));
-			boolean renamed = osFile.renameTo(newFile);
+					+ osFileName.substring(osFileName.lastIndexOf(iOldName) + iOldName.length()));
+			boolean renamed = file.renameTo(newFile);
 			while (!renamed) {
 				OMemoryWatchDog.freeMemory(100);
-				renamed = osFile.renameTo(newFile);
+				renamed = file.renameTo(newFile);
 			}
 		}
 	}
 
 	/**
-	 * Compute the number of holes. Note that not all the holes could be valid.
+	 * Computes the number of holes. Note that not all the holes could be valid.
 	 * 
 	 * @return
 	 */

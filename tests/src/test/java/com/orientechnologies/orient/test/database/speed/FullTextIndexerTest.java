@@ -22,14 +22,14 @@ public class FullTextIndexerTest {
 
 		long time = System.currentTimeMillis();
 
-		final ODocument document = new ODocument(database, "Employee");
+		final ODocument document = new ODocument("Employee");
 		for (int i = 0; i < DOCUMENTS; ++i) {
 			document.reset();
 			document.field("name", "Jay");
 			document.field("surname", "Miner");
 			document
 					.field("description",
-							"Jay Glenn Miner (May 31, 1932 -  June 20, 1994), was a famous integrated circuit designer, known primarily for his "
+							"Jay Glenn Miner (May 31, 1932 to June 20, 1994), was a famous integrated circuit designer, known primarily for his "
 									+ "work in multimedia chips and as the 'father of the Amiga'[1]. He received a BS in EECS from "
 									+ "UC Berkeley in 1959. Miner started in the electronics industry with a number of designs in the "
 									+ "medical world, including a remote-control pacemaker. He moved to Atari in the late 1970s. One of "
@@ -65,8 +65,6 @@ public class FullTextIndexerTest {
 									+ " to complications from kidney failure at the age of 62, just two months after Commodore"
 									+ " declared bankruptcy.");
 			document.save();
-
-//			index.indexDocument(document);
 		}
 
 		long lap = System.currentTimeMillis();

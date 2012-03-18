@@ -15,147 +15,135 @@
  */
 package com.orientechnologies.orient.core.cache;
 
+import static com.orientechnologies.orient.core.storage.OStorage.CLUSTER_INDEX_NAME;
+
 import com.orientechnologies.common.profiler.OProfiler;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
+import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.record.ORecordInternal;
-import com.orientechnologies.orient.core.storage.OStorage;
 
 /**
- * Per database cache of documents. It's not synchronized since database object are not thread-safes.
+ * Level1 cache. it's one to one with record database instances.
  * 
  * @author Luca Garulli
- * 
  */
 public class OLevel1RecordCache extends OAbstractRecordCache {
+	private OLevel2RecordCache	secondary	= null;
+	private String							CACHE_HIT;
+	private String							CACHE_MISS;
 
-	private final ODatabaseRecord	database;
-	private OLevel2RecordCache		level2cache;
-	private String								PROFILER_CACHE_FOUND;
-	private String								PROFILER_CACHE_NOTFOUND;
-
-	public OLevel1RecordCache(final ODatabaseRecord iDatabase) {
-		super("db." + iDatabase.getName(), OGlobalConfiguration.CACHE_LEVEL1_SIZE.getValueAsInteger());
-		database = iDatabase;
+	public OLevel1RecordCache() {
+		super(new OCacheLocator().primaryCache());
 	}
 
 	@Override
 	public void startup() {
-		profilerPrefix = "db." + database.getName();
-		PROFILER_CACHE_FOUND = profilerPrefix + ".cache.found";
-		PROFILER_CACHE_NOTFOUND = profilerPrefix + ".cache.notFound";
+		ODatabaseRecord db = ODatabaseRecordThreadLocal.INSTANCE.get();
+		secondary = db.getLevel2Cache();
+
+		profilerPrefix = "db." + db.getName();
+		CACHE_HIT = profilerPrefix + ".cache.found";
+		CACHE_MISS = profilerPrefix + ".cache.notFound";
+
+		excludedCluster = db.getClusterIdByName(CLUSTER_INDEX_NAME);
 
 		super.startup();
-		setExcludedCluster(database.getClusterIdByName(OStorage.CLUSTER_INDEX_NAME));
-
-		level2cache = (OLevel2RecordCache) database.getLevel2Cache();
-	}
-
-	public void updateRecord(final ORecordInternal<?> iRecord) {
-		if (enabled) {
-			if (iRecord.getIdentity().getClusterId() == excludedCluster)
-				// EXCLUDED CLUSTER
-				return;
-
-			acquireExclusiveLock();
-			try {
-				if (entries.get(iRecord.getIdentity()) != iRecord)
-					entries.put(iRecord.getIdentity(), iRecord);
-			} finally {
-				releaseExclusiveLock();
-			}
-		}
-
-		level2cache.updateRecord(iRecord);
+		setEnable(OGlobalConfiguration.CACHE_LEVEL1_ENABLED.getValueAsBoolean());
 	}
 
 	/**
-	 * Search a record in the cache and if found add it in the Database's level-1 cache.
+	 * Pushes record to cache. Identifier of record used as access key
 	 * 
-	 * @param iRID
-	 *          RecordID to search
-	 * @param iDbCache
-	 *          Database's cache
-	 * @return The record if found, otherwise null
+	 * @param record
+	 *          record that should be cached
 	 */
-	public ORecordInternal<?> findRecord(final ORID iRID) {
-		if (!enabled)
-			// PRECONDITIONS
+	public void updateRecord(final ORecordInternal<?> record) {
+		if (!isEnabled() || record.getIdentity().getClusterId() == excludedCluster || !record.getIdentity().isValid())
+			return;
+
+		underlying.lock(record.getIdentity());
+		try {
+			if (underlying.get(record.getIdentity()) != record)
+				underlying.put(record);
+		} finally {
+			underlying.unlock(record.getIdentity());
+		}
+
+		secondary.updateRecord(record);
+	}
+
+	/**
+	 * Looks up for record in cache by it's identifier. Optionally look up in secondary cache and update primary with found record
+	 * 
+	 * @param rid
+	 *          unique identifier of record
+	 * @return record stored in cache if any, otherwise - {@code null}
+	 */
+	public ORecordInternal<?> findRecord(final ORID rid) {
+		if (!isEnabled())
 			return null;
 
 		ORecordInternal<?> record;
-
-		// SEARCH INTO DATABASE'S 1-LEVEL CACHE
-		acquireSharedLock();
+		underlying.lock(rid);
 		try {
-			record = entries.get(iRID);
-		} finally {
-			releaseSharedLock();
-		}
+			record = underlying.get(rid);
 
-		if (record == null) {
-			// SEARCH INTO THE STORAGE'S 2-LEVEL CACHE
-			record = level2cache.retrieveRecord(iRID);
+			if (record == null) {
+				record = secondary.retrieveRecord(rid);
 
-			if (record != null) {
-				// FOUND: MOVE IT INTO THE DB'S CACHE
-				acquireExclusiveLock();
-				try {
-					entries.put(record.getIdentity(), record);
-				} finally {
-					releaseExclusiveLock();
-				}
+				if (record != null)
+					underlying.put(record);
 			}
+		} finally {
+			underlying.unlock(rid);
 		}
 
-		OProfiler.getInstance().updateCounter(record != null ? PROFILER_CACHE_FOUND : PROFILER_CACHE_NOTFOUND, +1);
+		OProfiler.getInstance().updateCounter(record != null ? CACHE_HIT : CACHE_MISS, 1L);
 
 		return record;
 	}
 
 	/**
-	 * Delete a record entry from both database and storage caches.
+	 * Removes record with specified identifier from both primary and secondary caches
 	 * 
-	 * @param iRecord
-	 *          Record to remove
+	 * @param rid
+	 *          unique identifier of record
 	 */
-	public void deleteRecord(final ORID iRecord) {
-		super.deleteRecord(iRecord);
-		level2cache.freeRecord(iRecord);
+	public void deleteRecord(final ORID rid) {
+		super.deleteRecord(rid);
+		secondary.freeRecord(rid);
 	}
 
 	public void shutdown() {
-		clear();
 		super.shutdown();
-		level2cache = null;
+		secondary = null;
 	}
 
 	@Override
 	public void clear() {
-		acquireExclusiveLock();
-		try {
-			if (level2cache != null)
-				// MOVE ALL THE LEVEL-1 CACHE INTO THE LEVEL-2 CACHE
-				level2cache.moveRecords(entries.values());
-
-			entries.clear();
-		} finally {
-			releaseExclusiveLock();
-		}
+		moveRecordsToSecondaryCache();
+		super.clear();
 	}
 
+	private void moveRecordsToSecondaryCache() {
+		if (secondary == null)
+			return;
+
+		for (ORID rid : underlying.keys())
+			secondary.updateRecord(underlying.get(rid));
+	}
+
+	/**
+	 * Invalidates the cache emptying all the records.
+	 */
 	public void invalidate() {
-		acquireExclusiveLock();
-		try {
-			entries.clear();
-		} finally {
-			releaseExclusiveLock();
-		}
+		underlying.clear();
 	}
 
 	@Override
 	public String toString() {
-		return "DB level1 cache records=" + getSize() + ", maxSize=" + maxSize;
+		return "DB level1 cache records = " + getSize() + ", maxSize= " + getMaxSize();
 	}
 }

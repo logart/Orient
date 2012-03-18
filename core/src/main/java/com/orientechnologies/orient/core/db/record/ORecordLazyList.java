@@ -27,7 +27,6 @@ import com.orientechnologies.orient.core.exception.ORecordNotFoundException;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.record.ORecord;
-import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.serialization.serializer.OStringSerializerHelper;
 
@@ -54,9 +53,15 @@ public class ORecordLazyList extends ORecordTrackedList implements ORecordLazyMu
 		this.recordType = ODocument.RECORD_TYPE;
 	}
 
-	public ORecordLazyList(final ORecordInternal<?> iSourceRecord) {
+	public ORecordLazyList(final ODocument iSourceRecord) {
 		super(iSourceRecord);
-		this.recordType = iSourceRecord.getRecordType();
+		if (iSourceRecord != null) {
+			this.recordType = iSourceRecord.getRecordType();
+			if (!iSourceRecord.isLazyLoad())
+				// SET AS NON-LAZY LOAD THE COLLECTION TOO
+				autoConvertToRecord = false;
+		} else
+			this.recordType = ODocument.RECORD_TYPE;
 	}
 
 	@SuppressWarnings("unchecked")
@@ -81,9 +86,7 @@ public class ORecordLazyList extends ORecordTrackedList implements ORecordLazyMu
 	}
 
 	/**
-	 * Returns a iterator that just returns the elements without convertion.
-	 * 
-	 * @return
+	 * @return iterator that just returns the elements without convertion.
 	 */
 	public Iterator<OIdentifiable> rawIterator() {
 		lazyLoad(false);
@@ -132,12 +135,13 @@ public class ORecordLazyList extends ORecordTrackedList implements ORecordLazyMu
 
 	@Override
 	public boolean add(OIdentifiable e) {
-		if ((ridOnly || contentType == MULTIVALUE_CONTENT_TYPE.ALL_RIDS || OGlobalConfiguration.LAZYSET_WORK_ON_STREAM
-				.getValueAsBoolean()) && !e.getIdentity().isNew() && (e instanceof ODocument && !((ODocument) e).isDirty()))
-			// IT'S BETTER TO LEAVE ALL RIDS AND EXTRACT ONLY THIS ONE
-			e = e.getIdentity();
-		else
-			contentType = ORecordMultiValueHelper.updateContentType(contentType, e);
+		if (e != null)
+			if ((ridOnly || contentType == MULTIVALUE_CONTENT_TYPE.ALL_RIDS || OGlobalConfiguration.LAZYSET_WORK_ON_STREAM
+					.getValueAsBoolean()) && !e.getIdentity().isNew() && (e instanceof ODocument && !((ODocument) e).isDirty()))
+				// IT'S BETTER TO LEAVE ALL RIDS AND EXTRACT ONLY THIS ONE
+				e = e.getIdentity();
+			else
+				contentType = ORecordMultiValueHelper.updateContentType(contentType, e);
 
 		lazyLoad(true);
 		return super.add(e);
@@ -145,12 +149,13 @@ public class ORecordLazyList extends ORecordTrackedList implements ORecordLazyMu
 
 	@Override
 	public void add(int index, OIdentifiable e) {
-		if ((ridOnly || contentType == MULTIVALUE_CONTENT_TYPE.ALL_RIDS || OGlobalConfiguration.LAZYSET_WORK_ON_STREAM
-				.getValueAsBoolean()) && !e.getIdentity().isNew() && (e instanceof ODocument && !((ODocument) e).isDirty()))
-			// IT'S BETTER TO LEAVE ALL RIDS AND EXTRACT ONLY THIS ONE
-			e = e.getIdentity();
-		else
-			contentType = ORecordMultiValueHelper.updateContentType(contentType, e);
+		if (e != null)
+			if ((ridOnly || contentType == MULTIVALUE_CONTENT_TYPE.ALL_RIDS || OGlobalConfiguration.LAZYSET_WORK_ON_STREAM
+					.getValueAsBoolean()) && !e.getIdentity().isNew() && (e instanceof ODocument && !((ODocument) e).isDirty()))
+				// IT'S BETTER TO LEAVE ALL RIDS AND EXTRACT ONLY THIS ONE
+				e = e.getIdentity();
+			else
+				contentType = ORecordMultiValueHelper.updateContentType(contentType, e);
 
 		lazyLoad(true);
 		super.add(index, e);
@@ -160,12 +165,13 @@ public class ORecordLazyList extends ORecordTrackedList implements ORecordLazyMu
 	public OIdentifiable set(int index, OIdentifiable e) {
 		lazyLoad(true);
 
-		if ((ridOnly || contentType == MULTIVALUE_CONTENT_TYPE.ALL_RIDS || OGlobalConfiguration.LAZYSET_WORK_ON_STREAM
-				.getValueAsBoolean()) && !e.getIdentity().isNew() && (e instanceof ODocument && !((ODocument) e).isDirty()))
-			// IT'S BETTER TO LEAVE ALL RIDS AND EXTRACT ONLY THIS ONE
-			e = e.getIdentity();
-		else
-			contentType = ORecordMultiValueHelper.updateContentType(contentType, e);
+		if (e != null)
+			if ((ridOnly || contentType == MULTIVALUE_CONTENT_TYPE.ALL_RIDS || OGlobalConfiguration.LAZYSET_WORK_ON_STREAM
+					.getValueAsBoolean()) && !e.getIdentity().isNew() && (e instanceof ODocument && !((ODocument) e).isDirty()))
+				// IT'S BETTER TO LEAVE ALL RIDS AND EXTRACT ONLY THIS ONE
+				e = e.getIdentity();
+			else
+				contentType = ORecordMultiValueHelper.updateContentType(contentType, e);
 
 		return super.set(index, e);
 	}
@@ -205,7 +211,9 @@ public class ORecordLazyList extends ORecordTrackedList implements ORecordLazyMu
 			final String rid = ((OIdentifiable) iElement).getIdentity().toString();
 			int pos = stream.indexOf(rid);
 			if (pos > -1) {
-				setDirty();
+				fireCollectionChangedEvent(new OMultiValueChangeEvent<Integer, OIdentifiable>(OMultiValueChangeEvent.OChangeType.REMOVE,
+						pos, null, (OIdentifiable) iElement));
+
 				// FOUND: REMOVE IT DIRECTLY FROM STREAM
 				if (pos > 0)
 					pos--;
@@ -228,6 +236,7 @@ public class ORecordLazyList extends ORecordTrackedList implements ORecordLazyMu
 
 	@Override
 	public void clear() {
+		lazyLoad(true);
 		super.clear();
 		contentType = MULTIVALUE_CONTENT_TYPE.EMPTY;
 		stream = null;
@@ -245,6 +254,12 @@ public class ORecordLazyList extends ORecordTrackedList implements ORecordLazyMu
 		if (!marshalling)
 			return (RET) super.setDirty();
 		return (RET) this;
+	}
+
+	@Override
+	protected void fireCollectionChangedEvent(final OMultiValueChangeEvent<Integer, OIdentifiable> event) {
+		if (!marshalling)
+			super.fireCollectionChangedEvent(event);
 	}
 
 	@Override
@@ -335,6 +350,7 @@ public class ORecordLazyList extends ORecordTrackedList implements ORecordLazyMu
 	 * 
 	 * @param iIndex
 	 *          Position of the item to convert
+	 * @return <code>true</code> if conversion was successful.
 	 */
 	private boolean convertRecord2Link(final int iIndex) {
 		if (contentType == MULTIVALUE_CONTENT_TYPE.ALL_RIDS)
@@ -391,7 +407,7 @@ public class ORecordLazyList extends ORecordTrackedList implements ORecordLazyMu
 
 		final int tot = super.size();
 		for (int i = 0; i < tot; ++i)
-			copy.rawAdd(rawGet(i));
+			copy.add(rawGet(i));
 
 		return copy;
 	}
@@ -440,7 +456,7 @@ public class ORecordLazyList extends ORecordTrackedList implements ORecordLazyMu
 			if (item.length() == 0)
 				continue;
 
-			super.rawAdd(new ORecordId(item));
+			super.add(new ORecordId(item));
 		}
 
 		modCount = currentModCount;

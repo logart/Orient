@@ -4,11 +4,11 @@
 	<parent>
 		<groupId>com.orientechnologies</groupId>
 		<artifactId>orientdb-parent</artifactId>
-		<version>1.0rc8-SNAPSHOT</version>
+		<version>1.0rc9-SNAPSHOT</version>
 	</parent>
 
 	<artifactId>orientdb-core</artifactId>
-	<packaging>bundle</packaging>
+	<packaging>jar</packaging>
 
 	<name>OrientDB Core</name>
 
@@ -32,13 +32,6 @@
 			<groupId>org.testng</groupId>
 			<artifactId>testng</artifactId>
 			<version>5.14.1</version>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.orientechnologies</groupId>
-			<artifactId>orient-commons</artifactId>
-			<version>${project.version}</version>
-			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

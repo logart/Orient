@@ -143,7 +143,7 @@ public abstract class OMVRBTreeProviderAbstract<K, V> implements OMVRBTreeProvid
 		if (!record.getIdentity().isValid())
 			// NOTHING TO LOAD
 			return;
-		ORawBuffer raw = iSt.readRecord((ORecordId) record.getIdentity(), null, null);
+		ORawBuffer raw = iSt.readRecord((ORecordId) record.getIdentity(), null, false, null);
 		if (raw == null)
 			throw new OConfigurationException("Cannot load map with id " + record.getIdentity());
 		record.setVersion(raw.version);
@@ -167,13 +167,14 @@ public abstract class OMVRBTreeProviderAbstract<K, V> implements OMVRBTreeProvid
 		record.fromStream(toStream());
 		if (record.getIdentity().isValid())
 			// UPDATE IT WITHOUT VERSION CHECK SINCE ALL IT'S LOCKED
-			record.setVersion(iSt.updateRecord((ORecordId) record.getIdentity(), record.toStream(), -1, record.getRecordType(), null));
+			record.setVersion(iSt.updateRecord((ORecordId) record.getIdentity(), record.toStream(), -1, record.getRecordType(), (byte) 0,
+					null));
 		else {
 			// CREATE IT
 			if (record.getIdentity().getClusterId() == ORID.CLUSTER_ID_INVALID)
 				((ORecordId) record.getIdentity()).clusterId = clusterId;
 
-			iSt.createRecord((ORecordId) record.getIdentity(), record.toStream(), record.getRecordType(), null);
+			iSt.createRecord((ORecordId) record.getIdentity(), record.toStream(), record.getRecordType(), (byte) 0, null);
 		}
 		record.unsetDirty();
 	}
@@ -191,7 +192,7 @@ public abstract class OMVRBTreeProviderAbstract<K, V> implements OMVRBTreeProvid
 	}
 
 	protected void delete(final OStorage iSt) {
-		iSt.deleteRecord((ORecordId) record.getIdentity(), record.getVersion(), null);
+		iSt.deleteRecord((ORecordId) record.getIdentity(), record.getVersion(), (byte) 0, null);
 	}
 
 	public String toString() {

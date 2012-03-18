@@ -20,8 +20,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecordTx;
 import com.orientechnologies.orient.core.db.record.ORecordLazyList;
+import com.orientechnologies.orient.core.db.record.ORecordOperation;
+import com.orientechnologies.orient.core.exception.ORecordNotFoundException;
 import com.orientechnologies.orient.core.exception.OSerializationException;
 import com.orientechnologies.orient.core.exception.OTransactionException;
 import com.orientechnologies.orient.core.id.ORID;
@@ -30,7 +33,7 @@ import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.tx.OTransactionOptimistic;
-import com.orientechnologies.orient.core.tx.OTransactionRecordEntry;
+import com.orientechnologies.orient.core.tx.OTransactionRealAbstract;
 import com.orientechnologies.orient.enterprise.channel.binary.OChannelBinary;
 
 public class OTransactionOptimisticProxy extends OTransactionOptimistic {
@@ -59,35 +62,57 @@ public class OTransactionOptimisticProxy extends OTransactionOptimistic {
 
 				final ORecordId rid = channel.readRID();
 
-				final OTransactionEntryProxy entry = new OTransactionEntryProxy(channel.readByte());
-				entry.status = recordStatus;
+				final byte recordType = channel.readByte();
+				final ORecordOperation entry;
+				switch (recordStatus) {
+				case ORecordOperation.CREATED:
+					entry = new OTransactionEntryProxy(recordType);
+					entry.type = recordStatus;
 
-				switch (entry.status) {
-				case OTransactionRecordEntry.CREATED:
-					entry.clusterName = channel.readString();
 					entry.getRecord().fill(rid, 0, channel.readBytes(), true);
 
 					// SAVE THE RECORD TO RETRIEVE THEM FOR THE NEW RID TO SEND BACK TO THE REQUESTER
 					createdRecords.put(rid.copy(), entry.getRecord());
 					break;
 
-				case OTransactionRecordEntry.UPDATED:
-					entry.getRecord().fill(rid, channel.readInt(), channel.readBytes(), true);
+				case ORecordOperation.UPDATED:
+					final ORecordInternal<?> newRecord = Orient.instance().getRecordFactoryManager().newInstance(recordType);
+					newRecord.fill(rid, channel.readInt(), channel.readBytes(), true);
+
+					final ORecordInternal<?> currentRecord;
+					if (newRecord.getRecordType() == ODocument.RECORD_TYPE) {
+						currentRecord = getDatabase().load(rid);
+
+						if (currentRecord == null)
+							throw new ORecordNotFoundException(rid.toString());
+
+						if(currentRecord.getRecordType() == ODocument.RECORD_TYPE )
+							((ODocument) currentRecord).merge((ODocument) newRecord, false, false);
+
+					} else
+						currentRecord = newRecord;
+					
+					currentRecord.setVersion(newRecord.getVersion());
+					
+					entry = new ORecordOperation(currentRecord, recordStatus);
 
 					// SAVE THE RECORD TO RETRIEVE THEM FOR THE NEW VERSIONS TO SEND BACK TO THE REQUESTER
-					updatedRecords.put(rid, entry.getRecord());
+					updatedRecords.put(rid, currentRecord);
 					break;
 
-				case OTransactionRecordEntry.DELETED:
+				case ORecordOperation.DELETED:
+					entry = new OTransactionEntryProxy(recordType);
+					entry.type = recordStatus;
+
 					entry.getRecord().fill(rid, channel.readInt(), null, false);
 					break;
 
 				default:
-					throw new OTransactionException("Unrecognized tx command: " + entry.status);
+					throw new OTransactionException("Unrecognized tx command: " + recordStatus);
 				}
 
 				// PUT IN TEMPORARY LIST TO GET FETCHED AFTER ALL FOR CACHE
-				recordEntries.put((ORecordId) entry.getRecord().getIdentity(), entry);
+				recordEntries.put(entry.getRecord().getIdentity(), entry);
 			}
 
 			if (lastTxStatus == -1)
@@ -111,7 +136,9 @@ public class OTransactionOptimisticProxy extends OTransactionOptimistic {
 	@Override
 	public ORecordInternal<?> getRecord(final ORID rid) {
 		ORecordInternal<?> record = super.getRecord(rid);
-		if (record == null && rid.isNew())
+		if (record == OTransactionRealAbstract.DELETED_RECORD)
+			return null;
+		else if (record == null && rid.isNew())
 			// SEARCH BETWEEN CREATED RECORDS
 			record = (ORecordInternal<?>) createdRecords.get(rid);
 

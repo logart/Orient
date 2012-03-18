@@ -77,8 +77,6 @@ public class OStorageLocal extends OStorageEmbedded {
 	private final OStorageVariableParser	variableParser;
 	private int														defaultClusterId		= -1;
 
-	private OStorageConfigurationSegment	configurationSegment;
-
 	private static String[]								ALL_FILE_EXTENSIONS	= { "ocf", ".och", ".ocl", ".oda", ".odh", ".otx" };
 	private final String									PROFILER_CREATE_RECORD;
 	private final String									PROFILER_READ_RECORD;
@@ -189,8 +187,8 @@ public class OStorageLocal extends OStorageEmbedded {
 					} catch (FileNotFoundException e) {
 						OLogManager.instance().warn(
 								this,
-								"Error on loading cluster '" + clusters[i].getName() + "' (" + i + "). It will be excluded from current database '"
-										+ getName() + "'.");
+								"Error on loading cluster '" + clusters[i].getName() + "' (" + i
+										+ "): file not found. It will be excluded from current database '" + getName() + "'.");
 
 						clusterMap.remove(clusters[i].getName());
 						clusters[i] = null;
@@ -301,7 +299,8 @@ public class OStorageLocal extends OStorageEmbedded {
 
 			txManager.close();
 
-			configuration.close();
+			if (configuration != null)
+				configuration.close();
 
 			level2Cache.shutdown();
 
@@ -581,7 +580,7 @@ public class OStorageLocal extends OStorageEmbedded {
 							pos += OBinaryProtocol.SIZE_INT + OBinaryProtocol.SIZE_SHORT + OBinaryProtocol.SIZE_LONG + recordSize;
 						}
 					} catch (Exception e) {
-						OLogManager.instance().warn(this, "[OStorageLocal.check] Found wrong chunk %d", pos);
+						OLogManager.instance().warn(this, "[OStorageLocal.check] Found wrong chunk %d, cause: ", e, pos, e.toString());
 						errors++;
 						break;
 					}
@@ -721,8 +720,7 @@ public class OStorageLocal extends OStorageEmbedded {
 			clusters[iClusterId] = null;
 
 			// UPDATE CONFIGURATION
-			configuration.clusters.set(iClusterId, null);
-			configuration.update();
+			configuration.dropCluster(iClusterId);
 
 			return true;
 		} catch (Exception e) {
@@ -793,27 +791,47 @@ public class OStorageLocal extends OStorageEmbedded {
 		}
 	}
 
-	public long createRecord(final ORecordId iRid, final byte[] iContent, final byte iRecordType, ORecordCallback<Long> iCallback) {
+	public long createRecord(final ORecordId iRid, final byte[] iContent, final byte iRecordType, final int iMode,
+			ORecordCallback<Long> iCallback) {
 		checkOpeness();
 
-		iRid.clusterPosition = createRecord(getClusterById(iRid.clusterId), iContent, iRecordType);
+		final OCluster cluster = getClusterById(iRid.clusterId);
+
+		if (txManager.isCommitting())
+			iRid.clusterPosition = txManager
+					.createRecord(txManager.getCurrentTransaction().getId(), cluster, iRid, iContent, iRecordType);
+		else
+			iRid.clusterPosition = createRecord(cluster, iContent, iRecordType);
 		return iRid.clusterPosition;
 	}
 
-	public ORawBuffer readRecord(final ORecordId iRid, final String iFetchPlan, ORecordCallback<ORawBuffer> iCallback) {
+	public ORawBuffer readRecord(final ORecordId iRid, final String iFetchPlan, boolean iIgnoreCache,
+			ORecordCallback<ORawBuffer> iCallback) {
 		checkOpeness();
 		return readRecord(getClusterById(iRid.clusterId), iRid, true);
 	}
 
-	public int updateRecord(final ORecordId iRid, final byte[] iContent, final int iVersion, final byte iRecordType,
+	public int updateRecord(final ORecordId iRid, final byte[] iContent, final int iVersion, final byte iRecordType, final int iMode,
 			ORecordCallback<Integer> iCallback) {
 		checkOpeness();
-		return updateRecord(getClusterById(iRid.clusterId), iRid, iContent, iVersion, iRecordType);
+
+		final OCluster cluster = getClusterById(iRid.clusterId);
+
+		if (txManager.isCommitting())
+			return txManager.updateRecord(txManager.getCurrentTransaction().getId(), cluster, iRid, iContent, iVersion, iRecordType);
+		else
+			return updateRecord(cluster, iRid, iContent, iVersion, iRecordType);
 	}
 
-	public boolean deleteRecord(final ORecordId iRid, final int iVersion, ORecordCallback<Boolean> iCallback) {
+	public boolean deleteRecord(final ORecordId iRid, final int iVersion, final int iMode, ORecordCallback<Boolean> iCallback) {
 		checkOpeness();
-		return deleteRecord(getClusterById(iRid.clusterId), iRid, iVersion);
+
+		final OCluster cluster = getClusterById(iRid.clusterId);
+
+		if (txManager.isCommitting())
+			return txManager.deleteRecord(txManager.getCurrentTransaction().getId(), cluster, iRid.clusterPosition, iVersion);
+		else
+			return deleteRecord(cluster, iRid, iVersion);
 	}
 
 	public Set<String> getClusterNames() {
@@ -938,6 +956,9 @@ public class OStorageLocal extends OStorageEmbedded {
 			for (ODataLocal data : dataSegments)
 				if (data != null)
 					data.synch();
+
+			if (configuration != null)
+				configuration.synch();
 
 		} catch (IOException e) {
 			throw new OStorageException("Error on synch storage '" + name + "'", e);
@@ -1091,10 +1112,6 @@ public class OStorageLocal extends OStorageEmbedded {
 		} finally {
 			lock.releaseSharedLock();
 		}
-	}
-
-	public OStorageConfigurationSegment getConfigurationSegment() {
-		return configurationSegment;
 	}
 
 	public String getStoragePath() {
@@ -1334,7 +1351,7 @@ public class OStorageLocal extends OStorageEmbedded {
 
 		final long timer = OProfiler.getInstance().startChrono();
 
-		lock.acquireExclusiveLock();
+		lock.acquireSharedLock();
 
 		try {
 			lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
@@ -1356,12 +1373,6 @@ public class OStorageLocal extends OStorageEmbedded {
 				case -2:
 					break;
 
-				// DOCUMENT ROLLBACK, DECREMENT VERSION
-				case -3:
-					--ppos.version;
-					iClusterSegment.updateVersion(iRid.clusterPosition, ppos.version);
-					break;
-
 				default:
 					// MVCC CONTROL AND RECORD UPDATE OR WRONG VERSION VALUE
 					if (iVersion > -1) {
@@ -1374,14 +1385,13 @@ public class OStorageLocal extends OStorageEmbedded {
 											+ name
 											+ "' because the version is not the latest. Probably you are updating an old record or it has been modified by another user (db=v"
 											+ ppos.version + " your=v" + iVersion + ")", iRid, ppos.version, iVersion);
-
 						++ppos.version;
 						iClusterSegment.updateVersion(iRid.clusterPosition, ppos.version);
-					} else
-						throw new IllegalArgumentException("Cannot update record " + iRid + " in storage '" + name
-								+ "' because the version is not correct: recieved=" + iVersion
-								+ " expected=-1 (skip version control),-2 (skip version control and increment),-3 (rollback) or " + ppos.version
-								+ "(current version)");
+					} else {
+						// DOCUMENT ROLLBACKED
+						ppos.version = iVersion - Integer.MIN_VALUE;
+						iClusterSegment.updateVersion(iRid.clusterPosition, ppos.version);
+					}
 
 				}
 
@@ -1413,7 +1423,7 @@ public class OStorageLocal extends OStorageEmbedded {
 			OLogManager.instance().error(this, "Error on updating record " + iRid + " (cluster: " + iClusterSegment + ")", e);
 
 		} finally {
-			lock.releaseExclusiveLock();
+			lock.releaseSharedLock();
 
 			OProfiler.getInstance().stopChrono(PROFILER_UPDATE_RECORD, timer);
 		}
@@ -1446,10 +1456,10 @@ public class OStorageLocal extends OStorageEmbedded {
 									+ "' because the version is not the latest. Probably you are deleting an old record or it has been modified by another user (db=v"
 									+ ppos.version + " your=v" + iVersion + ")", iRid, ppos.version, iVersion);
 
-				iClusterSegment.removePhysicalPosition(iRid.clusterPosition, ppos);
-
 				if (ppos.dataChunkPosition > -1)
 					getDataSegment(ppos.dataSegmentId).deleteRecord(ppos.dataChunkPosition);
+
+				iClusterSegment.removePhysicalPosition(iRid.clusterPosition, ppos);
 
 				incrementVersion();
 
@@ -1529,7 +1539,8 @@ public class OStorageLocal extends OStorageEmbedded {
 
 				final OStoragePhysicalClusterConfiguration config = new OStoragePhysicalClusterConfiguration(configuration, iClusterName,
 						clusterPos);
-				configuration.clusters.add(config);
+
+				configuration.setCluster(config);
 
 				cluster = new OClusterLocal(this, config);
 			} else
@@ -1560,7 +1571,7 @@ public class OStorageLocal extends OStorageEmbedded {
 				final OStorageLogicalClusterConfiguration config = new OStorageLogicalClusterConfiguration(iClusterName, clusters.length,
 						iPhysicalCluster, null);
 
-				configuration.clusters.add(config);
+				configuration.setCluster(config);
 
 				cluster = new OClusterLogical(this, clusters.length, iClusterName, iPhysicalCluster);
 				config.map = cluster.getRID();
@@ -1587,7 +1598,7 @@ public class OStorageLocal extends OStorageEmbedded {
 			if (iClusterName != null) {
 				final OStorageMemoryClusterConfiguration config = new OStorageMemoryClusterConfiguration(iClusterName, clusters.length);
 
-				configuration.clusters.add(config);
+				configuration.setCluster(config);
 
 				cluster = new OClusterMemory(clusters.length, iClusterName);
 			} else

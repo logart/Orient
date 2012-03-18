@@ -16,6 +16,7 @@
 package com.orientechnologies.orient.core.sql.query;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -93,7 +94,7 @@ public abstract class OSQLQuery<T> extends OQueryAbstract<T> implements OCommand
 	public OSerializableStream fromStream(final byte[] iStream) throws OSerializationException {
 		final OMemoryStream buffer = new OMemoryStream(iStream);
 
-    queryFromStream(buffer);
+		queryFromStream(buffer);
 
 		return this;
 	}
@@ -103,81 +104,91 @@ public abstract class OSQLQuery<T> extends OQueryAbstract<T> implements OCommand
 		return queryToStream().toByteArray();
 	}
 
-  protected OMemoryStream queryToStream() {
-    final OMemoryStream buffer = new OMemoryStream();
+	protected OMemoryStream queryToStream() {
+		final OMemoryStream buffer = new OMemoryStream();
 
-    buffer.set(text); // TEXT AS STRING
-    buffer.set(limit); // LIMIT AS INTEGER
-    buffer.set(fetchPlan != null ? fetchPlan : ""); // FETCH PLAN IN FORM OF STRING (to know more goto:
-    // http://code.google.com/p/orient/wiki/FetchingStrategies)
+		buffer.set(text); // TEXT AS STRING
+		buffer.set(limit); // LIMIT AS INTEGER
+		buffer.set(fetchPlan != null ? fetchPlan : ""); // FETCH PLAN IN FORM OF STRING (to know more goto:
+		// http://code.google.com/p/orient/wiki/FetchingStrategies)
 
-    if (parameters == null || parameters.size() == 0)
-      // NO PARAMETER, JUST SEND 0
-      buffer.set(new byte[0]);
-    else {
-      final Map<Object, Object> newParams = new HashMap<Object, Object>(parameters);
+		buffer.set(serializeQueryParameters(parameters));
 
-      for (Entry<Object, Object> entry : newParams.entrySet()) {
-        final Object value = entry.getValue();
+		return buffer;
+	}
 
-        if (value instanceof Set<?> && ((Set<?>) value).iterator().next() instanceof ORecord<?>) {
-          // CONVERT RECORDS AS RIDS
-          final Set<ORID> newSet = new HashSet<ORID>();
-          for (ORecord<?> rec : (Set<ORecord<?>>) value) {
-            newSet.add(rec.getIdentity());
-          }
-          parameters.put(entry.getKey(), newSet);
+	private Map<Object, Object> convertToRIDsIfPossible(final Map<Object, Object> params) {
+		final Map<Object, Object> newParams = new HashMap<Object, Object>(params.size());
 
-        } else if (value instanceof List<?> && ((List<?>) value).get(0) instanceof ORecord<?>) {
-          // CONVERT RECORDS AS RIDS
-          final List<ORID> newList = new ArrayList<ORID>();
-          for (ORecord<?> rec : (List<ORecord<?>>) value) {
-            newList.add(rec.getIdentity());
-          }
-          parameters.put(entry.getKey(), newList);
+		for (Entry<Object, Object> entry : params.entrySet()) {
+			final Object value = entry.getValue();
 
-        } else if (value instanceof Map<?, ?> && ((Map<?, ?>) value).values().iterator().next() instanceof ORecord<?>) {
-          // CONVERT RECORDS AS RIDS
-          final Map<Object, ORID> newMap = new HashMap<Object, ORID>();
-          for (Entry<?, ORecord<?>> mapEntry : ((Map<?, ORecord<?>>) value).entrySet()) {
-            newMap.put(mapEntry.getKey(), mapEntry.getValue().getIdentity());
-          }
-          parameters.put(entry.getKey(), newMap);
-        }
-      }
+			if (value instanceof Set<?> && ((Set<?>) value).iterator().next() instanceof ORecord<?>) {
+				// CONVERT RECORDS AS RIDS
+				final Set<ORID> newSet = new HashSet<ORID>();
+				for (ORecord<?> rec : (Set<ORecord<?>>) value) {
+					newSet.add(rec.getIdentity());
+				}
+				newParams.put(entry.getKey(), newSet);
 
-      // PARAMETERS FOUND, SEND THEM AS DOCUMENT ITSELF
-      final ODocument param = new ODocument();
-      param.field("params", parameters);
-      buffer.set(param.toStream());
-    }
+			} else if (value instanceof List<?> && ((List<?>) value).get(0) instanceof ORecord<?>) {
+				// CONVERT RECORDS AS RIDS
+				final List<ORID> newList = new ArrayList<ORID>();
+				for (ORecord<?> rec : (List<ORecord<?>>) value) {
+					newList.add(rec.getIdentity());
+				}
+				newParams.put(entry.getKey(), newList);
 
-    return buffer;
-  }
+			} else if (value instanceof Map<?, ?> && ((Map<?, ?>) value).values().iterator().next() instanceof ORecord<?>) {
+				// CONVERT RECORDS AS RIDS
+				final Map<Object, ORID> newMap = new HashMap<Object, ORID>();
+				for (Entry<?, ORecord<?>> mapEntry : ((Map<?, ORecord<?>>) value).entrySet()) {
+					newMap.put(mapEntry.getKey(), mapEntry.getValue().getIdentity());
+				}
+				newParams.put(entry.getKey(), newMap);
+			} else
+				newParams.put(entry.getKey(), entry.getValue());
+		}
 
-  protected void queryFromStream(final OMemoryStream buffer) {
-    text = buffer.getAsString();
-    limit = buffer.getAsInteger();
+		return newParams;
+	}
 
-    setFetchPlan(buffer.getAsString());
+	protected void queryFromStream(final OMemoryStream buffer) {
+		text = buffer.getAsString();
+		limit = buffer.getAsInteger();
 
-    final byte[] paramBuffer = buffer.getAsByteArray();
+		setFetchPlan(buffer.getAsString());
 
-    if (paramBuffer.length == 0)
-      parameters = null;
-    else {
-      final ODocument param = new ODocument();
-      param.fromStream(paramBuffer);
+		final byte[] paramBuffer = buffer.getAsByteArray();
+		parameters = deserializeQueryParameters(paramBuffer);
+	}
 
-      final Map<String, Object> params = param.rawField("params");
+	protected Map<Object, Object> deserializeQueryParameters(final byte[] paramBuffer) {
+		if (paramBuffer == null || paramBuffer.length == 0)
+			return Collections.emptyMap();
 
-      parameters = new HashMap<Object, Object>();
-      for (Entry<String, Object> p : params.entrySet()) {
-        if (Character.isDigit(p.getKey().charAt(0)))
-          parameters.put(Integer.parseInt(p.getKey()), p.getValue());
-        else
-          parameters.put(p.getKey(), p.getValue());
-      }
-    }
-  }
+		final ODocument param = new ODocument();
+		param.fromStream(paramBuffer);
+
+		final Map<String, Object> params = param.rawField("params");
+
+		final Map<Object, Object> result = new HashMap<Object, Object>();
+		for (Entry<String, Object> p : params.entrySet()) {
+			if (Character.isDigit(p.getKey().charAt(0)))
+				result.put(Integer.parseInt(p.getKey()), p.getValue());
+			else
+				result.put(p.getKey(), p.getValue());
+		}
+		return result;
+	}
+
+	protected byte[] serializeQueryParameters(final Map<Object, Object> params) {
+		if (parameters == null || parameters.size() == 0)
+			// NO PARAMETER, JUST SEND 0
+			return new byte[0];
+
+		final ODocument param = new ODocument();
+		param.field("params", convertToRIDsIfPossible(params));
+		return param.toStream();
+	}
 }

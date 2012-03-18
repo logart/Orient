@@ -29,7 +29,6 @@ import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.common.profiler.OProfiler;
 import com.orientechnologies.common.profiler.OProfiler.OProfilerHookValue;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
-import com.orientechnologies.orient.core.memory.OMemoryWatchDog;
 
 public class OMMapManager {
 	public enum OPERATION_TYPE {
@@ -45,8 +44,6 @@ public class OMMapManager {
 	}
 
 	private static final long															MIN_MEMORY				= 50000000;
-	private static final int															FORCE_DELAY;
-	private static final int															FORCE_RETRY;
 	private static OVERLAP_STRATEGY												overlapStrategy;
 	private static ALLOC_STRATEGY													lastStrategy;
 	private static int																		blockSize;
@@ -58,8 +55,6 @@ public class OMMapManager {
 
 	static {
 		blockSize = OGlobalConfiguration.FILE_MMAP_BLOCK_SIZE.getValueAsInteger();
-		FORCE_DELAY = OGlobalConfiguration.FILE_MMAP_FORCE_DELAY.getValueAsInteger();
-		FORCE_RETRY = OGlobalConfiguration.FILE_MMAP_FORCE_RETRY.getValueAsInteger();
 		maxMemory = OGlobalConfiguration.FILE_MMAP_MAX_MEMORY.getValueAsLong();
 		setOverlapStrategy(OGlobalConfiguration.FILE_MMAP_OVERLAP_STRATEGY.getValueAsInteger());
 
@@ -100,9 +95,9 @@ public class OMMapManager {
 		});
 	}
 
-	public static OMMapBufferEntry request(final OFileMMap iFile, final long iBeginOffset, final int iSize,
+	public static OMMapBufferEntry acquire(final OFileMMap iFile, final long iBeginOffset, final int iSize,
 			final OPERATION_TYPE iOperationType, final ALLOC_STRATEGY iStrategy) {
-		return request(iFile, iBeginOffset, iSize, false, iOperationType, iStrategy);
+		return acquire(iFile, iBeginOffset, iSize, false, iOperationType, iStrategy);
 	}
 
 	/**
@@ -121,7 +116,7 @@ public class OMMapManager {
 	 * @param iStrategy
 	 * @return The mmap buffer entry if found, or null if the operation is READ and the buffer pool is full.
 	 */
-	public synchronized static OMMapBufferEntry request(final OFileMMap iFile, final long iBeginOffset, final int iSize,
+	public synchronized static OMMapBufferEntry acquire(final OFileMMap iFile, final long iBeginOffset, final int iSize,
 			final boolean iForce, final OPERATION_TYPE iOperationType, final ALLOC_STRATEGY iStrategy) {
 
 		if (iStrategy == ALLOC_STRATEGY.MMAP_NEVER)
@@ -130,90 +125,100 @@ public class OMMapManager {
 		lastStrategy = iStrategy;
 
 		OMMapBufferEntry entry = searchBetweenLastBlocks(iFile, iBeginOffset, iSize);
-		if (entry != null && entry.buffer != null)
-			return entry;
-
-		// SEARCH THE REQUESTED RANGE IN THE CACHED BUFFERS
-		List<OMMapBufferEntry> fileEntries = bufferPoolPerFile.get(iFile);
-		if (fileEntries == null) {
-			fileEntries = new ArrayList<OMMapBufferEntry>();
-			bufferPoolPerFile.put(iFile, fileEntries);
-		}
-
-		int position = searchEntry(fileEntries, iBeginOffset, iSize);
-		if (position > -1) {
-			// FOUND !!!
-			entry = fileEntries.get(position);
+		try {
 			if (entry != null && entry.buffer != null)
 				return entry;
-		}
 
-		int p = (position + 2) * -1;
+			// SEARCH THE REQUESTED RANGE IN THE CACHED BUFFERS
+			List<OMMapBufferEntry> fileEntries = bufferPoolPerFile.get(iFile);
+			if (fileEntries == null) {
+				fileEntries = new ArrayList<OMMapBufferEntry>();
+				bufferPoolPerFile.put(iFile, fileEntries);
+			}
 
-		// CHECK IF THERE IS A BUFFER THAT OVERLAPS
-		if (!allocIfOverlaps(iBeginOffset, iSize, fileEntries, p)) {
-			OProfiler.getInstance().updateCounter("OMMapManager.usedChannel", 1);
-			return null;
-		}
-
-		int bufferSize = computeBestEntrySize(iFile, iBeginOffset, iSize, iForce, fileEntries, p);
-
-		if (totalMemory + bufferSize > maxMemory
-				&& (iStrategy == ALLOC_STRATEGY.MMAP_ONLY_AVAIL_POOL || iOperationType == OPERATION_TYPE.READ
-						&& iStrategy == ALLOC_STRATEGY.MMAP_WRITE_ALWAYS_READ_IF_AVAIL_POOL)) {
-			OProfiler.getInstance().updateCounter("OMMapManager.usedChannel", 1);
-			return null;
-		}
-
-		entry = null;
-		// FREE LESS-USED BUFFERS UNTIL THE FREE-MEMORY IS DOWN THE CONFIGURED MAX LIMIT
-		do {
-			if (totalMemory + bufferSize > maxMemory)
-				freeResources();
-
-			// RECOMPUTE THE POSITION AFTER REMOVING
-			fileEntries = bufferPoolPerFile.get(iFile);
-			position = searchEntry(fileEntries, iBeginOffset, iSize);
+			int position = searchEntry(fileEntries, iBeginOffset, iSize);
 			if (position > -1) {
-				// FOUND: THIS IS PRETTY STRANGE SINCE IT WASN'T FOUND!
+				// FOUND !!!
 				entry = fileEntries.get(position);
 				if (entry != null && entry.buffer != null)
 					return entry;
 			}
 
-			// LOAD THE PAGE
-			try {
-				entry = mapBuffer(iFile, iBeginOffset, bufferSize);
-			} catch (IllegalArgumentException e) {
-				throw e;
-			} catch (Exception e) {
-				// REDUCE MAX MEMORY TO FORCE EMPTY BUFFERS
-				maxMemory = maxMemory * 90 / 100;
-				OLogManager.instance().warn(OMMapManager.class, "Memory mapping error, try to reduce max memory to %d and retry...", e,
-						maxMemory);
+			int p = (position + 2) * -1;
+
+			// CHECK IF THERE IS A BUFFER THAT OVERLAPS
+			if (!allocIfOverlaps(iBeginOffset, iSize, fileEntries, p)) {
+				OProfiler.getInstance().updateCounter("OMMapManager.usedChannel", 1);
+				return null;
 			}
-		} while (entry == null && maxMemory > MIN_MEMORY);
 
-		if (entry == null || !entry.isValid())
-			throw new OIOException("You cannot access to the file portion " + iBeginOffset + "-" + iBeginOffset + iSize + " bytes");
+			int bufferSize = computeBestEntrySize(iFile, iBeginOffset, iSize, iForce, fileEntries, p);
 
-		totalMemory += bufferSize;
-		bufferPoolLRU.add(entry);
+			if (totalMemory + bufferSize > maxMemory
+					&& (iStrategy == ALLOC_STRATEGY.MMAP_ONLY_AVAIL_POOL || iOperationType == OPERATION_TYPE.READ
+							&& iStrategy == ALLOC_STRATEGY.MMAP_WRITE_ALWAYS_READ_IF_AVAIL_POOL)) {
+				OProfiler.getInstance().updateCounter("OMMapManager.usedChannel", 1);
+				return null;
+			}
 
-		p = (position + 2) * -1;
-		if (p < 0)
-			p = 0;
+			entry = null;
+			// FREE LESS-USED BUFFERS UNTIL THE FREE-MEMORY IS DOWN THE CONFIGURED MAX LIMIT
+			do {
+				if (totalMemory + bufferSize > maxMemory)
+					freeResources();
 
-		if (fileEntries == null) {
-			// IN CASE THE CLEAN HAS REMOVED THE LIST
-			fileEntries = new ArrayList<OMMapBufferEntry>();
-			bufferPoolPerFile.put(iFile, fileEntries);
+				// RECOMPUTE THE POSITION AFTER REMOVING
+				fileEntries = bufferPoolPerFile.get(iFile);
+				position = searchEntry(fileEntries, iBeginOffset, iSize);
+				if (position > -1) {
+					// FOUND: THIS IS PRETTY STRANGE SINCE IT WASN'T FOUND!
+					entry = fileEntries.get(position);
+					if (entry != null && entry.buffer != null)
+						return entry;
+				}
+
+				// LOAD THE PAGE
+				try {
+					entry = mapBuffer(iFile, iBeginOffset, bufferSize);
+				} catch (IllegalArgumentException e) {
+					throw e;
+				} catch (Exception e) {
+					// REDUCE MAX MEMORY TO FORCE EMPTY BUFFERS
+					maxMemory = maxMemory * 90 / 100;
+					OLogManager.instance().warn(OMMapManager.class, "Memory mapping error, try to reduce max memory to %d and retry...", e,
+							maxMemory);
+				}
+			} while (entry == null && maxMemory > MIN_MEMORY);
+
+			if (entry == null || !entry.isValid())
+				throw new OIOException("You cannot access to the file portion " + iBeginOffset + "-" + iBeginOffset + iSize + " bytes");
+
+			totalMemory += bufferSize;
+			bufferPoolLRU.add(entry);
+
+			p = (position + 2) * -1;
+			if (p < 0)
+				p = 0;
+
+			if (fileEntries == null) {
+				// IN CASE THE CLEAN HAS REMOVED THE LIST
+				fileEntries = new ArrayList<OMMapBufferEntry>();
+				bufferPoolPerFile.put(iFile, fileEntries);
+			}
+
+			fileEntries.add(p, entry);
+
+			if (entry != null && entry.buffer != null)
+				return entry;
+
+		} finally {
+			if (entry != null) {
+				entry.acquire();
+
+				if (iOperationType == OPERATION_TYPE.WRITE)
+					entry.setDirty();
+			}
 		}
-
-		fileEntries.add(p, entry);
-
-		if (entry != null && entry.buffer != null)
-			return entry;
 
 		return null;
 	}
@@ -234,13 +239,13 @@ public class OMMapManager {
 		// REMOVE THE LESS USED ENTRY AND UPDATE THE TOTAL MEMORY
 		for (Iterator<OMMapBufferEntry> it = bufferPoolLRU.iterator(); it.hasNext();) {
 			final OMMapBufferEntry entry = it.next();
-			if (!entry.pin) {
-				// REMOVE FROM COLLECTIONS
-				removeEntry(it, entry);
 
-				if (totalMemory < memoryThreshold)
-					break;
-			}
+			// REMOVE FROM COLLECTIONS
+			if (removeEntry(entry))
+				it.remove();
+
+			if (totalMemory < memoryThreshold)
+				break;
 		}
 	}
 
@@ -270,31 +275,33 @@ public class OMMapManager {
 		for (Iterator<OMMapBufferEntry> it = bufferPoolLRU.iterator(); it.hasNext();) {
 			entry = it.next();
 			if (entry.file != null && entry.file.isClosed()) {
-				removeEntry(it, entry);
-				entry.close();
+				if (removeEntry(entry))
+					it.remove();
 			}
 		}
 	}
 
-	/**
-	 * Frees the mmap entry from the memory
-	 */
-	private static boolean removeEntry(final Iterator<OMMapBufferEntry> it, final OMMapBufferEntry entry) {
-		if (commitBuffer(entry)) {
+	protected static boolean removeEntry(final OMMapBufferEntry entry) {
+		if (!entry.flush())
+			return false;
+
+		entry.acquire();
+		try {
 			// COMMITTED: REMOVE IT
-			it.remove();
 			final List<OMMapBufferEntry> file = bufferPoolPerFile.get(entry.file);
 			if (file != null) {
 				file.remove(entry);
 				if (file.isEmpty())
 					bufferPoolPerFile.remove(entry.file);
 			}
-			entry.buffer = null;
+			entry.close();
 
 			totalMemory -= entry.size;
 			return true;
+
+		} finally {
+			entry.release();
 		}
-		return false;
 	}
 
 	/**
@@ -302,21 +309,32 @@ public class OMMapManager {
 	 * 
 	 * @throws IOException
 	 */
-	public synchronized static void removeFile(final OFile file) throws IOException {
-		final List<OMMapBufferEntry> entries = bufferPoolPerFile.remove(file);
+	public synchronized static void removeFile(final OFile iFile) throws IOException {
+		final List<OMMapBufferEntry> entries = bufferPoolPerFile.remove(iFile);
 		if (entries != null) {
 			for (OMMapBufferEntry entry : entries) {
 				bufferPoolLRU.remove(entry);
-				entry.close();
+				removeEntry(entry);
 			}
-			entries.clear();
 		}
 	}
 
+	/**
+	 * Flushes all the buffers of the passed file.
+	 * 
+	 * @param iFile
+	 */
+	public static void flushFile(final OFile iFile) {
+		final List<OMMapBufferEntry> entries = bufferPoolPerFile.get(iFile);
+		if (entries != null)
+			for (OMMapBufferEntry entry : entries)
+				entry.flush();
+	}
+
 	public synchronized static void shutdown() {
-		for (OMMapBufferEntry entry : new ArrayList<OMMapBufferEntry>(bufferPoolLRU)) {
-			entry.close();
-		}
+		for (OMMapBufferEntry entry : new ArrayList<OMMapBufferEntry>(bufferPoolLRU))
+			removeEntry(entry);
+
 		bufferPoolLRU.clear();
 		bufferPoolPerFile.clear();
 		totalMemory = 0;
@@ -442,33 +460,6 @@ public class OMMapManager {
 		return mid;
 	}
 
-	protected static boolean commitBuffer(final OMMapBufferEntry iEntry) {
-		final long timer = OProfiler.getInstance().startChrono();
-
-		// FORCE THE WRITE OF THE BUFFER
-		boolean forceSucceed = false;
-		for (int i = 0; i < FORCE_RETRY; ++i) {
-			try {
-				iEntry.buffer.force();
-				forceSucceed = true;
-				break;
-			} catch (Exception e) {
-				OLogManager.instance().debug(iEntry,
-						"Cannot write memory buffer to disk. Retrying (" + (i + 1) + "/" + FORCE_RETRY + ")...");
-				OMemoryWatchDog.freeMemory(FORCE_DELAY);
-			}
-		}
-
-		if (!forceSucceed)
-			OLogManager.instance().debug(iEntry, "Cannot commit memory buffer to disk after %d retries", FORCE_RETRY);
-		else
-			OProfiler.getInstance().updateCounter("OMMapManager.pagesCommitted", 1);
-
-		OProfiler.getInstance().stopChrono("OMMapManager.commitPages", timer);
-
-		return forceSucceed;
-	}
-
 	private static boolean allocIfOverlaps(final long iBeginOffset, final int iSize, final List<OMMapBufferEntry> fileEntries,
 			final int p) {
 		if (overlapStrategy == OVERLAP_STRATEGY.OVERLAP)
@@ -492,7 +483,7 @@ public class OMMapManager {
 			// READ NOT IN BUFFER POOL: RETURN NULL TO LET TO THE CALLER TO EXECUTE A DIRECT READ WITHOUT MMAP
 			OProfiler.getInstance().updateCounter("OMMapManager.overlappedPageUsingChannel", 1);
 			if (overlapStrategy == OVERLAP_STRATEGY.NO_OVERLAP_FLUSH_AND_USE_CHANNEL)
-				commitBuffer(entry);
+				entry.flush();
 			return false;
 		}
 

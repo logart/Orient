@@ -19,13 +19,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
-import com.orientechnologies.orient.core.exception.ORecordNotFoundException;
-import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.index.OIndex;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
@@ -33,6 +30,7 @@ import com.orientechnologies.orient.core.metadata.schema.OPropertyImpl;
 import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.record.impl.ODocumentHelper;
+import com.orientechnologies.orient.core.serialization.serializer.record.string.ORecordSerializerStringAbstract;
 import com.orientechnologies.orient.server.db.OSharedDocumentDatabase;
 import com.orientechnologies.orient.server.network.protocol.http.OHttpRequest;
 import com.orientechnologies.orient.server.network.protocol.http.OHttpUtils;
@@ -105,7 +103,7 @@ public class OServerCommandPostStudio extends OServerCommandAuthenticatedDbAbstr
 		// GET THE TARGET CLASS
 		final OClass cls = db.getMetadata().getSchema().getClass(rid);
 		if (cls == null) {
-			sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR, "Error", null, OHttpUtils.CONTENT_TEXT_PLAIN, "Error: Class '"
+			sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR_CODE, "Error", null, OHttpUtils.CONTENT_TEXT_PLAIN, "Error: Class '"
 					+ rid + "' not found.");
 			return;
 		}
@@ -138,7 +136,7 @@ public class OServerCommandPostStudio extends OServerCommandAuthenticatedDbAbstr
 						"Property " + fields.get("name") + " created successfully");
 
 			} catch (Exception e) {
-				sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR, "Error on creating a new property in class " + rid + ": " + e,
+				sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR_CODE, "Error on creating a new property in class " + rid + ": " + e,
 						null, OHttpUtils.CONTENT_TEXT_PLAIN, "Error on creating a new property in class " + rid + ": " + e);
 			}
 		} else if ("del".equals(operation)) {
@@ -177,7 +175,7 @@ public class OServerCommandPostStudio extends OServerCommandAuthenticatedDbAbstr
 						+ "' created successfully with id=" + db.getMetadata().getSchema().getClasses().size());
 
 			} catch (Exception e) {
-				sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR, "Error on creating the new class '" + rid + "': " + e, null,
+				sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR_CODE, "Error on creating the new class '" + rid + "': " + e, null,
 						OHttpUtils.CONTENT_TEXT_PLAIN, "Error on creating the new class '" + rid + "': " + e);
 			}
 		} else if ("del".equals(operation)) {
@@ -208,42 +206,33 @@ public class OServerCommandPostStudio extends OServerCommandAuthenticatedDbAbstr
 			if (rid == null)
 				throw new IllegalArgumentException("Record ID not found in request");
 
-			ODocument doc = new ODocument(db, className, new ORecordId(rid));
-			doc = (ODocument) doc.load();
+			ODocument doc = new ODocument(className, new ORecordId(rid));
+			doc.reload(null, true);
 
 			// BIND ALL CHANGED FIELDS
-			Object oldValue;
-			Object newValue;
 			for (Entry<String, String> f : fields.entrySet()) {
-				oldValue = doc.rawField(f.getKey());
-				newValue = f.getValue();
+				final Object oldValue = doc.rawField(f.getKey());
+				String userValue = f.getValue();
 
-				if (oldValue != null) {
-					if (oldValue instanceof ORID) {
-						final ORID oldRid = (ORID) oldValue;
-						final ORID newRid = new ORecordId(f.getValue());
+				if (userValue.equals("undefined"))
+					continue;
 
-						if (!oldRid.equals(newRid)) {
-							// CHANGED RID: RELOAD TO ASSURE IT EXISTS
-							if (newRid.getRecord() == null)
-								throw new ORecordNotFoundException("Linked record " + oldRid + " was not found in database");
-							newValue = newRid;
-						} else
-							// NO CHANGES
-							continue;
-					} else if (oldValue instanceof Collection<?>) {
-						newValue = new ArrayList<ODocument>();
+				Object newValue = ORecordSerializerStringAbstract.getTypeValue(userValue);
 
-						if (f.getValue() != null) {
-							String[] items = f.getValue().split(",");
-							for (String s : items) {
-								((List<ORID>) newValue).add(new ORecordId(s));
-							}
+				if (newValue != null) {
+					if (newValue instanceof Collection) {
+						final ArrayList<Object> array = new ArrayList<Object>();
+						for (String s : (Collection<String>) newValue) {
+							Object v = ORecordSerializerStringAbstract.getTypeValue(s);
+							array.add(v);
 						}
-					} else if (oldValue.equals(newValue))
-						// NO CHANGES
-						continue;
+						newValue = array;
+					}
 				}
+
+				if (oldValue != null && oldValue.equals(userValue))
+					// NO CHANGES
+					continue;
 
 				doc.field(f.getKey(), newValue);
 			}
@@ -254,7 +243,7 @@ public class OServerCommandPostStudio extends OServerCommandAuthenticatedDbAbstr
 		} else if ("add".equals(operation)) {
 			iRequest.data.commandInfo = "Studio create document";
 
-			final ODocument doc = new ODocument(db, className);
+			final ODocument doc = new ODocument(className);
 
 			// BIND ALL CHANGED FIELDS
 			for (Entry<String, String> f : fields.entrySet())
@@ -270,7 +259,7 @@ public class OServerCommandPostStudio extends OServerCommandAuthenticatedDbAbstr
 			if (rid == null)
 				throw new IllegalArgumentException("Record ID not found in request");
 
-			final ODocument doc = new ODocument(db, new ORecordId(rid));
+			final ODocument doc = new ODocument(new ORecordId(rid));
 			doc.load();
 			doc.delete();
 			sendTextContent(iRequest, OHttpUtils.STATUS_OK_CODE, "OK", null, OHttpUtils.CONTENT_TEXT_PLAIN, "Record " + rid
@@ -285,7 +274,7 @@ public class OServerCommandPostStudio extends OServerCommandAuthenticatedDbAbstr
 		// GET THE TARGET CLASS
 		final OClass cls = db.getMetadata().getSchema().getClass(rid);
 		if (cls == null) {
-			sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR, "Error", null, OHttpUtils.CONTENT_TEXT_PLAIN, "Error: Class '"
+			sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR_CODE, "Error", null, OHttpUtils.CONTENT_TEXT_PLAIN, "Error: Class '"
 					+ rid + "' not found.");
 			return;
 		}
@@ -307,16 +296,16 @@ public class OServerCommandPostStudio extends OServerCommandAuthenticatedDbAbstr
 						"Index " + fields.get("name") + " created successfully");
 
 			} catch (Exception e) {
-				sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR, "Error on creating a new index for class " + rid + ": " + e,
+				sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR_CODE, "Error on creating a new index for class " + rid + ": " + e,
 						null, OHttpUtils.CONTENT_TEXT_PLAIN, "Error on creating a new index for class " + rid + ": " + e);
 			}
 		} else if ("del".equals(operation)) {
 			iRequest.data.commandInfo = "Studio delete index";
 
 			try {
-				final OIndex index = cls.getClassIndex(className);
+				final OIndex<?> index = cls.getClassIndex(className);
 				if (index == null) {
-					sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR, "Error", null, OHttpUtils.CONTENT_TEXT_PLAIN, "Error: Index '"
+					sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR_CODE, "Error", null, OHttpUtils.CONTENT_TEXT_PLAIN, "Error: Index '"
 							+ className + "' not found in class '" + rid + "'.");
 					return;
 				}
@@ -326,12 +315,12 @@ public class OServerCommandPostStudio extends OServerCommandAuthenticatedDbAbstr
 				sendTextContent(iRequest, OHttpUtils.STATUS_OK_CODE, "OK", null, OHttpUtils.CONTENT_TEXT_PLAIN, "Index " + className
 						+ " deleted successfully.");
 			} catch (Exception e) {
-				sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR, "Error on deletion index '" + className + "' for class " + rid
+				sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR_CODE, "Error on deletion index '" + className + "' for class " + rid
 						+ ": " + e, null, OHttpUtils.CONTENT_TEXT_PLAIN, "Error on deletion index '" + className + "' for class " + rid + ": "
 						+ e);
 			}
 		} else
-			sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR, "Error", null, OHttpUtils.CONTENT_TEXT_PLAIN,
+			sendTextContent(iRequest, OHttpUtils.STATUS_INTERNALERROR_CODE, "Error", null, OHttpUtils.CONTENT_TEXT_PLAIN,
 					"Operation not supported");
 	}
 

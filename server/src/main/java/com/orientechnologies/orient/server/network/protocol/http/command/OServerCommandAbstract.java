@@ -27,7 +27,6 @@ import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.metadata.schema.OProperty;
 import com.orientechnologies.orient.core.record.ORecord;
-import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.serialization.OBinaryProtocol;
 import com.orientechnologies.orient.core.serialization.serializer.OJSONWriter;
 import com.orientechnologies.orient.server.network.protocol.http.OHttpRequest;
@@ -80,7 +79,7 @@ public abstract class OServerCommandAbstract implements OServerCommand {
 
 		final String sessId = iRequest.sessionId != null ? iRequest.sessionId : "-";
 
-		writeLine(iRequest, "Set-Cookie: OSESSIONID=" + sessId + "; Path=/; HttpOnly");
+		writeLine(iRequest, "Set-Cookie: " + OHttpUtils.OSESSIONID + "=" + sessId + "; Path=/; HttpOnly");
 
 		final byte[] binaryContent = empty ? null : OBinaryProtocol.string2bytes(content);
 
@@ -152,17 +151,6 @@ public abstract class OServerCommandAbstract implements OServerCommand {
 		final StringWriter buffer = new StringWriter();
 		final OJSONWriter json = new OJSONWriter(buffer, JSON_FORMAT);
 		json.beginObject();
-
-		// WRITE ENTITY SCHEMA IF ANY
-		if (iRecords != null && iRecords.size() > 0) {
-			ORecord<?> first = iRecords.get(0).getRecord();
-			if (first != null && first instanceof ODocument) {
-				ODatabaseRecord db = ((ODocument) first).getDatabase();
-
-				final String className = ((ODocument) first).getClassName();
-				exportClassSchema(db, json, db.getMetadata().getSchema().getClass(className));
-			}
-		}
 
 		final String format = iFetchPlan != null ? JSON_FORMAT + ",fetchPlan:" + iFetchPlan : JSON_FORMAT;
 

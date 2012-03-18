@@ -22,6 +22,7 @@ import org.testng.annotations.Parameters;
 import org.testng.annotations.Test;
 
 import com.orientechnologies.orient.client.db.ODatabaseHelper;
+import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.record.ODatabaseFlat;
 import com.orientechnologies.orient.core.exception.OSchemaException;
 import com.orientechnologies.orient.core.exception.OValidationException;
@@ -83,6 +84,18 @@ public class SchemaTest {
 		whiz.createProperty("date", OType.DATE).setMin("2010-01-01");
 		whiz.createProperty("text", OType.STRING).setMandatory(true).setMin("1").setMax("140").createIndex(OClass.INDEX_TYPE.FULLTEXT);
 		whiz.createProperty("replyTo", OType.LINK, account);
+
+		OClass strictTest = database.getMetadata().getSchema().createClass("StrictTest");
+		strictTest.setStrictMode(true);
+		strictTest.createProperty("id", OType.INTEGER).isMandatory();
+		strictTest.createProperty("name", OType.STRING);
+
+		OClass animalRace = database.getMetadata().getSchema().createClass("AnimalRace");
+		animalRace.createProperty("name", OType.STRING);
+
+		OClass animal = database.getMetadata().getSchema().createClass("Animal");
+		animal.createProperty("races", OType.LINKSET, animalRace);
+		animal.createProperty("name", OType.STRING);
 
 		database.close();
 	}
@@ -181,7 +194,8 @@ public class SchemaTest {
 		Thread thread = new Thread(new Runnable() {
 
 			public void run() {
-				ODocument doc = new ODocument(database, "NewClass");
+				ODatabaseRecordThreadLocal.INSTANCE.set(database);
+				ODocument doc = new ODocument("NewClass");
 				database.save(doc);
 
 				doc.delete();
@@ -266,6 +280,41 @@ public class SchemaTest {
 		Assert.assertNull(dropTestClass);
 		Assert.assertEquals(database.getStorage().getClusterIdByName(testClassName), -1);
 		Assert.assertNull(database.getClusterNameById(clusterId));
+		database.close();
+	}
+
+	@Test(dependsOnMethods = "createSchema")
+	public void customAttributes() {
+		database = new ODatabaseFlat(url);
+		database.open("admin", "admin");
+
+		// TEST CUSTOM PROPERTY CREATION
+		database.getMetadata().getSchema().getClass("Profile").getProperty("nick").setCustom("stereotype", "icon");
+
+		Assert.assertEquals(database.getMetadata().getSchema().getClass("Profile").getProperty("nick").getCustom("stereotype"), "icon");
+
+		// TEST CUSTOM PROPERTY EXISTS EVEN AFTER REOPEN
+		database.close();
+		database.open("admin", "admin");
+
+		Assert.assertEquals(database.getMetadata().getSchema().getClass("Profile").getProperty("nick").getCustom("stereotype"), "icon");
+
+		// TEST CUSTOM PROPERTY REMOVAL
+		database.getMetadata().getSchema().getClass("Profile").getProperty("nick").setCustom("stereotype", null);
+		Assert.assertEquals(database.getMetadata().getSchema().getClass("Profile").getProperty("nick").getCustom("stereotype"), null);
+
+		// TEST CUSTOM PROPERTY UPDATE
+		database.getMetadata().getSchema().getClass("Profile").getProperty("nick").setCustom("stereotype", "polygon");
+		Assert.assertEquals(database.getMetadata().getSchema().getClass("Profile").getProperty("nick").getCustom("stereotype"),
+				"polygon");
+
+		// TEST CUSTOM PROPERTY UDPATED EVEN AFTER REOPEN
+		database.close();
+		database.open("admin", "admin");
+
+		Assert.assertEquals(database.getMetadata().getSchema().getClass("Profile").getProperty("nick").getCustom("stereotype"),
+				"polygon");
+
 		database.close();
 	}
 }

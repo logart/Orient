@@ -15,6 +15,8 @@
  */
 package com.orientechnologies.orient.core.serialization.serializer.record.string;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
@@ -136,7 +138,7 @@ public class ORecordSerializerSchemaAware2CSV extends ORecordSerializerCSVAbstra
 						type = OType.DATETIME;
 					else if (fieldValue instanceof String)
 						type = OType.STRING;
-					else if (fieldValue instanceof Integer)
+					else if (fieldValue instanceof Integer || fieldValue instanceof BigInteger)
 						type = OType.INTEGER;
 					else if (fieldValue instanceof Long)
 						type = OType.LONG;
@@ -148,10 +150,12 @@ public class ORecordSerializerSchemaAware2CSV extends ORecordSerializerCSVAbstra
 						type = OType.BYTE;
 					else if (fieldValue instanceof Double)
 						type = OType.DOUBLE;
+					else if (fieldValue instanceof BigDecimal)
+						type = OType.DECIMAL;
 				}
 
 				if (fieldValue instanceof Collection<?> || fieldValue.getClass().isArray()) {
-					int size = OMultiValue.getSize(fieldValue);
+					final int size = OMultiValue.getSize(fieldValue);
 
 					Boolean autoConvertLinks = null;
 					if (fieldValue instanceof ORecordLazyMultiValue) {
@@ -173,7 +177,7 @@ public class ORecordSerializerSchemaAware2CSV extends ORecordSerializerCSVAbstra
 								else
 									type = OType.LINKLIST;
 							} else if (ODatabaseRecordThreadLocal.INSTANCE.isDefined()
-									&& (firstValue instanceof ORecordSchemaAware<?> || (ODatabaseRecordThreadLocal.INSTANCE.get().getDatabaseOwner() instanceof ODatabaseObject && ((ODatabaseObject) ODatabaseRecordThreadLocal.INSTANCE
+									&& (firstValue instanceof ORecord<?> || (ODatabaseRecordThreadLocal.INSTANCE.get().getDatabaseOwner() instanceof ODatabaseObject && ((ODatabaseObject) ODatabaseRecordThreadLocal.INSTANCE
 											.get().getDatabaseOwner()).getEntityManager().getEntityClass(getClassName(firstValue)) != null))) {
 								linkedClass = getLinkInfo(ODatabaseRecordThreadLocal.INSTANCE.get(), getClassName(firstValue));
 								if (type == null) {
@@ -188,7 +192,8 @@ public class ORecordSerializerSchemaAware2CSV extends ORecordSerializerCSVAbstra
 									linkedType = OType.EMBEDDED;
 							} else {
 								// EMBEDDED COLLECTION
-								if (firstValue instanceof ODocument && ((ODocument) firstValue).hasOwners())
+								if (firstValue instanceof ODocument
+										&& ((((ODocument) firstValue).hasOwners()) || type == OType.EMBEDDEDSET || type == OType.EMBEDDEDLIST || type == OType.EMBEDDEDMAP))
 									linkedType = OType.EMBEDDED;
 								else if (firstValue instanceof Enum<?>)
 									linkedType = OType.STRING;

@@ -33,8 +33,8 @@ public class OSingleFileSegment extends OSharedResourceAdaptive {
 	protected OStorageFileConfiguration	config;
 
 	public OSingleFileSegment(final String iPath, final String iType) throws IOException {
-		super(OGlobalConfiguration.ENVIRONMENT_CONCURRENT.getValueAsBoolean());
-		file = OFileFactory.create(iType, OSystemVariableResolver.resolveSystemVariables(iPath), "rw");
+		super(OGlobalConfiguration.ENVIRONMENT_CONCURRENT.getValueAsBoolean(), 0, true);
+		file = OFileFactory.instance().create(iType, OSystemVariableResolver.resolveSystemVariables(iPath), "rw");
 	}
 
 	public OSingleFileSegment(final OStorageLocal iStorage, final OStorageFileConfiguration iConfig) throws IOException {
@@ -47,7 +47,7 @@ public class OSingleFileSegment extends OSharedResourceAdaptive {
 
 		config = iConfig;
 		storage = iStorage;
-		file = OFileFactory.create(iType, iStorage.getVariableParser().resolveVariables(iConfig.path), iStorage.getMode());
+		file = OFileFactory.instance().create(iType, iStorage.getVariableParser().resolveVariables(iConfig.path), iStorage.getMode());
 		file.setMaxSize((int) OFileUtils.getSizeAsNumber(iConfig.maxSize));
 		file.setIncrementSize((int) OFileUtils.getSizeAsNumber(iConfig.incrementSize));
 	}
@@ -59,7 +59,7 @@ public class OSingleFileSegment extends OSharedResourceAdaptive {
 			if (!softClosed) {
 				// LAST TIME THE FILE WAS NOT CLOSED IN SOFT WAY
 				OLogManager.instance().warn(this,
-						"File " + file.getOsFile().getAbsolutePath() + " was not closed correctly last time. Checking segments...");
+						"File " + file.getAbsolutePath() + " was not closed correctly last time. Checking segments...");
 			}
 
 			return softClosed;

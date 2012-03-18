@@ -26,12 +26,12 @@ public class OServerCommandGetListDatabases extends OServerCommandAuthenticatedS
 	private static final String[]	NAMES	= { "GET|listDatabases" };
 
 	public OServerCommandGetListDatabases() {
-		super("info-server");
+		super("server.listDatabases");
 	}
 
 	@Override
 	public boolean beforeExecute(OHttpRequest iRequest) throws IOException {
-		return true;
+		return authenticate(iRequest, false);
 	}
 
 	@Override

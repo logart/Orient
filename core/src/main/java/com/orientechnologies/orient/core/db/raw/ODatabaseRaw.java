@@ -83,8 +83,8 @@ public class ODatabaseRaw implements ODatabase {
 			storage.open(iUserName, iUserPassword, properties);
 
 			// WAKE UP DB LIFECYCLE LISTENER
-			for (ODatabaseLifecycleListener it : Orient.instance().getDbLifecycleListeners())
-				it.onOpen(getDatabaseOwner());
+			for (Iterator<ODatabaseLifecycleListener> it = Orient.instance().getDbLifecycleListeners(); it.hasNext();)
+				it.next().onOpen(getDatabaseOwner());
 
 			// WAKE UP LISTENERS
 			for (ODatabaseListener listener : listeners)
@@ -113,8 +113,8 @@ public class ODatabaseRaw implements ODatabase {
 			storage.create(properties);
 
 			// WAKE UP DB LIFECYCLE LISTENER
-			for (ODatabaseLifecycleListener it : Orient.instance().getDbLifecycleListeners())
-				it.onOpen(getDatabaseOwner());
+			for (Iterator<ODatabaseLifecycleListener> it = Orient.instance().getDbLifecycleListeners(); it.hasNext();)
+				it.next().onOpen(getDatabaseOwner());
 
 			// WAKE UP LISTENERS
 			for (ODatabaseListener listener : listeners)
@@ -130,7 +130,17 @@ public class ODatabaseRaw implements ODatabase {
 		return (DB) this;
 	}
 
+	/**
+	 * Deprecated, use #drop() instead.
+	 * 
+	 * @see #drop()
+	 */
+	@Deprecated
 	public void delete() {
+		drop();
+	}
+
+	public void drop() {
 		final List<ODatabaseListener> tmpListeners = new ArrayList<ODatabaseListener>(listeners);
 		close();
 
@@ -197,14 +207,14 @@ public class ODatabaseRaw implements ODatabase {
 		return storage.count(iClusterIds);
 	}
 
-	public ORawBuffer read(final ORecordId iRid, final String iFetchPlan) {
+	public ORawBuffer read(final ORecordId iRid, final String iFetchPlan, final boolean iIgnoreCache) {
 		if (!iRid.isValid())
 			return null;
 
 		OFetchHelper.checkFetchPlanValid(iFetchPlan);
 
 		try {
-			return storage.readRecord(iRid, iFetchPlan, null);
+			return storage.readRecord(iRid, iFetchPlan, iIgnoreCache, null);
 
 		} catch (Throwable t) {
 			if (iRid.isTemporary())
@@ -215,18 +225,18 @@ public class ODatabaseRaw implements ODatabase {
 		}
 	}
 
-	public long save(final ORecordId iRid, final byte[] iContent, final int iVersion, final byte iRecordType) {
+	public long save(final ORecordId iRid, final byte[] iContent, final int iVersion, final byte iRecordType, final int iMode) {
 		// CHECK IF RECORD TYPE IS SUPPORTED
 		Orient.instance().getRecordFactoryManager().getRecordTypeClass(iRecordType);
 
 		try {
 			if (iRid.clusterPosition < 0) {
 				// CREATE
-				return storage.createRecord(iRid, iContent, iRecordType, null);
+				return storage.createRecord(iRid, iContent, iRecordType, iMode, null);
 
 			} else {
 				// UPDATE
-				return storage.updateRecord(iRid, iContent, iVersion, iRecordType, null);
+				return storage.updateRecord(iRid, iContent, iVersion, iRecordType, iMode, null);
 			}
 		} catch (OException e) {
 			// PASS THROUGH
@@ -236,9 +246,9 @@ public class ODatabaseRaw implements ODatabase {
 		}
 	}
 
-	public void delete(final ORecordId iRid, final int iVersion) {
+	public void delete(final ORecordId iRid, final int iVersion, final boolean iRequired, final int iMode) {
 		try {
-			if (!storage.deleteRecord(iRid, iVersion, null))
+			if (!storage.deleteRecord(iRid, iVersion, iMode, null) && iRequired)
 				throw new ORecordNotFoundException("The record with id " + iRid + " was not found");
 
 		} catch (OException e) {
@@ -418,6 +428,11 @@ public class ODatabaseRaw implements ODatabase {
 		if (status != STATUS.OPEN)
 			return;
 
+		if (currentIntent != null) {
+			currentIntent.end(this);
+			currentIntent = null;
+		}
+
 		callOnCloseListeners();
 		listeners.clear();
 
@@ -430,7 +445,16 @@ public class ODatabaseRaw implements ODatabase {
 
 	@Override
 	public String toString() {
-		return "OrientDB[" + (getStorage() != null ? getStorage().getURL() : "?") + "]";
+		final StringBuilder buffer = new StringBuilder();
+		buffer.append("OrientDB[");
+		buffer.append(url != null ? url : "?");
+		buffer.append(']');
+		if (getStorage() != null) {
+			buffer.append(" (users: ");
+			buffer.append(getStorage().getUsers());
+			buffer.append(')');
+		}
+		return buffer.toString();
 	}
 
 	public Object get(final ATTRIBUTES iAttribute) {
@@ -466,8 +490,8 @@ public class ODatabaseRaw implements ODatabase {
 
 	public void callOnCloseListeners() {
 		// WAKE UP DB LIFECYCLE LISTENER
-		for (ODatabaseLifecycleListener it : Orient.instance().getDbLifecycleListeners())
-			it.onClose(getDatabaseOwner());
+		for (Iterator<ODatabaseLifecycleListener> it = Orient.instance().getDbLifecycleListeners(); it.hasNext();)
+			it.next().onClose(getDatabaseOwner());
 
 		// WAKE UP LISTENERS
 		for (ODatabaseListener listener : listeners)

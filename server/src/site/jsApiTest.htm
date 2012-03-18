@@ -5,7 +5,7 @@
 <meta name="title" content="OrientDB Javascript API Test Suite" />
 <meta name="description" content="OrientDB" />
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-<script src="www/js/jquery-1.6.4.min.js" type="text/javascript">
+<script src="www/js/jquery-1.7.1.min.js" type="text/javascript">
 </script>
 <script src="www/js/jquery.tools.min.js" type="text/javascript">
 </script>
@@ -17,21 +17,17 @@
 <script type="text/javascript">
 	var orientServer;
 
+	
 	function testCode() {
 		database = new ODatabase('http://localhost:2480/demo');
 		databaseInfo = database.open('admin', 'admin');
-		queryResult = database
-				.query('select from Address where city.country.name = \'Italy\'');
-		executeMessage = '';
-		if (queryResult["result"].length == 0) {
-			commandResult = database
-					.executeCommand('insert into Address (street,type) values (\'Via test 1\',\'Tipo test\')');
-			executeMessage = 'Created an address';
-		} else {
-			executeMessage = queryResult["result"].length + ' elements.';
-		}
-		database.close();
-		jQuery("#output").text('Code executed correctly: ' + executeMessage);
+		queryResult = database.createClass('TestClass');
+		queryResult = database.createProperty('TestClass','testField');
+		queryResult = database.createProperty('TestClass','testField2','BOOLEAN');
+		queryResult = database.createProperty('TestClass','testField3','LINK','Person');
+		queryResult = database.createProperty('TestClass','testField4','LINKMAP','Person');
+		queryResult = database.createProperties('TestClass','{"testBooleanField" : {"propertyType" : "BOOLEAN"}, "testDateField" : {"propertyType" : "DATE"}, "testStringField" : {"propertyType" : "STRING"}, "testLinkField" :  {"propertyType" : "LINK","linkedClass" : "Person"}, "testLinkMapField" :  {"propertyType" : "LINKMAP","linkedClass" : "Person"}, "testLinkTypeMapField" :  {"propertyType" : "LINKMAP","linkedType" : "DATE"}}');
+		classInfo('TestClass');
 	}
 
 	function connect() {
@@ -162,14 +158,13 @@
 							+ ' items' + '\n' + queryResult);
 		}
 	}
-	
 
 	function queryFetchedAndLimited2Callback() {
 		connectLogged();
-		var script = document.createElement( 'script' );
+		var script = document.createElement('script');
 		script.type = 'text/javascript';
 		script.src = 'http://localhost:2480/query/demo/sql/select from Address where city.country.name = \'Italy\'/?campo1=0&callback=jsonpTest&campo2=1';
-		$("#jsonPTestDiv").append( script );
+		$("#jsonPTestDiv").append(script);
 	}
 
 	function load() {
@@ -211,6 +206,16 @@
 	function classInfo() {
 		connectLogged();
 		queryResult = orientServer.classInfo('Address');
+		if (queryResult == null) {
+			jQuery("#output").text(orientServer.getErrorMessage());
+		} else {
+			jQuery("#output").text('Class: ' + queryResult.name);
+		}
+	}
+	
+	function classInfo(className) {
+		connectLogged();
+		queryResult = orientServer.classInfo(className);
 		if (queryResult == null) {
 			jQuery("#output").text(orientServer.getErrorMessage());
 		} else {
@@ -264,7 +269,8 @@
 	function insert() {
 		connectLogged();
 		commandResult = orientServer
-				.executeCommand('insert into Address (street,type) values (\'Via test 1\',\'Tipo test\')');
+				.save(jQuery
+						.parseJSON('{"@rid":"-1:-1","@class":"FlexForm","@version":0,"surface":"federicasd","stem":"federic","morphFeats":["INDIC"],"lemma":"#5:27406","suffix":"asd"}'));
 		if (commandResult == null) {
 			jQuery("#output").text(orientServer.getErrorMessage());
 		} else {
@@ -343,7 +349,7 @@
 		}
 	}
 	function jsonpTest(data) {
-		alert('PRova'+data);
+		alert('PRova' + data);
 	}
 </script>
 </head>

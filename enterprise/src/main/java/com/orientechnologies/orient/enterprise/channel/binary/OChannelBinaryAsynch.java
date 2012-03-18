@@ -17,8 +17,12 @@ package com.orientechnologies.orient.enterprise.channel.binary;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.orientechnologies.common.concur.OTimeoutException;
+import com.orientechnologies.common.io.OIOException;
+import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.config.OContextConfiguration;
 
 /**
@@ -28,11 +32,13 @@ import com.orientechnologies.orient.core.config.OContextConfiguration;
  * 
  */
 public class OChannelBinaryAsynch extends OChannelBinary {
-	private final ReentrantLock	lockRead		= new ReentrantLock();
-	private final ReentrantLock	lockWrite		= new ReentrantLock();
-	private boolean							channelRead	= false;
+	private final ReentrantLock	lockRead							= new ReentrantLock();
+	private final ReentrantLock	lockWrite							= new ReentrantLock();
+	private boolean							channelRead						= false;
 	private byte								currentStatus;
-	private int									currentTxId;
+	private int									currentSessionId;
+
+	private static final int		MAX_UNREAD_RESPONSES	= 5;
 
 	public OChannelBinaryAsynch(final Socket iSocket, final OContextConfiguration iConfig) throws IOException {
 		super(iSocket, iConfig);
@@ -43,45 +49,82 @@ public class OChannelBinaryAsynch extends OChannelBinary {
 	}
 
 	public void endRequest() throws IOException {
-		out.flush();
+		flush();
 		lockWrite.unlock();
 	}
 
 	public void beginResponse(final int iRequesterId) throws IOException {
+		try {
+			beginResponse(iRequesterId, 0);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			// NEVER HAPPENS?
+			e.printStackTrace();
+		}
+	}
+
+	public void beginResponse(final int iRequesterId, final long iTimeout) throws IOException, InterruptedException {
+		int unreadResponse = 0;
 		// WAIT FOR THE RESPONSE
 		do {
-			lockRead.lock();
+			if (iTimeout <= 0)
+				lockRead.lock();
+			else if (!lockRead.tryLock(iTimeout, TimeUnit.MILLISECONDS))
+				throw new OTimeoutException("Cannot acquire read lock against channel: " + this);
 
 			if (!channelRead) {
 				channelRead = true;
 
 				try {
 					currentStatus = readByte();
-					currentTxId = readInt();
+					currentSessionId = readInt();
 
 				} catch (IOException e) {
 					// UNLOCK THE RESOURCE AND PROPAGATES THE EXCEPTION
 					lockRead.unlock();
+					channelRead = false;
 					throw e;
 				}
 			}
 
-			if (currentTxId == iRequesterId)
+			if (currentSessionId == iRequesterId)
 				// IT'S FOR ME
 				break;
 
+			if (unreadResponse > MAX_UNREAD_RESPONSES) {
+				final StringBuilder dirtyBuffer = new StringBuilder();
+				int i = 0;
+				while (in.available() > 0) {
+					if (dirtyBuffer.length() > 0)
+						dirtyBuffer.append('-');
+					dirtyBuffer.append(in.read());
+					++i;
+				}
+
+				OLogManager.instance().error(
+						this,
+						"Received unread response for session=" + currentSessionId
+								+ ", probably corrupted data from the network connection. Cleared dirty data in the buffer (" + i + " bytes): ["
+								+ dirtyBuffer + "]", OIOException.class);
+			}
+
 			lockRead.unlock();
 
+			// WAIT 1 SECOND AND RETRY
 			synchronized (this) {
 				try {
+					final long start = System.currentTimeMillis();
 					wait(1000);
+					if (System.currentTimeMillis() - start >= 1000)
+						unreadResponse++;
+
 				} catch (InterruptedException e) {
 					Thread.currentThread().interrupt();
 				}
 			}
 		} while (true);
 
-		handleStatus(currentStatus, currentTxId);
+		handleStatus(currentStatus, currentSessionId);
 	}
 
 	public void endResponse() {

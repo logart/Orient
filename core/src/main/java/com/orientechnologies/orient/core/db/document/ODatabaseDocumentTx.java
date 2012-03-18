@@ -41,14 +41,17 @@ public class ODatabaseDocumentTx extends ODatabaseRecordWrapperAbstract<ODatabas
 		super(iSource);
 	}
 
+	/**
+	 * Creates a new ODocument.
+	 */
 	@Override
 	public ODocument newInstance() {
-		return new ODocument(this);
+		return new ODocument();
 	}
 
 	public ODocument newInstance(final String iClassName) {
 		checkSecurity(ODatabaseSecurityResources.CLASS, ORole.PERMISSION_CREATE, iClassName);
-		return new ODocument(this, iClassName);
+		return new ODocument(iClassName);
 	}
 
 	public ORecordIteratorClass<ODocument> browseClass(final String iClassName) {
@@ -94,11 +97,38 @@ public class ODatabaseDocumentTx extends ODatabaseRecordWrapperAbstract<ODatabas
 	 */
 	@Override
 	public ODatabaseDocumentTx save(final ORecordInternal<?> iRecord) {
+		return save(iRecord, OPERATION_MODE.SYNCHRONOUS);
+	}
+
+	/**
+	 * Saves a document to the database. Behavior depends by the current running transaction if any. If no transaction is running then
+	 * changes apply immediately. If an Optimistic transaction is running then the record will be changed at commit time. The current
+	 * transaction will continue to see the record as modified, while others not. If a Pessimistic transaction is running, then an
+	 * exclusive lock is acquired against the record. Current transaction will continue to see the record as modified, while others
+	 * cannot access to it since it's locked.
+	 * 
+	 * If MVCC is enabled and the version of the document is different by the version stored in the database, then a
+	 * {@link OConcurrentModificationException} exception is thrown.Before to save the document it must be valid following the
+	 * constraints declared in the schema if any (can work also in schema-less mode). To validate the document the
+	 * {@link ODocument#validate()} is called.
+	 * 
+	 * @param iRecord
+	 *          Record to save.
+	 * @see #setMVCC(boolean), {@link #isMVCC()}
+	 * @throws OConcurrentModificationException
+	 *           if the version of the document is different by the version contained in the database.
+	 * @throws OValidationException
+	 *           if the document breaks some validation constraints defined in the schema
+	 * @return The Database instance itself giving a "fluent interface". Useful to call multiple methods in chain.
+	 */
+	@Override
+	public ODatabaseDocumentTx save(final ORecordInternal<?> iRecord, final OPERATION_MODE iMode) {
 		if (!(iRecord instanceof ODocument))
-			return (ODatabaseDocumentTx) super.save(iRecord);
+			return (ODatabaseDocumentTx) super.save(iRecord, iMode);
 
 		final ODocument doc = (ODocument) iRecord;
 		doc.validate();
+		doc.convertAllMultiValuesToTrackedVersions();
 
 		try {
 			if (doc.getIdentity().isNew()) {
@@ -110,7 +140,7 @@ public class ODatabaseDocumentTx extends ODatabaseRecordWrapperAbstract<ODatabas
 					// CLASS FOUND: FORCE THE STORING IN THE CLUSTER CONFIGURED
 					String clusterName = getClusterNameById(doc.getSchemaClass().getDefaultClusterId());
 
-					super.save(doc, clusterName);
+					super.save(doc, clusterName, iMode);
 					return this;
 				}
 			} else {
@@ -119,7 +149,7 @@ public class ODatabaseDocumentTx extends ODatabaseRecordWrapperAbstract<ODatabas
 					checkSecurity(ODatabaseSecurityResources.CLASS, ORole.PERMISSION_UPDATE, doc.getClassName());
 			}
 
-			super.save(doc);
+			super.save(doc, iMode);
 
 		} catch (OException e) {
 			// PASS THROUGH
@@ -155,11 +185,41 @@ public class ODatabaseDocumentTx extends ODatabaseRecordWrapperAbstract<ODatabas
 	 * @return The Database instance itself giving a "fluent interface". Useful to call multiple methods in chain.
 	 */
 	@Override
-	public ODatabaseDocumentTx save(final ORecordInternal<?> iContent, String iClusterName) {
-		if (!(iContent instanceof ODocument))
-			return (ODatabaseDocumentTx) super.save(iContent, iClusterName);
+	public ODatabaseDocumentTx save(final ORecordInternal<?> iRecord, final String iClusterName) {
+		return save(iRecord, iClusterName, OPERATION_MODE.SYNCHRONOUS);
+	}
 
-		final ODocument doc = (ODocument) iContent;
+	/**
+	 * Saves a document specifying a cluster where to store the record. Behavior depends by the current running transaction if any. If
+	 * no transaction is running then changes apply immediately. If an Optimistic transaction is running then the record will be
+	 * changed at commit time. The current transaction will continue to see the record as modified, while others not. If a Pessimistic
+	 * transaction is running, then an exclusive lock is acquired against the record. Current transaction will continue to see the
+	 * record as modified, while others cannot access to it since it's locked.
+	 * 
+	 * If MVCC is enabled and the version of the document is different by the version stored in the database, then a
+	 * {@link OConcurrentModificationException} exception is thrown. Before to save the document it must be valid following the
+	 * constraints declared in the schema if any (can work also in schema-less mode). To validate the document the
+	 * {@link ODocument#validate()} is called.
+	 * 
+	 * @param iRecord
+	 *          Record to save
+	 * @param iClusterName
+	 *          Cluster name where to save the record
+	 * @param iMode
+	 *          Mode of save: synchronous (default) or asynchronous
+	 * @see #setMVCC(boolean), {@link #isMVCC()}, ORecordSchemaAware#validate()
+	 * @throws OConcurrentModificationException
+	 *           if the version of the document is different by the version contained in the database.
+	 * @throws OValidationException
+	 *           if the document breaks some validation constraints defined in the schema
+	 * @return The Database instance itself giving a "fluent interface". Useful to call multiple methods in chain.
+	 */
+	@Override
+	public ODatabaseDocumentTx save(final ORecordInternal<?> iRecord, String iClusterName, final OPERATION_MODE iMode) {
+		if (!(iRecord instanceof ODocument))
+			return (ODatabaseDocumentTx) super.save(iRecord, iClusterName, iMode);
+
+		final ODocument doc = (ODocument) iRecord;
 
 		if (!doc.getIdentity().isValid()) {
 			if (doc.getClassName() != null)
@@ -196,8 +256,9 @@ public class ODatabaseDocumentTx extends ODatabaseRecordWrapperAbstract<ODatabas
 		}
 
 		doc.validate();
+		doc.convertAllMultiValuesToTrackedVersions();
 
-		super.save(doc, iClusterName);
+		super.save(doc, iClusterName, iMode);
 		return this;
 	}
 
@@ -211,23 +272,24 @@ public class ODatabaseDocumentTx extends ODatabaseRecordWrapperAbstract<ODatabas
 	 * If MVCC is enabled and the version of the document is different by the version stored in the database, then a
 	 * {@link OConcurrentModificationException} exception is thrown.
 	 * 
-	 * @param iContent
+	 * @param iRecord
 	 * @see #setMVCC(boolean), {@link #isMVCC()}
 	 * @return The Database instance itself giving a "fluent interface". Useful to call multiple methods in chain.
 	 */
-	public ODatabaseDocumentTx delete(final ODocument iContent) {
+	public ODatabaseDocumentTx delete(final ODocument iRecord) {
+		if (iRecord == null)
+			throw new ODatabaseException("Cannot delete null document");
+
 		// CHECK ACCESS ON SCHEMA CLASS NAME (IF ANY)
-		if (iContent.getClassName() != null)
-			checkSecurity(ODatabaseSecurityResources.CLASS, ORole.PERMISSION_DELETE, iContent.getClassName());
+		if (iRecord.getClassName() != null)
+			checkSecurity(ODatabaseSecurityResources.CLASS, ORole.PERMISSION_DELETE, iRecord.getClassName());
 
 		try {
-			underlying.delete(iContent);
-
-			// ODocumentHelper.deleteCrossRefs(iContent.getIdentity(), iContent);
+			underlying.delete(iRecord);
 
 		} catch (Exception e) {
 			OLogManager.instance().exception("Error on deleting record %s of class '%s'", e, ODatabaseException.class,
-					iContent.getIdentity(), iContent.getClassName());
+					iRecord.getIdentity(), iRecord.getClassName());
 		}
 		return this;
 	}
@@ -258,5 +320,9 @@ public class ODatabaseDocumentTx extends ODatabaseRecordWrapperAbstract<ODatabas
 		} finally {
 			getTransaction().close();
 		}
+	}
+
+	public String getType() {
+		return TYPE;
 	}
 }

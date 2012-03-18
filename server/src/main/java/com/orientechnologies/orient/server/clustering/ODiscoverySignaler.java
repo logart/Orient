@@ -59,12 +59,14 @@ public class ODiscoverySignaler extends OPollerThread {
 	}
 
 	private void startTimeoutPresenceTask() {
+		if (runningTask != null)
+			return;
+
 		runningTask = new TimerTask() {
 			@Override
 			public void run() {
 				try {
-					if (running)
-						// TIMEOUT: STOP TO SEND PACKETS TO BEING DISCOVERED
+					if (isRunning() && !manager.isLeader())
 						manager.becameLeader();
 
 				} catch (Exception e) {
@@ -101,7 +103,7 @@ public class ODiscoverySignaler extends OPollerThread {
 		try {
 			socket.send(dgram);
 		} catch (Throwable t) {
-			shutdown();
+			sendShutdown();
 			OLogManager
 					.instance()
 					.error(
@@ -114,6 +116,7 @@ public class ODiscoverySignaler extends OPollerThread {
 
 	@Override
 	public void shutdown() {
+		super.shutdown();
 		if (runningTask != null)
 			runningTask.cancel();
 
@@ -124,6 +127,5 @@ public class ODiscoverySignaler extends OPollerThread {
 		}
 		socket = null;
 		dgram = null;
-		super.shutdown();
 	}
 }

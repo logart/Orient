@@ -28,10 +28,11 @@ import com.orientechnologies.orient.core.config.OContextConfiguration;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 
 public class OChannelBinaryClient extends OChannelBinaryAsynch {
-	final protected int	timeout;	// IN MS
+	final protected int	timeout;						// IN MS
+	final private short	srvProtocolVersion;
 
-	public OChannelBinaryClient(final String remoteHost, final int remotePort, final OContextConfiguration iConfig)
-			throws IOException {
+	public OChannelBinaryClient(final String remoteHost, final int remotePort, final OContextConfiguration iConfig,
+			final int iProtocolVersion) throws IOException {
 		super(new Socket(), iConfig);
 		timeout = iConfig.getValueAsInteger(OGlobalConfiguration.NETWORK_SOCKET_TIMEOUT);
 
@@ -40,13 +41,31 @@ public class OChannelBinaryClient extends OChannelBinaryAsynch {
 		socket.setKeepAlive(true);
 		socket.setSendBufferSize(socketBufferSize);
 		socket.setReceiveBufferSize(socketBufferSize);
-		socket.connect(new InetSocketAddress(remoteHost, remotePort), timeout);
+		try {
+			socket.connect(new InetSocketAddress(remoteHost, remotePort), timeout);
+		} catch (java.net.SocketTimeoutException e) {
+			throw new IOException("Cannot connect to host " + remoteHost + ":" + remotePort, e);
+		}
 
 		inStream = new BufferedInputStream(socket.getInputStream(), socketBufferSize);
 		outStream = new BufferedOutputStream(socket.getOutputStream(), socketBufferSize);
 
 		in = new DataInputStream(inStream);
 		out = new DataOutputStream(outStream);
+
+		try {
+			srvProtocolVersion = readShort();
+		} catch (IOException e) {
+			throw new ONetworkProtocolException("Cannot read protocol version from remote server " + socket.getRemoteSocketAddress()
+					+ ": " + e);
+		}
+
+		if (Math.abs(srvProtocolVersion - iProtocolVersion) > 2) {
+			close();
+			throw new ONetworkProtocolException("Binary protocol is incompatible with the Server connected: client=" + iProtocolVersion
+					+ ", server=" + srvProtocolVersion);
+		}
+
 	}
 
 	public void reconnect() throws IOException {
@@ -70,5 +89,9 @@ public class OChannelBinaryClient extends OChannelBinaryAsynch {
 		}
 
 		return false;
+	}
+
+	public short getSrvProtocolVersion() {
+		return srvProtocolVersion;
 	}
 }

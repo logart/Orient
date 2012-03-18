@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
+import com.orientechnologies.orient.core.command.OCommandContext;
 import com.orientechnologies.orient.core.exception.OCommandExecutionException;
 import com.orientechnologies.orient.core.sql.filter.OSQLFilter;
 import com.orientechnologies.orient.core.sql.functions.OSQLFunction;
@@ -45,6 +46,7 @@ import com.orientechnologies.orient.core.sql.operator.OQueryOperatorContainsText
 import com.orientechnologies.orient.core.sql.operator.OQueryOperatorContainsValue;
 import com.orientechnologies.orient.core.sql.operator.OQueryOperatorEquals;
 import com.orientechnologies.orient.core.sql.operator.OQueryOperatorIn;
+import com.orientechnologies.orient.core.sql.operator.OQueryOperatorInstanceof;
 import com.orientechnologies.orient.core.sql.operator.OQueryOperatorIs;
 import com.orientechnologies.orient.core.sql.operator.OQueryOperatorLike;
 import com.orientechnologies.orient.core.sql.operator.OQueryOperatorMajor;
@@ -63,25 +65,29 @@ import com.orientechnologies.orient.core.sql.operator.math.OQueryOperatorMultipl
 import com.orientechnologies.orient.core.sql.operator.math.OQueryOperatorPlus;
 
 public class OSQLEngine {
-	private Map<String, OSQLFunction>																	inlineFunctions				= new HashMap<String, OSQLFunction>();
-	private Map<String, Class<? extends OSQLFunction>>								aggregationFunctions	= new HashMap<String, Class<? extends OSQLFunction>>();
-	private Map<String, Class<? extends OCommandExecutorSQLAbstract>>	commands							= new HashMap<String, Class<? extends OCommandExecutorSQLAbstract>>();
-	public static OQueryOperator[]																		RECORD_OPERATORS			= { new OQueryOperatorAnd(),
-			new OQueryOperatorOr(), new OQueryOperatorNotEquals(), new OQueryOperatorNot(), new OQueryOperatorEquals(),
-			new OQueryOperatorMinorEquals(), new OQueryOperatorMinor(), new OQueryOperatorMajorEquals(), new OQueryOperatorContainsAll(),
-			new OQueryOperatorMajor(), new OQueryOperatorLike(), new OQueryOperatorMatches(), new OQueryOperatorIs(),
-			new OQueryOperatorIn(), new OQueryOperatorContainsKey(), new OQueryOperatorContainsValue(), new OQueryOperatorContainsText(),
-			new OQueryOperatorContains(), new OQueryOperatorContainsText(), new OQueryOperatorTraverse(), new OQueryOperatorBetween(),
-			new OQueryOperatorPlus(), new OQueryOperatorMinus(), new OQueryOperatorMultiply(), new OQueryOperatorDivide(),
-			new OQueryOperatorMod()																														};
+	private Map<String, OSQLFunction>																		inlineFunctions				= new HashMap<String, OSQLFunction>();
+	private Map<String, Class<? extends OSQLFunction>>									aggregationFunctions	= new HashMap<String, Class<? extends OSQLFunction>>();
+	protected Map<String, Class<? extends OCommandExecutorSQLAbstract>>	commands							= new HashMap<String, Class<? extends OCommandExecutorSQLAbstract>>();
 
-	private static final OSQLEngine																		INSTANCE							= new OSQLEngine();
+	// WARNING: ORDER IS IMPORTANT TO AVOID SUB-STRING LIKE "IS" and AND "INSTANCEOF": INSTANCEOF MUST BE PLACED BEFORE! AND ALSO FOR
+	// PERFORMANCE (MOST USED BEFORE)
+	public static OQueryOperator[]																			RECORD_OPERATORS			= { new OQueryOperatorEquals(),
+			new OQueryOperatorAnd(), new OQueryOperatorOr(), new OQueryOperatorNotEquals(), new OQueryOperatorNot(),
+			new OQueryOperatorMinorEquals(), new OQueryOperatorMinor(), new OQueryOperatorMajorEquals(), new OQueryOperatorContainsAll(),
+			new OQueryOperatorMajor(), new OQueryOperatorLike(), new OQueryOperatorMatches(), new OQueryOperatorInstanceof(),
+			new OQueryOperatorIs(), new OQueryOperatorIn(), new OQueryOperatorContainsKey(), new OQueryOperatorContainsValue(),
+			new OQueryOperatorContainsText(), new OQueryOperatorContains(), new OQueryOperatorContainsText(),
+			new OQueryOperatorTraverse(), new OQueryOperatorBetween(), new OQueryOperatorPlus(), new OQueryOperatorMinus(),
+			new OQueryOperatorMultiply(), new OQueryOperatorDivide(), new OQueryOperatorMod()		};
+
+	protected static OSQLEngine																					INSTANCE							= new OSQLEngine();
 
 	protected OSQLEngine() {
 		// COMMANDS
 		commands.put(OCommandExecutorSQLAlterDatabase.KEYWORD_ALTER + " " + OCommandExecutorSQLAlterDatabase.KEYWORD_DATABASE,
 				OCommandExecutorSQLAlterDatabase.class);
 		commands.put(OCommandExecutorSQLSelect.KEYWORD_SELECT, OCommandExecutorSQLSelect.class);
+		commands.put(OCommandExecutorSQLTraverse.KEYWORD_TRAVERSE, OCommandExecutorSQLTraverse.class);
 		commands.put(OCommandExecutorSQLInsert.KEYWORD_INSERT, OCommandExecutorSQLInsert.class);
 		commands.put(OCommandExecutorSQLUpdate.KEYWORD_UPDATE, OCommandExecutorSQLUpdate.class);
 		commands.put(OCommandExecutorSQLDelete.KEYWORD_DELETE, OCommandExecutorSQLDelete.class);
@@ -205,8 +211,8 @@ public class OSQLEngine {
 		return null;
 	}
 
-	public OSQLFilter parseFromWhereCondition(final String iText) {
-		return new OSQLFilter(iText);
+	public OSQLFilter parseFromWhereCondition(final String iText, final OCommandContext iContext) {
+		return new OSQLFilter(iText, iContext);
 	}
 
 	public static OSQLEngine getInstance() {

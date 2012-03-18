@@ -26,6 +26,7 @@ import com.orientechnologies.common.io.OFileUtils;
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.common.profiler.OProfiler;
 import com.orientechnologies.orient.core.OConstants;
+import com.orientechnologies.orient.core.cache.ODefaultCache;
 import com.orientechnologies.orient.core.storage.fs.OMMapManager;
 
 /**
@@ -66,6 +67,9 @@ public enum OGlobalConfiguration {
 
 	CACHE_LEVEL2_SIZE("cache.level2.size", "Size of the cache that keeps the record in memory", Integer.class, -1),
 
+	CACHE_LEVEL2_IMPL("cache.level2.impl", "Actual implementation of secondary cache", String.class, ODefaultCache.class
+			.getCanonicalName()),
+
 	CACHE_LEVEL2_STRATEGY("cache.level2.strategy",
 			"Strategy to use when a database requests a record: 0 = pop the record, 1 = copy the record", Integer.class, 0,
 			new OConfigurationChangeCallback() {
@@ -102,7 +106,7 @@ public enum OGlobalConfiguration {
 			"Transaction mode used in TinkerPop Blueprints implementation. 0 = Automatic (default), 1 = Manual", Integer.class, 0),
 
 	// TREEMAP
-	MVRBTREE_TIMEOUT("mvrbtree.timeout", "Maximum timeout to get lock against the OMVRB-Tree", Integer.class, 1000),
+	MVRBTREE_TIMEOUT("mvrbtree.timeout", "Maximum timeout to get lock against the OMVRB-Tree", Integer.class, 2000),
 
 	MVRBTREE_LAZY_UPDATES(
 			"mvrbtree.lazyUpdates",
@@ -176,7 +180,7 @@ public enum OGlobalConfiguration {
 
 	FILE_MMAP_MAX_MEMORY(
 			"file.mmap.maxMemory",
-			"Max memory allocatable by memory mapping manager. Note that on 32bit operating systems, the limit is 2Gb but will vary between operating systems.",
+			"Max memory allocatable by memory mapping manager. Note that on 32bit operating systems, the limit is 2Gb but will vary between operating systems",
 			Long.class, 134217728, new OConfigurationChangeCallback() {
 				public void change(final Object iCurrentValue, final Object iNewValue) {
 					OMMapManager.setMaxMemory(OFileUtils.getSizeAsNumber(iNewValue));
@@ -238,6 +242,21 @@ public enum OGlobalConfiguration {
 						OProfiler.getInstance().startRecording();
 					else
 						OProfiler.getInstance().stopRecording();
+				}
+			}),
+
+	PROFILER_AUTODUMP_INTERVAL("profiler.autoDump.interval",
+			"Dumps the profiler values at regular intervals. Time is expressed in seconds", Integer.class, 0,
+			new OConfigurationChangeCallback() {
+				public void change(final Object iCurrentValue, final Object iNewValue) {
+					OProfiler.getInstance().setAutoDump((Integer) iNewValue);
+				}
+			}),
+
+	PROFILER_AUTODUMP_RESET("profiler.autoDump.reset", "Resets the profiler at every auto dump", Boolean.class, true,
+			new OConfigurationChangeCallback() {
+				public void change(final Object iCurrentValue, final Object iNewValue) {
+					OProfiler.getInstance().setAutoDumpReset((Boolean) iNewValue);
 				}
 			}),
 
@@ -425,10 +444,6 @@ public enum OGlobalConfiguration {
 	}
 
 	private static void autoConfig() {
-		if (System.getProperty("os.name").indexOf("Windows") > -1) {
-			// WINDOWS
-		}
-
 		if (System.getProperty("os.arch").indexOf("64") > -1) {
 			// 64 BIT
 

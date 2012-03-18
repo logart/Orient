@@ -15,11 +15,7 @@
  */
 package com.orientechnologies.orient.test.database.auto;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.Map.Entry;
 
 import org.testng.Assert;
@@ -917,7 +913,7 @@ public class IndexTest {
 		final OIndex<?> idx = database.getMetadata().getIndexManager().getIndex("Whiz.account");
 
 		for (int i = 0; i < 5; i++) {
-			final ODocument whiz = new ODocument(database.getUnderlying(), "Whiz");
+			final ODocument whiz = new ODocument("Whiz");
 
 			whiz.field("id", i);
 			whiz.field("text", "This is a test");
@@ -937,10 +933,10 @@ public class IndexTest {
 			resDoc.delete();
 		}
 
-		final ODocument whiz = new ODocument(database.getUnderlying(), "Whiz");
+		final ODocument whiz = new ODocument("Whiz");
 		whiz.field("id", 100);
 		whiz.field("text", "This is a test!");
-		whiz.field("account", new ODocument(database.getUnderlying(), "Company").field("id", 9999));
+		whiz.field("account", new ODocument("Company").field("id", 9999));
 		whiz.save();
 
 		Assert.assertTrue(((ODocument) whiz.field("account")).getIdentity().isValid());
@@ -964,7 +960,7 @@ public class IndexTest {
 		}
 		ODocument testClassDocument = db.newInstance("TestClass");
 		testClassDocument.field("name", "Test Class 1");
-		ODocument testLinkClassDocument = new ODocument(db, "TestLinkClass");
+		ODocument testLinkClassDocument = new ODocument("TestLinkClass");
 		testLinkClassDocument.field("testString", "Test Link Class 1");
 		testLinkClassDocument.field("testBoolean", true);
 		testClassDocument.field("testLink", testLinkClassDocument);
@@ -981,6 +977,33 @@ public class IndexTest {
 		db.close();
 	}
 
+	@Test(dependsOnMethods = "linkedIndexedProperty")
+	public void testLinkedIndexedPropertyInTx() {
+		ODatabaseDocument db = new ODatabaseDocumentTx(database.getURL());
+		db.open("admin", "admin");
+
+		db.begin();
+		ODocument testClassDocument = db.newInstance("TestClass");
+		testClassDocument.field("name", "Test Class 2");
+		ODocument testLinkClassDocument = new ODocument("TestLinkClass");
+		testLinkClassDocument.field("testString", "Test Link Class 2");
+		testLinkClassDocument.field("testBoolean", true);
+		testClassDocument.field("testLink", testLinkClassDocument);
+		testClassDocument.save();
+		db.commit();
+
+		// THIS WILL THROW A java.lang.ClassCastException: com.orientechnologies.orient.core.id.ORecordId cannot be cast to
+		// java.lang.Boolean
+		List<ODocument> result = db.query(new OSQLSynchQuery<ODocument>("select from TestClass where testLink.testBoolean = true"));
+		Assert.assertEquals(result.size(), 2);
+		// THIS WILL THROW A java.lang.ClassCastException: com.orientechnologies.orient.core.id.ORecordId cannot be cast to
+		// java.lang.String
+		result = db.query(new OSQLSynchQuery<ODocument>("select from TestClass where testLink.testString = 'Test Link Class 2'"));
+		Assert.assertEquals(result.size(), 1);
+
+		db.close();
+	}
+
 	public void testDictionary() {
 		ODatabaseDocument db = new ODatabaseDocumentTx(database.getURL());
 		db.open("admin", "admin");
@@ -991,54 +1014,248 @@ public class IndexTest {
 		pClass.createProperty("age", OType.INTEGER);
 		pClass.createIndex("testIdx", INDEX_TYPE.DICTIONARY, "firstName", "lastName");
 
-		ODocument person = new ODocument(db, "Person2");
+		ODocument person = new ODocument("Person2");
 		person.field("firstName", "foo").field("lastName", "bar").save();
 
-		person = new ODocument(db, "Person2");
+		person = new ODocument("Person2");
 		person.field("firstName", "foo").field("lastName", "bar").field("age", 32).save();
+
+    db.close();
 	}
 
-	/*
-	 * @Test(dependsOnMethods = "linkedIndexedProperty") public void testIndexRemovalLink() { List<ODocument> result =
-	 * database.command(new OCommandSQL("select rid from index:Profile.nick")).execute(); Assert.assertNotNull(result);
-	 * 
-	 * ODocument firstProfile = null;
-	 * 
-	 * for (ODocument d : result) { if (firstProfile == null) firstProfile = d.field("rid");
-	 * 
-	 * Assert.assertFalse(d.containsField("key")); Assert.assertTrue(d.containsField("rid")); }
-	 * 
-	 * result = database.command(new OCommandSQL("select rid from index:Profile.nick where key = ?")).execute(
-	 * firstProfile.field("nick"));
-	 * 
-	 * Assert.assertNotNull(result); Assert.assertEquals(result.get(0).field("rid", ORID.class), firstProfile.getIdentity());
-	 * 
-	 * firstProfile.delete();
-	 * 
-	 * result = database.command(new OCommandSQL("select rid from index:Profile.nick where key = ?")).execute(
-	 * firstProfile.field("nick")); Assert.assertTrue(result.isEmpty());
-	 * 
-	 * }
-	 * 
-	 * public void testIndexRemoval() { List<ODocument> result = database.command(new
-	 * OCommandSQL("select rid from index:Profile.nick")).execute(); Assert.assertNotNull(result);
-	 * 
-	 * ODocument firstProfile = null;
-	 * 
-	 * for (ODocument d : result) { if (firstProfile == null) firstProfile = d.field("rid");
-	 * 
-	 * Assert.assertFalse(d.containsField("key")); Assert.assertTrue(d.containsField("rid")); }
-	 * 
-	 * result = database.command(new OCommandSQL("select rid from index:Profile.nick where key = ?")).execute(
-	 * firstProfile.field("nick"));
-	 * 
-	 * Assert.assertNotNull(result); Assert.assertEquals(result.get(0).field("rid", ORID.class), firstProfile.getIdentity());
-	 * 
-	 * firstProfile.delete();
-	 * 
-	 * result = database.command(new OCommandSQL("select rid from index:Profile.nick where key = ?")).execute(
-	 * firstProfile.field("nick")); Assert.assertTrue(result.isEmpty());
-	 * 
-	 * }
-	 */
+  public void testConcurrentRemoveDelete() {
+    ODatabaseDocument db = new ODatabaseDocumentTx(database.getURL());
+    db.open("admin", "admin");
+
+    if ( !db.getMetadata().getSchema().existsClass( "MyFruit" ) ) {
+      OClass fruitClass = db.getMetadata().getSchema().createClass( "MyFruit" );
+      fruitClass.createProperty( "name", OType.STRING );
+      fruitClass.createProperty( "color", OType.STRING );
+
+      db.getMetadata().getSchema().getClass( "MyFruit" ).getProperty( "name" ).createIndex( OClass.INDEX_TYPE.UNIQUE );
+
+      db.getMetadata().getSchema().getClass( "MyFruit" ).getProperty( "color" ).createIndex( OClass.INDEX_TYPE.NOTUNIQUE );
+
+      db.getMetadata().getSchema().save();
+    }
+
+    final int passCount = 10;
+    final int chunkSize = 1000;
+    for( int pass = 0; pass < passCount; pass++ ) {
+      List<ODocument> recordsToDelete = new ArrayList<ODocument>(  );
+      db.begin();
+      for( int i = 0; i < chunkSize; i++ ) {
+        ODocument d = new ODocument( "MyFruit" ).field( "name", "ABC" + pass + 'K' + i ).field( "color", "FOO"
+          + pass );
+        d.save();
+        if ( i < chunkSize / 2 ) {
+          recordsToDelete.add( d );
+        }
+      }
+      db.commit();
+
+      // do delete
+      db.begin();
+      for(final ODocument recordToDelete : recordsToDelete ) {
+        Assert.assertNotNull( db.delete( recordToDelete ) );
+      }
+      db.commit();
+    }
+
+
+    db.close();
+  }
+
+  public void testIndexParamsAutoConversion() {
+    ODatabaseDocument db = new ODatabaseDocumentTx(database.getURL());
+    db.open("admin", "admin");
+
+    if ( !db.getMetadata().getSchema().existsClass( "IndexTestTerm" ) ) {
+      final OClass termClass = db.getMetadata().getSchema().createClass( "IndexTestTerm" );
+      termClass.createProperty( "label", OType.STRING );
+      termClass.createIndex( "idxTerm", INDEX_TYPE.UNIQUE, "label" );
+
+      db.getMetadata().getSchema().save();
+    }
+
+    final ODocument doc = new ODocument( "IndexTestTerm" );
+    doc.field( "label", "42" );
+    doc.save();
+
+    final ORecordId result =(ORecordId)db.getMetadata().getIndexManager().getIndex( "idxTerm" ).get( "42" );
+    Assert.assertNotNull( result );
+    Assert.assertEquals( result.getIdentity(), doc.getIdentity() );
+  }
+
+	public void testTransactionUniqueIndexTestOne()
+	{
+		ODatabaseDocumentTx db = new ODatabaseDocumentTx(database.getURL());
+		db.open("admin", "admin");
+
+		if ( !db.getMetadata().getSchema().existsClass( "TransactionUniqueIndexTest" ) ) {
+			final OClass termClass = db.getMetadata().getSchema().createClass( "TransactionUniqueIndexTest" );
+			termClass.createProperty( "label", OType.STRING );
+			termClass.createIndex( "idxTransactionUniqueIndexTest", INDEX_TYPE.UNIQUE, "label" );
+			db.getMetadata().getSchema().save();
+		}
+
+		ODocument docOne = new ODocument("TransactionUniqueIndexTest");
+		docOne.field("label", "A");
+		docOne.save();
+
+		final List<ODocument> resultBeforeCommit = db.query(new OSQLSynchQuery<ODocument>("select from index:idxTransactionUniqueIndexTest"));
+		Assert.assertEquals(resultBeforeCommit.size(), 1);
+
+		db.begin();
+		try {
+			ODocument docTwo = new ODocument("TransactionUniqueIndexTest");
+			docTwo.field("label", "A");
+			docTwo.save();
+
+			db.commit();
+			Assert.fail();
+		} catch (OIndexException oie) {
+		}
+
+		final List<ODocument> resultAfterCommit = db.query(new OSQLSynchQuery<ODocument>("select from index:idxTransactionUniqueIndexTest"));
+		Assert.assertEquals(resultAfterCommit.size(), 1);
+	}
+
+	@Test(dependsOnMethods = "testTransactionUniqueIndexTestOne")
+	public void testTransactionUniqueIndexTestTwo()
+	{
+		ODatabaseDocumentTx db = new ODatabaseDocumentTx(database.getURL());
+		db.open("admin", "admin");
+
+		if ( !db.getMetadata().getSchema().existsClass( "TransactionUniqueIndexTest" ) ) {
+			final OClass termClass = db.getMetadata().getSchema().createClass( "TransactionUniqueIndexTest" );
+			termClass.createProperty( "label", OType.STRING );
+			termClass.createIndex( "idxTransactionUniqueIndexTest", INDEX_TYPE.UNIQUE, "label" );
+			db.getMetadata().getSchema().save();
+		}
+
+
+		final List<ODocument> resultBeforeCommit = db.query(new OSQLSynchQuery<ODocument>("select from index:idxTransactionUniqueIndexTest"));
+		Assert.assertEquals(resultBeforeCommit.size(), 1);
+
+		db.begin();
+
+		try {
+			ODocument docOne = new ODocument("TransactionUniqueIndexTest");
+			docOne.field("label", "B");
+			docOne.save();
+
+
+			ODocument docTwo = new ODocument("TransactionUniqueIndexTest");
+			docTwo.field("label", "B");
+			docTwo.save();
+
+			db.commit();
+			Assert.fail();
+		} catch (OIndexException oie) {
+		}
+
+		final List<ODocument> resultAfterCommit = db.query(new OSQLSynchQuery<ODocument>("select from index:idxTransactionUniqueIndexTest"));
+		Assert.assertEquals(resultAfterCommit.size(), 1);
+	}
+
+	public void testTransactionUniqueIndexTestWithDotNameOne()
+	{
+		ODatabaseDocumentTx db = new ODatabaseDocumentTx(database.getURL());
+		db.open("admin", "admin");
+
+		if ( !db.getMetadata().getSchema().existsClass( "TransactionUniqueIndexWithDotTest" ) ) {
+			final OClass termClass = db.getMetadata().getSchema().createClass( "TransactionUniqueIndexWithDotTest" );
+			termClass.createProperty( "label", OType.STRING ).createIndex(INDEX_TYPE.UNIQUE);
+			db.getMetadata().getSchema().save();
+		}
+
+		ODocument docOne = new ODocument("TransactionUniqueIndexWithDotTest");
+		docOne.field("label", "A");
+		docOne.save();
+
+		final List<ODocument> resultBeforeCommit = db.query(new OSQLSynchQuery<ODocument>("select from  index:TransactionUniqueIndexWithDotTest.label"));
+		Assert.assertEquals(resultBeforeCommit.size(), 1);
+
+		db.begin();
+
+		try {
+			ODocument docTwo = new ODocument("TransactionUniqueIndexWithDotTest");
+			docTwo.field("label", "A");
+			docTwo.save();
+
+			db.commit();
+			Assert.fail();
+		} catch (OIndexException oie) {
+		}
+
+		final List<ODocument> resultAfterCommit = db.query(new OSQLSynchQuery<ODocument>("select from  index:TransactionUniqueIndexWithDotTest.label"));
+		Assert.assertEquals(resultAfterCommit.size(), 1);
+	}
+
+	@Test(dependsOnMethods = "testTransactionUniqueIndexTestWithDotNameOne")
+	public void testTransactionUniqueIndexTestWithDotNameTwo()
+	{
+		ODatabaseDocumentTx db = new ODatabaseDocumentTx(database.getURL());
+		db.open("admin", "admin");
+
+		if ( !db.getMetadata().getSchema().existsClass( "TransactionUniqueIndexWithDotTest" ) ) {
+			final OClass termClass = db.getMetadata().getSchema().createClass( "TransactionUniqueIndexWithDotTest" );
+			termClass.createProperty( "label", OType.STRING ).createIndex(INDEX_TYPE.UNIQUE);
+			db.getMetadata().getSchema().save();
+		}
+
+		final List<ODocument> resultBeforeCommit = db.query(new OSQLSynchQuery<ODocument>("select from index:TransactionUniqueIndexWithDotTest.label"));
+		Assert.assertEquals(resultBeforeCommit.size(), 1);
+
+		db.begin();
+
+		try {
+			ODocument docOne = new ODocument("TransactionUniqueIndexWithDotTest");
+			docOne.field("label", "B");
+			docOne.save();
+
+
+			ODocument docTwo = new ODocument("TransactionUniqueIndexWithDotTest");
+			docTwo.field("label", "B");
+			docTwo.save();
+
+			db.commit();
+			Assert.fail();
+		} catch (OIndexException oie) {
+		}
+
+		final List<ODocument> resultAfterCommit = db.query(new OSQLSynchQuery<ODocument>("select from  index:TransactionUniqueIndexWithDotTest.label"));
+		Assert.assertEquals(resultAfterCommit.size(), 1);
+	}
+
+
+	@Test(dependsOnMethods = "linkedIndexedProperty")
+	public void testIndexRemoval() {
+		List<ODocument> result =
+						database.command(new OCommandSQL("select rid from index:Profile.nick")).execute();
+		Assert.assertNotNull(result);
+
+		ODocument firstProfile = null;
+
+		for (ODocument d : result) {
+			if (firstProfile == null) firstProfile = d.field("rid");
+
+			Assert.assertFalse(d.containsField("key"));
+			Assert.assertTrue(d.containsField("rid"));
+		}
+
+		result = database.command(new OCommandSQL("select rid from index:Profile.nick where key = ?")).execute(
+						firstProfile.field("nick"));
+
+		Assert.assertNotNull(result);
+		Assert.assertEquals(result.get(0).field("rid", OType.LINK), firstProfile.getIdentity());
+
+		firstProfile.delete();
+
+		result = database.command(new OCommandSQL("select rid from index:Profile.nick where key = ?")).execute(
+						firstProfile.field("nick"));
+		Assert.assertTrue(result.isEmpty());
+
+	}
 }

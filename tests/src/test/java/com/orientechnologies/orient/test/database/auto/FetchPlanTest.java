@@ -51,7 +51,7 @@ public class FetchPlanTest {
 		for (ODocument d : resultset) {
 			linked = ((ORID) d.field("location", ORID.class));
 			if (linked != null)
-				Assert.assertFalse(database.getLevel1Cache().existsRecord(linked));
+				Assert.assertNull(database.getLevel1Cache().findRecord(linked));
 		}
 
 		database.close();
@@ -60,6 +60,7 @@ public class FetchPlanTest {
 	@Test(dependsOnMethods = "queryNoFetchPlan")
 	public void queryWithFetchPlan() {
 		database.open("admin", "admin");
+		database.getLevel1Cache().setEnable(true);
 
 		final long times = OProfiler.getInstance().getCounter("Cache.reused");
 		List<ODocument> resultset = database.query(new OSQLSynchQuery<ODocument>("select * from Profile").setFetchPlan("*:-1"));
