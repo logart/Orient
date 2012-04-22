@@ -62,7 +62,7 @@ public class OMultiFileSegment extends OSegment {
 			// EMPTY FILE: CREATE THE FIRST FILE BY DEFAULT
 			files = new OFile[1];
 			files[0] = OFileFactory.instance().create(type,
-					iStorage.getVariableParser().resolveVariables(storage.getStoragePath() + "/" + name + "." + 0 + fileExtension),
+					iStorage.getVariableParser().resolveVariables(config.getLocation() + "/" + name + "." + 0 + fileExtension),
 					iStorage.getMode());
 			perFileMaxSize = fileMaxSize;
 			files[0].setMaxSize(perFileMaxSize);
@@ -87,7 +87,7 @@ public class OMultiFileSegment extends OSegment {
 			if (!file.open()) {
 				// LAST TIME THE FILE WAS NOT CLOSED IN SOFT WAY
 				OLogManager.instance().warn(this,
-						"Segment file " + OFileUtils.getPath(file.getName()) + " was not closed correctly last time. Checking segments...");
+						"segment file " + OFileUtils.getPath(file.getName()) + " was not closed correctly last time. Checking segments...");
 				OLogManager.instance().warn(this, "OK");
 			}
 	}
@@ -285,7 +285,7 @@ public class OMultiFileSegment extends OSegment {
 	private OFile createNewFile() throws IOException {
 		final int num = files.length - 1;
 
-		final OFile file = OFileFactory.instance().create(type, storage.getStoragePath() + "/" + name + "." + num + fileExtension,
+		final OFile file = OFileFactory.instance().create(type, config.getLocation() + "/" + name + "." + num + fileExtension,
 				storage.getMode());
 		file.setMaxSize((int) OFileUtils.getSizeAsNumber(config.root.fileTemplate.fileMaxSize));
 		file.create(fileStartSize);

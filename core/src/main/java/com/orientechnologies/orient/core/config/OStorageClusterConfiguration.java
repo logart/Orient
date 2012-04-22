@@ -17,7 +17,11 @@ package com.orientechnologies.orient.core.config;
 
 public interface OStorageClusterConfiguration {
 
+	public int getId();
+
 	public String getName();
 
-	public int getId();
+	public String getLocation();
+
+	public int getDataSegmentId();
 }

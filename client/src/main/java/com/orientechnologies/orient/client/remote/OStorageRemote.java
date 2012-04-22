@@ -65,6 +65,8 @@ import com.orientechnologies.orient.core.serialization.OSerializableStream;
 import com.orientechnologies.orient.core.serialization.serializer.record.string.ORecordSerializerStringAbstract;
 import com.orientechnologies.orient.core.serialization.serializer.stream.OStreamSerializerAnyStreamable;
 import com.orientechnologies.orient.core.storage.OCluster;
+import com.orientechnologies.orient.core.storage.ODataSegment;
+import com.orientechnologies.orient.core.storage.OPhysicalPosition;
 import com.orientechnologies.orient.core.storage.ORawBuffer;
 import com.orientechnologies.orient.core.storage.ORecordCallback;
 import com.orientechnologies.orient.core.storage.OStorage;
@@ -300,14 +302,19 @@ public class OStorageRemote extends OStorageAbstract {
 		}
 	}
 
-	public long createRecord(final ORecordId iRid, final byte[] iContent, final byte iRecordType, int iMode,
-			final ORecordCallback<Long> iCallback) {
+	public OPhysicalPosition createRecord(final int iDataSegmentId, final ORecordId iRid, final byte[] iContent,
+			final byte iRecordType, int iMode, final ORecordCallback<Long> iCallback) {
 		checkConnection();
+
+		final OPhysicalPosition ppos = new OPhysicalPosition(iDataSegmentId, -1, iRecordType);
 
 		do {
 			try {
 				final OChannelBinaryClient network = beginRequest(OChannelBinaryProtocol.REQUEST_RECORD_CREATE);
 				try {
+					if (network.getSrvProtocolVersion() >= 10)
+						// SEND THE DATA SEGMENT ID
+						network.writeInt(iDataSegmentId);
 					network.writeShort((short) iRid.clusterId);
 					network.writeBytes(iContent);
 					network.writeByte(iRecordType);
@@ -318,13 +325,18 @@ public class OStorageRemote extends OStorageAbstract {
 				}
 
 				if (iMode == 1)
-					return -1;
+					return ppos;
 
 				if (iCallback == null)
 					try {
 						beginResponse(network);
 						iRid.clusterPosition = network.readLong();
-						return iRid.clusterPosition;
+						ppos.clusterPosition = iRid.clusterPosition;
+						if (network.getSrvProtocolVersion() >= 11)
+							ppos.recordVersion = network.readInt();
+						else
+							ppos.recordVersion = 0;
+						return ppos;
 					} finally {
 						endResponse(network);
 					}
@@ -865,7 +877,8 @@ public class OStorageRemote extends OStorageAbstract {
 		return defaultClusterId;
 	}
 
-	public int addCluster(final String iClusterName, final OStorage.CLUSTER_TYPE iClusterType, final Object... iArguments) {
+	public int addCluster(final String iClusterType, final String iClusterName, final String iLocation,
+			final String iDataSegmentName, final Object... iArguments) {
 		checkConnection();
 
 		do {
@@ -876,19 +889,13 @@ public class OStorageRemote extends OStorageAbstract {
 
 					network.writeString(iClusterType.toString());
 					network.writeString(iClusterName);
+					if (network.getSrvProtocolVersion() >= 10 || iClusterType.equalsIgnoreCase("PHYSICAL"))
+						network.writeString(iLocation);
+					if (network.getSrvProtocolVersion() >= 10)
+						network.writeString(iDataSegmentName);
+					else
+						network.writeInt(-1);
 
-					switch (iClusterType) {
-					case PHYSICAL:
-						// FILE PATH + START SIZE
-						network.writeString(iArguments.length > 0 ? (String) iArguments[0] : "").writeInt(
-								iArguments.length > 0 ? (Integer) iArguments[1] : -1);
-						break;
-
-					case LOGICAL:
-						// PHY CLUSTER ID
-						network.writeInt(iArguments.length > 0 ? (Integer) iArguments[0] : -1);
-						break;
-					}
 				} finally {
 					endRequest(network);
 				}
@@ -918,7 +925,7 @@ public class OStorageRemote extends OStorageAbstract {
 			try {
 				OChannelBinaryClient network = null;
 				try {
-					network = beginRequest(OChannelBinaryProtocol.REQUEST_DATACLUSTER_REMOVE);
+					network = beginRequest(OChannelBinaryProtocol.REQUEST_DATACLUSTER_DROP);
 
 					network.writeShort((short) iClusterId);
 
@@ -958,7 +965,7 @@ public class OStorageRemote extends OStorageAbstract {
 		return addDataSegment(iDataSegmentName, null);
 	}
 
-	public int addDataSegment(final String iSegmentName, final String iSegmentFileName) {
+	public int addDataSegment(final String iSegmentName, final String iLocation) {
 		checkConnection();
 
 		do {
@@ -967,7 +974,7 @@ public class OStorageRemote extends OStorageAbstract {
 				try {
 					network = beginRequest(OChannelBinaryProtocol.REQUEST_DATASEGMENT_ADD);
 
-					network.writeString(iSegmentName).writeString(iSegmentFileName);
+					network.writeString(iSegmentName).writeString(iLocation);
 
 				} finally {
 					endRequest(network);
@@ -975,13 +982,41 @@ public class OStorageRemote extends OStorageAbstract {
 
 				try {
 					beginResponse(network);
-					return network.readShort();
+					return network.readInt();
 				} finally {
 					endResponse(network);
 				}
 
 			} catch (Exception e) {
 				handleException("Error on add new data segment", e);
+			}
+		} while (true);
+	}
+
+	public boolean dropDataSegment(final String iSegmentName) {
+		checkConnection();
+
+		do {
+			try {
+				OChannelBinaryClient network = null;
+				try {
+					network = beginRequest(OChannelBinaryProtocol.REQUEST_DATASEGMENT_DROP);
+
+					network.writeString(iSegmentName);
+
+				} finally {
+					endRequest(network);
+				}
+
+				try {
+					beginResponse(network);
+					return network.readByte() == 1;
+				} finally {
+					endResponse(network);
+				}
+
+			} catch (Exception e) {
+				handleException("Error on remove data segment", e);
 			}
 		} while (true);
 	}
@@ -1517,5 +1552,16 @@ public class OStorageRemote extends OStorageAbstract {
 
 	public String getClientId() {
 		return clientId;
+	}
+
+	public int getDataSegmentIdByName(final String iName) {
+		if (iName == null)
+			return 0;
+
+		throw new UnsupportedOperationException("getDataSegmentIdByName()");
+	}
+
+	public ODataSegment getDataSegmentById(final int iDataSegmentId) {
+		throw new UnsupportedOperationException("getDataSegmentById()");
 	}
 }

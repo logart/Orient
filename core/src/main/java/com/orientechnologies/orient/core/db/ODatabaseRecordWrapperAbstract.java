@@ -69,27 +69,14 @@ public abstract class ODatabaseRecordWrapperAbstract<DB extends ODatabaseRecord>
 		super.drop();
 	}
 
-	public int addCluster(final String iClusterName, final CLUSTER_TYPE iType) {
+	public int addCluster(final String iType, final String iClusterName, final String iLocation, final String iDataSegmentName,
+			final Object... iParameters) {
 		checkSecurity(ODatabaseSecurityResources.DATABASE, ORole.PERMISSION_UPDATE);
-		return super.addCluster(iClusterName, iType);
+		return super.addCluster(iType, iClusterName, iLocation, iDataSegmentName, iParameters);
 	}
 
-	@Override
-	public int addLogicalCluster(final String iClassName, final int iPhyClusterContainerId) {
-		checkSecurity(ODatabaseSecurityResources.DATABASE, ORole.PERMISSION_UPDATE);
-		return super.addLogicalCluster(iClassName, iPhyClusterContainerId);
-	}
-
-	@Override
-	public int addPhysicalCluster(final String iClusterName, final String iClusterFileName, final int iStartSize) {
-		checkSecurity(ODatabaseSecurityResources.DATABASE, ORole.PERMISSION_UPDATE);
-		return super.addPhysicalCluster(iClusterName, iClusterFileName, iStartSize);
-	}
-
-	@Override
-	public int addPhysicalCluster(final String iClusterName) {
-		checkSecurity(ODatabaseSecurityResources.DATABASE, ORole.PERMISSION_UPDATE);
-		return super.addPhysicalCluster(iClusterName);
+	public int addCluster(final String iClusterName, final CLUSTER_TYPE iType, final Object... iParameters) {
+		return super.addCluster(iType.toString(), iClusterName, null, null, iParameters);
 	}
 
 	@Override
@@ -106,9 +93,9 @@ public abstract class ODatabaseRecordWrapperAbstract<DB extends ODatabaseRecord>
 	}
 
 	@Override
-	public int addDataSegment(final String iSegmentName, final String iSegmentFileName) {
+	public int addDataSegment(final String iName, final String iLocation) {
 		checkSecurity(ODatabaseSecurityResources.DATABASE, ORole.PERMISSION_UPDATE);
-		return super.addDataSegment(iSegmentName, iSegmentFileName);
+		return super.addDataSegment(iName, iLocation);
 	}
 
 	public OTransaction getTransaction() {
@@ -318,6 +305,14 @@ public abstract class ODatabaseRecordWrapperAbstract<DB extends ODatabaseRecord>
 	public <DBTYPE extends ODatabaseComplex<?>> DBTYPE unregisterHook(final ORecordHook iHookImpl) {
 		underlying.unregisterHook(iHookImpl);
 		return (DBTYPE) this;
+	}
+
+	public ODataSegmentStrategy getDataSegmentStrategy() {
+		return underlying.getDataSegmentStrategy();
+	}
+
+	public void setDataSegmentStrategy(final ODataSegmentStrategy dataSegmentStrategy) {
+		underlying.setDataSegmentStrategy(dataSegmentStrategy);
 	}
 
 	protected void checkClusterBoundedToClass(int iClusterId) {

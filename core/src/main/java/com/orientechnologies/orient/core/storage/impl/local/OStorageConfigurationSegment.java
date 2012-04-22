@@ -31,9 +31,9 @@ public class OStorageConfigurationSegment extends OStorageConfiguration {
 	private static final int		START_SIZE	= 10000;
 	private OSingleFileSegment	segment;
 
-	public OStorageConfigurationSegment(final OStorageLocal iStorage, final String iPath) throws IOException {
+	public OStorageConfigurationSegment(final OStorageLocal iStorage) throws IOException {
 		super(iStorage);
-		segment = new OSingleFileSegment((OStorageLocal) storage, new OStorageFileConfiguration(null, iPath + "/database.ocf",
+		segment = new OSingleFileSegment((OStorageLocal) storage, new OStorageFileConfiguration(null, getDirectory() + "/database.ocf",
 				fileTemplate.fileType, fileTemplate.maxSize, fileTemplate.fileIncrementSize));
 	}
 
@@ -70,7 +70,7 @@ public class OStorageConfigurationSegment extends OStorageConfiguration {
 
 			fromStream(buffer);
 		} catch (Exception e) {
-			throw new OSerializationException("Cannot load database's configuration. The database seems to be corrupted.");
+			throw new OSerializationException("Cannot load database's configuration. The database seems to be corrupted.", e);
 		}
 		return this;
 	}

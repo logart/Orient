@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Set;
 
 import com.orientechnologies.common.concur.lock.OLockManager.LOCK;
+import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.common.profiler.OProfiler;
 import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.config.OStorageConfiguration;
@@ -37,6 +38,7 @@ import com.orientechnologies.orient.core.hook.ORecordHook;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.storage.OCluster;
+import com.orientechnologies.orient.core.storage.ODataSegment;
 import com.orientechnologies.orient.core.storage.OPhysicalPosition;
 import com.orientechnologies.orient.core.storage.ORawBuffer;
 import com.orientechnologies.orient.core.storage.ORecordCallback;
@@ -58,9 +60,9 @@ import com.orientechnologies.orient.core.tx.OTxListener;
  * 
  */
 public class OStorageMemory extends OStorageEmbedded {
-	private final ODataSegmentMemory		data							= new ODataSegmentMemory();
-	private final List<OClusterMemory>	clusters					= new ArrayList<OClusterMemory>();
-	private int													defaultClusterId	= 0;
+	private final List<ODataSegmentMemory>	dataSegments			= new ArrayList<ODataSegmentMemory>();
+	private final List<OClusterMemory>			clusters					= new ArrayList<OClusterMemory>();
+	private int															defaultClusterId	= 0;
 
 	public OStorageMemory(final String iURL) {
 		super(iURL, OEngineMemory.NAME + ":" + iURL, "rw");
@@ -76,13 +78,13 @@ public class OStorageMemory extends OStorageEmbedded {
 			addDataSegment(OStorage.DATA_DEFAULT_NAME);
 
 			// ADD THE METADATA CLUSTER TO STORE INTERNAL STUFF
-			addCluster(OStorage.CLUSTER_INTERNAL_NAME, null);
+			addCluster(CLUSTER_TYPE.PHYSICAL.toString(), OStorage.CLUSTER_INTERNAL_NAME, null, null);
 
 			// ADD THE INDEX CLUSTER TO STORE, BY DEFAULT, ALL THE RECORDS OF INDEXING
-			addCluster(OStorage.CLUSTER_INDEX_NAME, null);
+			addCluster(CLUSTER_TYPE.PHYSICAL.toString(), OStorage.CLUSTER_INDEX_NAME, null, null);
 
 			// ADD THE DEFAULT CLUSTER
-			defaultClusterId = addCluster(OStorage.CLUSTER_DEFAULT_NAME, null);
+			defaultClusterId = addCluster(CLUSTER_TYPE.PHYSICAL.toString(), OStorage.CLUSTER_DEFAULT_NAME, null, null);
 
 			configuration.create();
 
@@ -137,8 +139,12 @@ public class OStorageMemory extends OStorageEmbedded {
 					c.close();
 			clusters.clear();
 
-			// CLOSE THE DATA SEGMENT
-			data.close();
+			// CLOSE THE DATA SEGMENTS
+			for (ODataSegmentMemory d : dataSegments)
+				if (d != null)
+					d.close();
+			dataSegments.clear();
+
 			level2Cache.shutdown();
 
 			super.close(iForce);
@@ -158,7 +164,8 @@ public class OStorageMemory extends OStorageEmbedded {
 	public void reload() {
 	}
 
-	public int addCluster(final String iClusterName, final OStorage.CLUSTER_TYPE iClusterType, final Object... iParameters) {
+	public int addCluster(final String iClusterType, final String iClusterName, final String iLocation,
+			final String iDataSegmentName, final Object... iParameters) {
 		lock.acquireExclusiveLock();
 		try {
 			int clusterId = clusters.size();
@@ -169,7 +176,9 @@ public class OStorageMemory extends OStorageEmbedded {
 				}
 			}
 
-			final OClusterMemory cluster = new OClusterMemory(clusterId, iClusterName.toLowerCase());
+			final OClusterMemory cluster = new OClusterMemory();
+			cluster.configure(this, clusterId, iClusterName.toLowerCase(), iLocation, getDataSegmentIdByName(iDataSegmentName),
+					iParameters);
 
 			if (clusterId == clusters.size())
 				// APPEND IT
@@ -205,27 +214,66 @@ public class OStorageMemory extends OStorageEmbedded {
 		return false;
 	}
 
-	public int addDataSegment(final String iDataSegmentName) {
-		// UNIQUE DATASEGMENT
-		return 0;
+	public boolean dropDataSegment(final String iName) {
+		lock.acquireExclusiveLock();
+		try {
+
+			final int id = getDataSegmentIdByName(iName);
+			final ODataSegment data = dataSegments.get(id);
+			if (data == null)
+				return false;
+
+			data.drop();
+
+			dataSegments.set(id, null);
+
+			// UPDATE CONFIGURATION
+			configuration.dropCluster(id);
+
+			return true;
+		} catch (Exception e) {
+			OLogManager.instance().exception("Error while removing data segment '" + iName + "'", e, OStorageException.class);
+
+		} finally {
+			lock.releaseExclusiveLock();
+		}
+
+		return false;
 	}
 
-	public int addDataSegment(final String iSegmentName, final String iSegmentFileName) {
+	public int addDataSegment(final String iDataSegmentName) {
+		lock.acquireExclusiveLock();
+		try {
+
+			dataSegments.add(new ODataSegmentMemory(iDataSegmentName, dataSegments.size()));
+			return dataSegments.size() - 1;
+
+		} finally {
+			lock.releaseExclusiveLock();
+		}
+	}
+
+	public int addDataSegment(final String iSegmentName, final String iLocation) {
 		return addDataSegment(iSegmentName);
 	}
 
-	public long createRecord(final ORecordId iRid, final byte[] iContent, final byte iRecordType, final int iMode,
-			ORecordCallback<Long> iCallback) {
+	public OPhysicalPosition createRecord(final int iDataSegmentId, final ORecordId iRid, final byte[] iContent,
+			final byte iRecordType, final int iMode, ORecordCallback<Long> iCallback) {
 		final long timer = OProfiler.getInstance().startChrono();
 
 		lock.acquireSharedLock();
 		try {
+			final ODataSegmentMemory data = (ODataSegmentMemory) getDataSegmentById(iDataSegmentId);
 
 			final long offset = data.createRecord(iContent);
 			final OCluster cluster = getClusterById(iRid.clusterId);
 
-			iRid.clusterPosition = cluster.addPhysicalPosition(0, offset, iRecordType);
-			return iRid.clusterPosition;
+			// ASSIGN THE POSITION IN THE CLUSTER
+			final OPhysicalPosition ppos = new OPhysicalPosition(iDataSegmentId, offset, iRecordType);
+			cluster.addPhysicalPosition(ppos);
+			iRid.clusterPosition = ppos.clusterPosition;
+
+			return ppos;
 		} catch (IOException e) {
 			throw new OStorageException("Error on create record in cluster: " + iRid.clusterId, e);
 
@@ -254,12 +302,14 @@ public class OStorageMemory extends OStorageEmbedded {
 						+ iClusterSegment.getName() + "' is 0-" + lastPos);
 
 			try {
-				final OPhysicalPosition ppos = iClusterSegment.getPhysicalPosition(iRid.clusterPosition, new OPhysicalPosition());
+				final OPhysicalPosition ppos = iClusterSegment.getPhysicalPosition(new OPhysicalPosition(iRid.clusterPosition));
 
 				if (ppos == null)
 					return null;
 
-				return new ORawBuffer(data.readRecord(ppos.dataChunkPosition), ppos.version, ppos.type);
+				final ODataSegmentMemory dataSegment = (ODataSegmentMemory) getDataSegmentById(ppos.dataSegmentId);
+
+				return new ORawBuffer(dataSegment.readRecord(ppos.dataSegmentPos), ppos.recordVersion, ppos.recordType);
 
 			} finally {
 				lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.SHARED);
@@ -285,28 +335,29 @@ public class OStorageMemory extends OStorageEmbedded {
 			lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
 			try {
 
-				final OPhysicalPosition ppos = cluster.getPhysicalPosition(iRid.clusterPosition, new OPhysicalPosition());
+				final OPhysicalPosition ppos = cluster.getPhysicalPosition(new OPhysicalPosition(iRid.clusterPosition));
 				if (ppos == null)
 					return -1;
 
 				if (iVersion != -1) {
 					if (iVersion > -1) {
 						// MVCC TRANSACTION: CHECK IF VERSION IS THE SAME
-						if (iVersion != ppos.version)
+						if (iVersion != ppos.recordVersion)
 							throw new OConcurrentModificationException(
 									"Cannot update record "
 											+ iRid
 											+ " because the version is not the latest. Probably you are updating an old record or it has been modified by another user (db=v"
-											+ ppos.version + " your=v" + iVersion + ")", iRid, ppos.version, iVersion);
+											+ ppos.recordVersion + " your=v" + iVersion + ")", iRid, ppos.recordVersion, iVersion);
 
-						++ppos.version;
+						++ppos.recordVersion;
 					} else
-						--ppos.version;
+						--ppos.recordVersion;
 				}
 
-				data.updateRecord(ppos.dataChunkPosition, iContent);
+				final ODataSegmentMemory dataSegment = (ODataSegmentMemory) getDataSegmentById(ppos.dataSegmentId);
+				dataSegment.updateRecord(ppos.dataSegmentPos, iContent);
 
-				return ppos.version;
+				return ppos.recordVersion;
 
 			} finally {
 				lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
@@ -331,21 +382,23 @@ public class OStorageMemory extends OStorageEmbedded {
 			lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
 			try {
 
-				final OPhysicalPosition ppos = cluster.getPhysicalPosition(iRid.clusterPosition, new OPhysicalPosition());
+				final OPhysicalPosition ppos = cluster.getPhysicalPosition(new OPhysicalPosition(iRid.clusterPosition));
 
 				if (ppos == null)
 					return false;
 
 				// MVCC TRANSACTION: CHECK IF VERSION IS THE SAME
-				if (iVersion > -1 && ppos.version != iVersion)
+				if (iVersion > -1 && ppos.recordVersion != iVersion)
 					throw new OConcurrentModificationException(
 							"Cannot delete record "
 									+ iRid
 									+ " because the version is not the latest. Probably you are deleting an old record or it has been modified by another user (db=v"
-									+ ppos.version + " your=v" + iVersion + ")", iRid, ppos.version, iVersion);
+									+ ppos.recordVersion + " your=v" + iVersion + ")", iRid, ppos.recordVersion, iVersion);
 
-				cluster.removePhysicalPosition(iRid.clusterPosition, null);
-				data.deleteRecord(ppos.dataChunkPosition);
+				cluster.removePhysicalPosition(iRid.clusterPosition);
+
+				final ODataSegmentMemory dataSegment = (ODataSegmentMemory) getDataSegmentById(ppos.dataSegmentId);
+				dataSegment.deleteRecord(ppos.dataSegmentPos);
 
 				return true;
 
@@ -526,6 +579,38 @@ public class OStorageMemory extends OStorageEmbedded {
 		}
 	}
 
+	public ODataSegment getDataSegmentById(int iDataId) {
+		lock.acquireSharedLock();
+		try {
+
+			if (iDataId < 0 || iDataId > dataSegments.size() - 1)
+				throw new IllegalArgumentException("Invalid data segment id " + iDataId + ". Range is 0-" + (dataSegments.size() - 1));
+
+			return dataSegments.get(iDataId);
+
+		} finally {
+			lock.releaseSharedLock();
+		}
+	}
+
+	public int getDataSegmentIdByName(final String iDataSegmentName) {
+		if (iDataSegmentName == null)
+			return 0;
+
+		lock.acquireSharedLock();
+		try {
+
+			for (ODataSegmentMemory d : dataSegments)
+				if (d.getName().equalsIgnoreCase(iDataSegmentName))
+					return d.getId();
+
+			throw new IllegalArgumentException("Data segment '" + iDataSegmentName + "' does not exist in storage '" + name + "'");
+
+		} finally {
+			lock.releaseSharedLock();
+		}
+	}
+
 	public OCluster getClusterById(int iClusterId) {
 		lock.acquireSharedLock();
 		try {
@@ -572,11 +657,9 @@ public class OStorageMemory extends OStorageEmbedded {
 
 		lock.acquireSharedLock();
 		try {
-			size += data.getSize();
-
-			for (OClusterMemory c : clusters)
-				if (c != null)
-					size += c.getSize();
+			for (ODataSegmentMemory d : dataSegments)
+				if (d != null)
+					size += d.getSize();
 
 		} finally {
 			lock.releaseSharedLock();
@@ -591,8 +674,8 @@ public class OStorageMemory extends OStorageEmbedded {
 
 		lock.acquireSharedLock();
 		try {
-
-			if (ppos.dataChunkPosition >= data.count())
+			final ODataSegmentMemory dataSegment = (ODataSegmentMemory) getDataSegmentById(ppos.dataSegmentId);
+			if (ppos.dataSegmentPos >= dataSegment.count())
 				return false;
 
 		} finally {
@@ -625,8 +708,10 @@ public class OStorageMemory extends OStorageEmbedded {
 						// RECORD CHANGED: RE-STREAM IT
 						stream = txEntry.getRecord().toStream();
 
-				  txEntry.getRecord().onBeforeIdentityChanged(rid);
-					createRecord(rid, stream, txEntry.getRecord().getRecordType(), 0, null);
+					txEntry.getRecord().onBeforeIdentityChanged(rid);
+					final OPhysicalPosition ppos = createRecord(txEntry.dataSegmentId, rid, stream, txEntry.getRecord().getRecordType(), 0,
+							null);
+					txEntry.getRecord().setVersion(ppos.recordVersion);
 					txEntry.getRecord().onAfterIdentityChanged(txEntry.getRecord());
 
 					iTx.getDatabase().callbackHooks(ORecordHook.TYPE.AFTER_CREATE, txEntry.getRecord());

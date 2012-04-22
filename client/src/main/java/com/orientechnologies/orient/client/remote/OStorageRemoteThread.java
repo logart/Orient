@@ -30,6 +30,7 @@ import com.orientechnologies.orient.core.config.OStorageConfiguration;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.OCluster;
+import com.orientechnologies.orient.core.storage.ODataSegment;
 import com.orientechnologies.orient.core.storage.OPhysicalPosition;
 import com.orientechnologies.orient.core.storage.ORawBuffer;
 import com.orientechnologies.orient.core.storage.ORecordCallback;
@@ -132,13 +133,14 @@ public class OStorageRemoteThread implements OStorage {
 		return delegate.getClusterNames();
 	}
 
-	public long createRecord(final ORecordId iRid, final byte[] iContent, final byte iRecordType, final int iMode,
-			ORecordCallback<Long> iCallback) {
+	public OPhysicalPosition createRecord(final int iDataSegmentId, final ORecordId iRid, final byte[] iContent,
+			final byte iRecordType, final int iMode, ORecordCallback<Long> iCallback) {
 		delegate.setSessionId(sessionId);
-		return delegate.createRecord(iRid, iContent, iRecordType, iMode, null);
+		return delegate.createRecord(iDataSegmentId, iRid, iContent, iRecordType, iMode, null);
 	}
 
-	public ORawBuffer readRecord(final ORecordId iRid, final String iFetchPlan, boolean iIgnoreCache, ORecordCallback<ORawBuffer> iCallback) {
+	public ORawBuffer readRecord(final ORecordId iRid, final String iFetchPlan, boolean iIgnoreCache,
+			ORecordCallback<ORawBuffer> iCallback) {
 		delegate.setSessionId(sessionId);
 		return delegate.readRecord(iRid, iFetchPlan, iIgnoreCache, null);
 	}
@@ -214,14 +216,23 @@ public class OStorageRemoteThread implements OStorage {
 		return delegate.getDefaultClusterId();
 	}
 
-	public int addCluster(final String iClusterName, final CLUSTER_TYPE iClusterType, final Object... iArguments) {
+	public int addCluster(final String iClusterType, final String iClusterName, final String iLocation,
+			final String iDataSegmentName, final Object... iArguments) {
 		delegate.setSessionId(sessionId);
-		return delegate.addCluster(iClusterName, iClusterType, iArguments);
+		return delegate.addCluster(iClusterType, iClusterName, iLocation, iDataSegmentName, iArguments);
 	}
 
 	public boolean dropCluster(final int iClusterId) {
 		delegate.setSessionId(sessionId);
 		return delegate.dropCluster(iClusterId);
+	}
+
+	public ODataSegment getDataSegmentById(final int iDataSegmentId) {
+		return delegate.getDataSegmentById(iDataSegmentId);
+	}
+
+	public int getDataSegmentIdByName(final String iDataSegmentName) {
+		return delegate.getDataSegmentIdByName(iDataSegmentName);
 	}
 
 	public int addDataSegment(final String iDataSegmentName) {
@@ -232,6 +243,11 @@ public class OStorageRemoteThread implements OStorage {
 	public int addDataSegment(final String iSegmentName, final String iSegmentFileName) {
 		delegate.setSessionId(sessionId);
 		return delegate.addDataSegment(iSegmentName, iSegmentFileName);
+	}
+
+	public boolean dropDataSegment(final String iSegmentName) {
+		delegate.setSessionId(sessionId);
+		return delegate.dropDataSegment(iSegmentName);
 	}
 
 	public void synch() {

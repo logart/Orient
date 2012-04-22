@@ -15,15 +15,22 @@
  */
 package com.orientechnologies.orient.core.storage.impl.memory;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 import com.orientechnologies.common.concur.resource.OSharedResourceAbstract;
+import com.orientechnologies.orient.core.storage.ODataSegment;
 
-public class ODataSegmentMemory extends OSharedResourceAbstract {
+public class ODataSegmentMemory extends OSharedResourceAbstract implements ODataSegment {
+	private final String				name;
+	private final int						id;
+
 	private final List<byte[]>	entries	= new ArrayList<byte[]>();
 
-	public ODataSegmentMemory() {
+	public ODataSegmentMemory(final String iDataSegmentName, int iId) {
+		name = iDataSegmentName;
+		id = iId;
 	}
 
 	public void close() {
@@ -35,6 +42,10 @@ public class ODataSegmentMemory extends OSharedResourceAbstract {
 		} finally {
 			releaseExclusiveLock();
 		}
+	}
+
+	public void drop() throws IOException {
+		close();
 	}
 
 	public int count() {
@@ -107,5 +118,13 @@ public class ODataSegmentMemory extends OSharedResourceAbstract {
 		} finally {
 			releaseExclusiveLock();
 		}
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public int getId() {
+		return id;
 	}
 }

@@ -117,6 +117,11 @@ public interface ODatabase {
 	public STATUS getStatus();
 
 	/**
+	 * Returns the total size of database as the real used space.
+	 */
+	public long getSize();
+
+	/**
 	 * Returns the current status of database.
 	 */
 	public <DB extends ODatabase> DB setStatus(STATUS iStatus);
@@ -156,6 +161,17 @@ public interface ODatabase {
 	 * @return Current cache.
 	 */
 	public OLevel2RecordCache getLevel2Cache();
+
+	/**
+	 * Returns the data segment id by name.
+	 * 
+	 * @param iDataSegmentName
+	 *          Data segment name
+	 * @return The id of searched data segment.
+	 */
+	public int getDataSegmentIdByName(String iDataSegmentName);
+
+	public String getDataSegmentNameById(int dataSegmentId);
 
 	/**
 	 * Returns the default cluster id. If not specified all the new entities will be stored in the default cluster.
@@ -257,22 +273,34 @@ public interface ODatabase {
 	 */
 	public long countClusterElements(String iClusterName);
 
-	public int addCluster(String iClusterName, CLUSTER_TYPE iType);
-
 	/**
-	 * Adds a logical cluster. Logical clusters don't need separate files since are stored inside a OMVRBTree instance. Access is
-	 * slower than the physical cluster but the database size is reduced and less files are requires. This matters in some OS where a
-	 * single process has limitation for the number of files can open. Most accessed entities should be stored inside a physical
-	 * cluster.
+	 * Adds a new cluster.
 	 * 
 	 * @param iClusterName
 	 *          Cluster name
-	 * @param iPhyClusterContainerId
-	 *          Physical cluster where to store all the entities of this logical cluster
+	 * @param iType
+	 *          Cluster type between the defined ones
+	 * @param iParameters
+	 *          Additional parameters to pass to the factories
 	 * @return Cluster id
 	 */
-	@Deprecated
-	public int addLogicalCluster(String iClusterName, int iPhyClusterContainerId);
+	public int addCluster(String iClusterName, CLUSTER_TYPE iType, Object... iParameters);
+
+	/**
+	 * Adds a new cluster.
+	 * 
+	 * @param iType
+	 *          Cluster type between the defined ones
+	 * @param iClusterName
+	 *          Cluster name
+	 * @param iDataSegmentName
+	 *          Data segment where to store record of this cluster. null means 'default'
+	 * @param iParameters
+	 *          Additional parameters to pass to the factories
+	 * 
+	 * @return Cluster id
+	 */
+	public int addCluster(String iType, String iClusterName, String iLocation, final String iDataSegmentName, Object... iParameters);
 
 	/**
 	 * Adds a physical cluster. Physical clusters need separate files. Access is faster than the logical cluster but the database size
@@ -281,11 +309,15 @@ public interface ODatabase {
 	 * 
 	 * @param iClusterName
 	 *          Cluster name
-	 * @param iPhyClusterContainerId
-	 *          Physical cluster where to store all the entities of this logical cluster
+	 * @param iLocation
+	 *          Location where to put the cluster
+	 * @param iStartSize
+	 *          This is not used anymore
 	 * @return Cluster id
+	 * @deprecated use the more generic addCluster that uses the cluster factory
 	 */
-	public int addPhysicalCluster(String iClusterName, String iClusterFileName, int iStartSize);
+	@Deprecated
+	public int addPhysicalCluster(String iClusterName, String iLocation, int iStartSize);
 
 	/**
 	 * 
@@ -305,9 +337,19 @@ public interface ODatabase {
 	public boolean dropCluster(int iClusterId);
 
 	/**
-	 * Internal. Adds a data segment where to store record content.
+	 * Adds a data segment where to store record content. Data segments contain the content of records. Cluster segments contain the
+	 * pointer to them.
 	 */
-	public int addDataSegment(String iSegmentName, String iSegmentFileName);
+	public int addDataSegment(String iSegmentName, String iLocation);
+
+	/**
+	 * Drop a data segment and all the contained data.
+	 * 
+	 * @param data
+	 *          segment name
+	 * @return true if the segment has been removed, otherwise false
+	 */
+	public boolean dropDataSegment(String name);
 
 	/**
 	 * Sets a property value

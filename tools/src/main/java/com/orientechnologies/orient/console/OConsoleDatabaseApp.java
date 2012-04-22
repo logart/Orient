@@ -83,7 +83,6 @@ import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.OStorageEmbedded;
 import com.orientechnologies.orient.core.storage.impl.local.ODataHoleInfo;
 import com.orientechnologies.orient.core.storage.impl.local.OStorageLocal;
-import com.orientechnologies.orient.core.storage.impl.memory.OStorageMemory;
 import com.orientechnologies.orient.enterprise.command.OCommandExecutorScript;
 
 public class OConsoleDatabaseApp extends OrientConsole implements OCommandOutputListener, OProgressListener {
@@ -270,24 +269,43 @@ public class OConsoleDatabaseApp extends OrientConsole implements OCommandOutput
 		out.println("\nDone.");
 	}
 
-	@SuppressWarnings("deprecation")
+	@ConsoleCommand(description = "Create a new data-segment in the current database.")
+	public void createDatasegment(
+			@ConsoleParameter(name = "datasegment-name", description = "The name of the data segment to create") final String iName,
+			@ConsoleParameter(name = "datasegment-location", description = "The directory where to place the files", optional = true) final String iLocation) {
+		checkCurrentDatabase();
+
+		if (iLocation != null)
+			out.println("Creating data-segment [" + iName + "] in database " + currentDatabaseName + " in path: " + iLocation + "...");
+		else
+			out.println("Creating data-segment [" + iName + "] in database directory...");
+
+		currentDatabase.addDataSegment(iName, iLocation);
+
+		updateDatabaseInfo();
+	}
+
 	@ConsoleCommand(description = "Create a new cluster in the current database. The cluster can be physical or logical")
 	public void createCluster(
 			@ConsoleParameter(name = "cluster-name", description = "The name of the cluster to create") String iClusterName,
-			@ConsoleParameter(name = "cluster-type", description = "Cluster type: 'physical' or 'logical'") String iClusterType,
+			@ConsoleParameter(name = "cluster-type", description = "Cluster type: 'physical' or 'memory'") String iClusterType,
+			@ConsoleParameter(name = "data-segment", description = "Data segment to use. 'default' will use the default one") String iDataSegmentName,
+			@ConsoleParameter(name = "location", description = "Location where to place the new cluster files, if appliable. use 'default' to leave into the database directory") String iLocation,
 			@ConsoleParameter(name = "position", description = "cluster id to replace, an empty position or 'append' to append at the end") String iPosition) {
 		checkCurrentDatabase();
 
 		final int position = iPosition.toLowerCase().equals("append") ? -1 : Integer.parseInt(iPosition);
+		if ("default".equalsIgnoreCase(iLocation))
+			iLocation = null;
 
 		out.println("Creating cluster [" + iClusterName + "] of type '" + iClusterType + "' in database " + currentDatabaseName
 				+ (position == -1 ? " as last one" : " in place of #" + position) + "...");
 
-		int clusterId = iClusterType.equalsIgnoreCase("physical") ? currentDatabase.addPhysicalCluster(iClusterName, iClusterName, -1)
-				: currentDatabase.addLogicalCluster(iClusterName, currentDatabase.getClusterIdByName(OStorage.CLUSTER_INTERNAL_NAME));
+		iClusterType = iClusterType.toUpperCase();
 
-		out.println((iClusterType.equalsIgnoreCase("physical") ? "Physical" : "Logical") + " cluster created correctly with id #"
-				+ clusterId);
+		int clusterId = currentDatabase.addCluster(iClusterType, iClusterName, iLocation, iDataSegmentName);
+
+		out.println(currentDatabase.getClusterType(iClusterName) + " cluster created correctly with id #" + clusterId);
 		updateDatabaseInfo();
 	}
 
@@ -1103,19 +1121,19 @@ public class OConsoleDatabaseApp extends OrientConsole implements OCommandOutput
 	}
 
 	@ConsoleCommand(description = "Check database integrity")
-	public void checkDatabase() throws IOException {
+	public void checkDatabase(@ConsoleParameter(name = "options", description = "Options: -v", optional = true) final String iOptions)
+			throws IOException {
 		checkCurrentDatabase();
 
-		if (currentDatabase.getStorage() instanceof OStorageRemote) {
-			out.println("Cannot check integrity of remote database. Connect to it using local mode.");
-			return;
-		} else if (currentDatabase.getStorage() instanceof OStorageMemory) {
-			out.println("Cannot check integrity of in-memory database.");
+		if (!(currentDatabase.getStorage() instanceof OStorageLocal)) {
+			out.println("Cannot check integrity of non-local database. Connect to it using local mode.");
 			return;
 		}
 
+		boolean verbose = iOptions != null && iOptions.indexOf("-v") > -1;
+
 		try {
-			((OStorageLocal) currentDatabase.getStorage()).check(this);
+			((OStorageLocal) currentDatabase.getStorage()).check(verbose, this);
 		} catch (ODatabaseImportException e) {
 			printError(e);
 		}

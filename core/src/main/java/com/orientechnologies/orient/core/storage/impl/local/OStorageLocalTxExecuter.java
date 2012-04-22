@@ -60,22 +60,23 @@ public class OStorageLocalTxExecuter {
 		txSegment.close();
 	}
 
-	protected long createRecord(final int iTxId, final OCluster iClusterSegment, final ORecordId iRid, final byte[] iContent,
-			final byte iRecordType) {
+	protected OPhysicalPosition createRecord(final int iTxId, final ODataLocal iDataSegment, final OCluster iClusterSegment,
+			final ORecordId iRid, final byte[] iContent, final byte iRecordType) {
 		iRid.clusterPosition = -1;
 
 		try {
-			storage.createRecord(iClusterSegment, iContent, iRecordType, iRid);
+			final OPhysicalPosition ppos = storage.createRecord(iDataSegment, iClusterSegment, iContent, iRecordType, iRid);
 
 			// SAVE INTO THE LOG THE POSITION OF THE RECORD JUST CREATED. IF TX FAILS AT THIS POINT A GHOST RECORD IS CREATED UNTIL DEFRAG
 			txSegment.addLog(OTxSegment.OPERATION_CREATE, iTxId, iRid.clusterId, iRid.clusterPosition, iRecordType, 0, null);
+
+			return ppos;
 		} catch (IOException e) {
 
 			OLogManager.instance().error(this, "Error on creating entry in log segment: " + iClusterSegment, e,
 					OTransactionException.class);
+			return null;
 		}
-
-		return iRid.clusterPosition;
 	}
 
 	/**
@@ -101,8 +102,8 @@ public class OStorageLocalTxExecuter {
 					buffer.buffer);
 
 			final OPhysicalPosition ppos = storage.updateRecord(iClusterSegment, iRid, iContent, iVersion, iRecordType);
-			if(ppos != null)
-				return ppos.version;
+			if (ppos != null)
+				return ppos.recordVersion;
 
 			return -1;
 
@@ -187,6 +188,7 @@ public class OStorageLocalTxExecuter {
 		}
 
 		final OCluster cluster = storage.getClusterById(rid.clusterId);
+		final ODataLocal dataSegment = storage.getDataSegmentById(txEntry.dataSegmentId);
 
 		if (cluster.getName().equals(OStorage.CLUSTER_INDEX_NAME))
 			// AVOID TO COMMIT INDEX STUFF
@@ -223,11 +225,15 @@ public class OStorageLocalTxExecuter {
 			}
 
 			if (rid.isNew()) {
+				final OPhysicalPosition ppos;
 				if (iUseLog)
-					rid.clusterPosition = createRecord(iTx.getId(), cluster, rid, stream, txEntry.getRecord().getRecordType());
+					ppos = createRecord(iTx.getId(), dataSegment, cluster, rid, stream, txEntry.getRecord().getRecordType());
 				else
-					rid.clusterPosition = iTx.getDatabase().getStorage()
-							.createRecord(rid, stream, txEntry.getRecord().getRecordType(), (byte) 0, null);
+					ppos = iTx.getDatabase().getStorage()
+							.createRecord(txEntry.dataSegmentId, rid, stream, txEntry.getRecord().getRecordType(), (byte) 0, null);
+
+				rid.clusterPosition = ppos.clusterPosition;
+				txEntry.getRecord().setVersion(ppos.recordVersion);
 
 				txEntry.getRecord().onAfterIdentityChanged(txEntry.getRecord());
 				iTx.getDatabase().callbackHooks(ORecordHook.TYPE.AFTER_CREATE, txEntry.getRecord());

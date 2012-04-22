@@ -42,6 +42,7 @@ import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.intent.OIntent;
 import com.orientechnologies.orient.core.storage.ORawBuffer;
 import com.orientechnologies.orient.core.storage.OStorage;
+import com.orientechnologies.orient.core.storage.OStorage.CLUSTER_TYPE;
 
 /**
  * Lower level ODatabase implementation. It's extended or wrapped by all the others.
@@ -225,14 +226,15 @@ public class ODatabaseRaw implements ODatabase {
 		}
 	}
 
-	public long save(final ORecordId iRid, final byte[] iContent, final int iVersion, final byte iRecordType, final int iMode) {
+	public int save(final int iDataSegmentId, final ORecordId iRid, final byte[] iContent, final int iVersion,
+			final byte iRecordType, final int iMode) {
 		// CHECK IF RECORD TYPE IS SUPPORTED
 		Orient.instance().getRecordFactoryManager().getRecordTypeClass(iRecordType);
 
 		try {
 			if (iRid.clusterPosition < 0) {
 				// CREATE
-				return storage.createRecord(iRid, iContent, iRecordType, iMode, null);
+				return storage.createRecord(iDataSegmentId, iRid, iContent, iRecordType, iMode, null).recordVersion;
 
 			} else {
 				// UPDATE
@@ -275,9 +277,12 @@ public class ODatabaseRaw implements ODatabase {
 		return url != null ? url : storage.getURL();
 	}
 
-	@Override
-	public void finalize() {
-		//close();
+	public int getDataSegmentIdByName(final String iDataSegmentName) {
+		return storage.getDataSegmentIdByName(iDataSegmentName);
+	}
+
+	public String getDataSegmentNameById(int dataSegmentId) {
+		return storage.getDataSegmentById(dataSegmentId).getName();
 	}
 
 	public int getClusters() {
@@ -320,16 +325,17 @@ public class ODatabaseRaw implements ODatabase {
 		return 0l;
 	}
 
-	public int addCluster(final String iClusterName, final OStorage.CLUSTER_TYPE iType) {
-		return storage.addCluster(iClusterName, iType);
+	public int addCluster(String iClusterName, CLUSTER_TYPE iType, Object... iParameters) {
+		return addCluster(iType.toString(), iClusterName, null, null, iParameters);
 	}
 
-	public int addLogicalCluster(final String iClusterName, final int iPhyClusterContainerId) {
-		return storage.addCluster(iClusterName, OStorage.CLUSTER_TYPE.LOGICAL, iPhyClusterContainerId);
+	public int addCluster(final String iType, final String iClusterName, final String iLocation, final String iDataSegmentName,
+			final Object... iParameters) {
+		return storage.addCluster(iType, iClusterName, iLocation, iDataSegmentName, iParameters);
 	}
 
-	public int addPhysicalCluster(final String iClusterName, final String iClusterFileName, final int iStartSize) {
-		return storage.addCluster(iClusterName, OStorage.CLUSTER_TYPE.PHYSICAL, iClusterFileName, iStartSize);
+	public int addPhysicalCluster(final String iClusterName, final String iLocation, final int iStartSize) {
+		return storage.addCluster(OStorage.CLUSTER_TYPE.PHYSICAL.toString(), iClusterName, null, null, iLocation, iStartSize);
 	}
 
 	public boolean dropCluster(final String iClusterName) {
@@ -340,8 +346,12 @@ public class ODatabaseRaw implements ODatabase {
 		return storage.dropCluster(iClusterId);
 	}
 
-	public int addDataSegment(final String iSegmentName, final String iSegmentFileName) {
-		return storage.addDataSegment(iSegmentName, iSegmentFileName);
+	public int addDataSegment(final String iSegmentName, final String iLocation) {
+		return storage.addDataSegment(iSegmentName, iLocation);
+	}
+
+	public boolean dropDataSegment(final String iName) {
+		return storage.dropDataSegment(iName);
 	}
 
 	public Collection<String> getClusterNames() {
@@ -504,5 +514,9 @@ public class ODatabaseRaw implements ODatabase {
 
 	protected boolean isClusterBoundedToClass(int iClusterId) {
 		return false;
+	}
+
+	public long getSize() {
+		return storage.getSize();
 	}
 }

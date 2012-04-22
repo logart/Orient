@@ -31,18 +31,25 @@ public class OStorageSegmentConfiguration implements Serializable {
 	public String														defrag						= "auto";
 
 	public OStorageFileConfiguration[]			infoFiles;
+	String																	location;
 
 	public OStorageSegmentConfiguration() {
 		infoFiles = new OStorageFileConfiguration[0];
 	}
 
-	public OStorageSegmentConfiguration(String iSegmentName) {
-		this(null, iSegmentName);
-	}
-
-	public OStorageSegmentConfiguration(OStorageConfiguration iRoot, String iSegmentName) {
+	public OStorageSegmentConfiguration(final OStorageConfiguration iRoot, final String iSegmentName, final int iId) {
 		root = iRoot;
 		name = iSegmentName;
+		id = iId;
+		infoFiles = new OStorageFileConfiguration[0];
+	}
+
+	public OStorageSegmentConfiguration(final OStorageConfiguration iRoot, final String iSegmentName, final int iId,
+			final String iDirectory) {
+		root = iRoot;
+		name = iSegmentName;
+		id = iId;
+		location = iDirectory;
 		infoFiles = new OStorageFileConfiguration[0];
 	}
 
@@ -50,5 +57,12 @@ public class OStorageSegmentConfiguration implements Serializable {
 		this.root = iRoot;
 		for (OStorageFileConfiguration f : infoFiles)
 			f.parent = this;
+	}
+
+	public String getLocation() {
+		if (location != null)
+			return location;
+
+		return root != null ? root.getDirectory() : null;
 	}
 }

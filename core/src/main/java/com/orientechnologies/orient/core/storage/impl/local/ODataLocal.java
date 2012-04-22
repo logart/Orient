@@ -29,6 +29,7 @@ import com.orientechnologies.orient.core.exception.OStorageException;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.serialization.OBinaryProtocol;
 import com.orientechnologies.orient.core.storage.OCluster;
+import com.orientechnologies.orient.core.storage.ODataSegment;
 import com.orientechnologies.orient.core.storage.OPhysicalPosition;
 import com.orientechnologies.orient.core.storage.fs.OFile;
 
@@ -43,7 +44,7 @@ import com.orientechnologies.orient.core.storage.fs.OFile;
  * +--------------+--------------+--------------+----------------------+<br/>
  * = 14+? bytes<br/>
  */
-public class ODataLocal extends OMultiFileSegment {
+public class ODataLocal extends OMultiFileSegment implements ODataSegment {
 	static final String							DEF_EXTENSION		= ".oda";
 	public static final int					RECORD_FIX_SIZE	= 14;
 	protected final int							id;
@@ -63,8 +64,8 @@ public class ODataLocal extends OMultiFileSegment {
 		super(iStorage, iConfig, DEF_EXTENSION, 0);
 		id = iId;
 
-		iConfig.holeFile = new OStorageDataHoleConfiguration(iConfig, OStorageVariableParser.DB_PATH_VARIABLE + "/" + name,
-				iConfig.fileType, iConfig.maxSize);
+		iConfig.holeFile = new OStorageDataHoleConfiguration(iConfig, iConfig.getLocation() + "/" + name, iConfig.fileType,
+				iConfig.maxSize);
 		holeSegment = new ODataLocalHole(iStorage, iConfig.holeFile);
 
 		defStartSize = OFileUtils.getSizeAsNumber(iConfig.fileStartSize);
@@ -105,6 +106,19 @@ public class ODataLocal extends OMultiFileSegment {
 		}
 	}
 
+	public void drop() throws IOException {
+		acquireExclusiveLock();
+		try {
+
+			close();
+			super.delete();
+			holeSegment.delete();
+
+		} finally {
+			releaseExclusiveLock();
+		}
+	}
+
 	@Override
 	public void close() throws IOException {
 		acquireExclusiveLock();
@@ -116,6 +130,11 @@ public class ODataLocal extends OMultiFileSegment {
 		} finally {
 			releaseExclusiveLock();
 		}
+	}
+
+	@Override
+	public long getSize() {
+		return super.getFilledUpTo();
 	}
 
 	/**
@@ -281,8 +300,6 @@ public class ODataLocal extends OMultiFileSegment {
 
 			final long[] pos = getRelativePosition(iPosition);
 			final OFile file = files[(int) pos[0]];
-			file.writeShort(pos[1] + OBinaryProtocol.SIZE_INT, (short) -1);
-			file.writeLong(pos[1] + OBinaryProtocol.SIZE_INT + OBinaryProtocol.SIZE_SHORT, -1);
 
 			final int recordSize = file.readInt(pos[1]);
 			handleHole(iPosition, recordSize);
@@ -382,6 +399,7 @@ public class ODataLocal extends OMultiFileSegment {
 				// IT'S CONSECUTIVE TO ANOTHER HOLE AT THE LEFT: UPDATE LAST ONE
 				holeSize += closestHole.size;
 				holeSegment.updateHole(closestHole, closestHole.dataOffset, holeSize);
+				holePositionOffset = closestHole.dataOffset;
 
 			} else if (holePositionOffset + holeSize == closestHole.dataOffset) {
 				// IT'S CONSECUTIVE TO ANOTHER HOLE AT THE RIGHT: UPDATE LAST ONE
@@ -534,14 +552,15 @@ public class ODataLocal extends OMultiFileSegment {
 		if (clusterId > -1) {
 			// CHANGE THE POINTMENT OF CLUSTER TO THE NEW POSITION. -1 MEANS TEMP RECORD
 			final OCluster cluster = storage.getClusterById(clusterId);
-			final OPhysicalPosition ppos = cluster.getPhysicalPosition(clusterPosition, new OPhysicalPosition());
 
-			if (ppos.dataChunkPosition != iSourcePosition)
+			final OPhysicalPosition ppos = cluster.getPhysicalPosition(new OPhysicalPosition(clusterPosition));
+
+			if (ppos.dataSegmentPos != iSourcePosition)
 				OLogManager.instance().warn(this,
 						"Found corrupted record hole for rid %d:%d: data position is wrong: %d <-> %d. Auto fixed by writing position %d",
-						clusterId, clusterPosition, ppos.dataChunkPosition, iSourcePosition, iDestinationPosition);
+						clusterId, clusterPosition, ppos.dataSegmentPos, iSourcePosition, iDestinationPosition);
 
-			cluster.setPhysicalPosition(clusterPosition, iDestinationPosition);
+			cluster.updateDataSegmentPosition(clusterPosition, id, iDestinationPosition);
 		}
 
 		writeRecord(getRelativePosition(iDestinationPosition), clusterId, clusterPosition, content);

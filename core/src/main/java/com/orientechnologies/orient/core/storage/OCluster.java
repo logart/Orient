@@ -17,6 +17,8 @@ package com.orientechnologies.orient.core.storage;
 
 import java.io.IOException;
 
+import com.orientechnologies.orient.core.config.OStorageClusterConfiguration;
+
 /**
  * Handle the table to resolve logical address to physical address.<br/>
  * <br/>
@@ -31,8 +33,13 @@ import java.io.IOException;
 public interface OCluster {
 
 	public static enum ATTRIBUTES {
-		NAME
+		NAME, DATASEGMENT
 	}
+
+	public void configure(OStorage iStorage, int iId, String iClusterName, final String iLocation, int iDataSegmentId,
+			Object... iParameters) throws IOException;
+
+	public void configure(OStorage iStorage, OStorageClusterConfiguration iConfig) throws IOException;
 
 	public void create(int iStartSize) throws IOException;
 
@@ -53,23 +60,25 @@ public interface OCluster {
 
 	public String getType();
 
+	public int getDataSegmentId();
+
 	/**
 	 * Adds a new entry.
 	 */
-	public long addPhysicalPosition(int iDataSegmentId, long iPosition, final byte iRecordType) throws IOException;
+	public void addPhysicalPosition(OPhysicalPosition iPPosition) throws IOException;
 
 	/**
 	 * Fills and return the PhysicalPosition object received as parameter with the physical position of logical record iPosition
 	 * 
 	 * @throws IOException
 	 */
-	public OPhysicalPosition getPhysicalPosition(long iPosition, OPhysicalPosition iPPosition) throws IOException;
+	public OPhysicalPosition getPhysicalPosition(OPhysicalPosition iPPosition) throws IOException;
 
 	/**
 	 * Updates position in data segment (usually on defrag).
 	 */
 
-	public void setPhysicalPosition(long iPosition, long iDataPosition) throws IOException;
+	public void updateDataSegmentPosition(long iPosition, int iDataSegmentId, long iDataPosition) throws IOException;
 
 	/**
 	 * Changes the PhysicalPosition of the logical record iPosition.
@@ -77,13 +86,12 @@ public interface OCluster {
 	 * @param iVersion
 	 *          TODO
 	 */
-	public void setPhysicalPosition(long iPosition, int iDataSegment, long iDataPosition, final byte iRecordType, int iVersion)
-			throws IOException;
+	public void setPhysicalPosition(OPhysicalPosition iPPosition) throws IOException;
 
 	/**
 	 * Removes the Logical Position entry.
 	 */
-	public void removePhysicalPosition(long iPosition, OPhysicalPosition iPPosition) throws IOException;
+	public void removePhysicalPosition(long iPosition) throws IOException;
 
 	public void updateRecordType(long iPosition, final byte iRecordType) throws IOException;
 
@@ -116,18 +124,11 @@ public interface OCluster {
 	public String getName();
 
 	/**
-	 * Returns the size of the cluster in bytes.
+	 * Returns the size of the records contained in the cluster in bytes.
 	 * 
 	 * @return
 	 */
-	public long getSize();
-
-	/**
-	 * Returns the size of the record contained in the cluster in bytes.
-	 * 
-	 * @return
-	 */
-	public long getRecordsSize() throws IOException;
+	public long getRecordsSize();
 
 	public OClusterPositionIterator absoluteIterator();
 
