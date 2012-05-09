@@ -32,19 +32,23 @@ public interface OSecurity {
 
 	public OUser authenticate(String iUsername, String iUserPassword);
 
-	public OUser getUser(final String iUserName);
+	public OUser getUser(String iUserName);
 
-	public OUser createUser(final String iUserName, final String iUserPassword, final String[] iRoles);
+	public OUser createUser(String iUserName, String iUserPassword, String[] iRoles);
 
-	public ORole getRole(final String iRoleName);
+	public boolean dropUser(String iUserName);
 
-	public ORole createRole(final String iRoleName, final ORole.ALLOW_MODES iAllowMode);
+	public ORole getRole(String iRoleName);
 
-	public ORole createRole(final String iRoleName, final ORole iParent, final ORole.ALLOW_MODES iAllowMode);
+	public ORole createRole(String iRoleName, ORole.ALLOW_MODES iAllowMode);
 
-	public List<ODocument> getUsers();
+	public ORole createRole(String iRoleName, ORole iParent, ORole.ALLOW_MODES iAllowMode);
 
-	public List<ODocument> getRoles();
+	public boolean dropRole(String iRoleName);
+
+	public List<ODocument> getAllUsers();
+
+	public List<ODocument> getAllRoles();
 
 	public OUser repair();
 

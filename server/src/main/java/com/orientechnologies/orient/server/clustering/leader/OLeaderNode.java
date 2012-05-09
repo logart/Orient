@@ -50,243 +50,260 @@ import com.orientechnologies.orient.server.handler.distributed.ODistributedServe
  * 
  */
 public class OLeaderNode {
-	private ODistributedServerManager						manager;
-	private final HashMap<String, ORemotePeer>	nodes										= new LinkedHashMap<String, ORemotePeer>();	;
-	private ODocument														clusterDbConfigurations	= new ODocument();
-	private ODiscoveryListener									discoveryListener;
-	private OClusterLogger											logger									= new OClusterLogger();
-	private OPeerCheckerTask										peerCheckerTask;
+  private ODistributedServerManager          manager;
+  private final HashMap<String, ORemotePeer> nodes                   = new LinkedHashMap<String, ORemotePeer>(); ;
+  private ODocument                          clusterDbConfigurations = new ODocument();
+  private ODiscoveryListener                 discoveryListener;
+  private OClusterLogger                     logger                  = new OClusterLogger();
+  private OPeerCheckerTask                   peerCheckerTask;
 
-	public OLeaderNode(final ODistributedServerManager iManager) {
-		this.manager = iManager;
+  public OLeaderNode(final ODistributedServerManager iManager) {
+    this.manager = iManager;
 
-		logger.log(this, Level.WARNING, TYPE.CLUSTER, DIRECTION.NONE, "current node is the new Leader Node of cluster '%s'",
-				iManager.getConfig().name);
+    logger.log(this, Level.WARNING, TYPE.CLUSTER, DIRECTION.NONE, "current node is the new Leader Node of cluster '%s'",
+        iManager.getConfig().name);
 
-		for (String db : OServerMain.server().getAvailableStorageNames().keySet()) {
-			try {
-				addServerInConfiguration(db, manager.getId(), "synch");
-			} catch (UnknownHostException e) {
-				e.printStackTrace();
-			}
-		}
+    for (String db : OServerMain.server().getAvailableStorageNames().keySet()) {
+      try {
+        addServerInConfiguration(db, manager.getId(), "synch");
+      } catch (UnknownHostException e) {
+        e.printStackTrace();
+      }
+    }
 
-		discoveryListener = new ODiscoveryListener(manager, manager.getDistributedNetworkListener());
+    discoveryListener = new ODiscoveryListener(manager, manager.getDistributedNetworkListener());
 
-		// START HEARTBEAT FOR CONNECTIONS
-		peerCheckerTask = new OPeerCheckerTask(this);
-		Orient.getTimer().schedule(peerCheckerTask, manager.getConfig().networkHeartbeatDelay,
-				manager.getConfig().networkHeartbeatDelay);
-	}
+    // START HEARTBEAT FOR CONNECTIONS
+    peerCheckerTask = new OPeerCheckerTask(this);
+    Orient.getTimer().schedule(peerCheckerTask, manager.getConfig().networkHeartbeatDelay,
+        manager.getConfig().networkHeartbeatDelay);
+  }
 
-	/**
-	 * Abandon leadership
-	 * 
-	 * @param iForce
-	 */
-	public void shutdown() {
-		synchronized (this) {
-			for (Entry<String, ORemotePeer> node : nodes.entrySet())
-				node.getValue().disconnect();
+  /**
+   * Abandon leadership
+   * 
+   * @param iForce
+   */
+  public void shutdown() {
+    synchronized (this) {
+      for (Entry<String, ORemotePeer> node : nodes.entrySet())
+        node.getValue().disconnect();
 
-			nodes.clear();
-			clusterDbConfigurations.clear();
+      nodes.clear();
+      clusterDbConfigurations.clear();
 
-			if (peerCheckerTask != null) {
-				peerCheckerTask.cancel();
-				peerCheckerTask = null;
-			}
+      if (peerCheckerTask != null) {
+        peerCheckerTask.cancel();
+        peerCheckerTask = null;
+      }
 
-			if (discoveryListener != null) {
-				discoveryListener.sendShutdown();
-				discoveryListener = null;
-			}
-		}
-	}
+      if (discoveryListener != null) {
+        discoveryListener.sendShutdown();
+        discoveryListener = null;
+      }
+    }
+  }
 
-	/**
-	 * Connects to a peer.
-	 * 
-	 * @param iServerAddresses
-	 *          Array of Server addresses where to connect. The order will be respected.
-	 * @param iServerPort
-	 *          Server port
-	 * @throws IOException
-	 * @throws InterruptedException
-	 */
-	public void connect2Peer(final String[] iServerAddresses, final int iServerPort) {
-		Throwable lastException = null;
+  /**
+   * Connects to a peer.
+   * 
+   * @param iServerAddresses
+   *          Array of Server addresses where to connect. The order will be respected.
+   * @param iServerPort
+   *          Server port
+   * @throws IOException
+   * @throws InterruptedException
+   */
+  public void connect2Peer(final String[] iServerAddresses, final int iServerPort) {
+    Throwable lastException = null;
 
-		if (OLogManager.instance().isDebugEnabled())
-			logger.log(this, Level.FINE, TYPE.CLUSTER, DIRECTION.NONE, "trying to connecting to peer %s:%d",
-					Arrays.toString(iServerAddresses), iServerPort);
+    if (OLogManager.instance().isDebugEnabled())
+      logger.log(this, Level.FINE, TYPE.CLUSTER, DIRECTION.NONE, "trying to connecting to peer %s:%d",
+          Arrays.toString(iServerAddresses), iServerPort);
 
-		for (String serverAddress : iServerAddresses) {
-			final String key = ODistributedServerManager.getNodeName(serverAddress, iServerPort);
-			final ORemotePeer node;
+    for (String serverAddress : iServerAddresses) {
+      final String key = ODistributedServerManager.getNodeName(serverAddress, iServerPort);
+      final ORemotePeer node;
 
-			synchronized (this) {
-				if (nodes.containsKey(key)) {
-					// ALREADY REGISTERED, MAYBE IT WAS DISCONNECTED
-					node = nodes.get(key);
+      synchronized (this) {
+        if (nodes.containsKey(key)) {
+          // ALREADY REGISTERED, MAYBE IT WAS DISCONNECTED
+          node = nodes.get(key);
 
-					logger.log(this, Level.FINE, TYPE.CLUSTER, DIRECTION.NONE, "peer %s already registered. Now has status: %s", key,
-							node.getStatus());
+          logger.log(this, Level.FINE, TYPE.CLUSTER, DIRECTION.NONE, "peer %s already registered. Now has status: %s", key,
+              node.getStatus());
 
-					if (node.getStatus() != ORemotePeer.STATUS.UNREACHABLE && node.getStatus() != ORemotePeer.STATUS.DISCONNECTED
-							&& node.checkConnection())
-						// CONNECTION OK
-						return;
-				} else
-					node = new ORemotePeer(this, serverAddress, iServerPort);
+          if (node.getStatus() != ORemotePeer.STATUS.UNREACHABLE && node.getStatus() != ORemotePeer.STATUS.DISCONNECTED
+              && node.checkConnection())
+            // CONNECTION OK
+            return;
+        } else
+          node = new ORemotePeer(this, serverAddress, iServerPort);
 
-				try {
-					if (node.connect(manager.getConfig().networkTimeoutNode, manager.getConfig().name, manager.getConfig().securityKey))
-						// CONNECTION OK: ADD IT IN THE NODE LIST
-						nodes.put(key, node);
+        try {
+          if (node.connect(manager.getConfig().networkTimeoutNode, manager.getConfig().name, manager.getConfig().securityKey))
+            // CONNECTION OK: ADD IT IN THE NODE LIST
+            nodes.put(key, node);
 
-					return;
+          return;
 
-				} catch (Exception e) {
-					lastException = e;
-				}
-			}
-		}
+        } catch (Exception e) {
+          lastException = e;
+        }
+      }
+    }
 
-		logger.error(this, TYPE.CLUSTER, DIRECTION.NONE, "cannot connect to distributed server node using addresses %s:%d and %s:%d",
-				lastException, null, iServerAddresses[0], iServerPort, iServerAddresses[1], iServerPort);
-	}
+    if (iServerAddresses.length > 1)
+      logger.error(this, TYPE.CLUSTER, DIRECTION.NONE, "cannot connect to distributed server node using addresses %s:%d and %s:%d",
+          lastException, null, iServerAddresses[0], iServerPort, iServerAddresses[1], iServerPort);
+    else
+      logger.error(this, TYPE.CLUSTER, DIRECTION.NONE, "cannot connect to distributed server node using addresses %s:%d",
+          lastException, null, iServerAddresses[0], iServerPort);
+  }
 
-	/**
-	 * Handles the failure of a node
-	 */
-	public void handlePeerNodeFailure(final ORemotePeer iNode) {
-		iNode.disconnect();
+  /**
+   * Handles the failure of a node
+   */
+  public void handlePeerNodeFailure(final ORemotePeer iNode) {
+    iNode.disconnect();
 
-		// ERROR
-		logger.log(this, Level.WARNING, TYPE.CLUSTER, DIRECTION.NONE, "peer node %s seems down, retrying to connect...", iNode.getId());
+    // ERROR
+    logger.log(this, Level.WARNING, TYPE.CLUSTER, DIRECTION.NONE, "peer node %s seems down, retrying to connect...", iNode.getId());
 
-		// RETRY TO CONNECT
-		try {
-			if (iNode.connect(manager.getConfig().networkTimeoutNode, manager.getConfig().name, manager.getConfig().securityKey))
-				return;
-		} catch (IOException e) {
-			// IO ERROR: THE NODE SEEMED ALWAYS MORE DOWN: START TO COLLECT DATA FOR IT WAITING FOR A FUTURE RE-CONNECTION
-			logger.log(this, Level.WARNING, TYPE.CLUSTER, DIRECTION.NONE,
-					"remote server node %s is down, set it as DISCONNECTED and start to buffer changes", iNode.getId());
-		}
+    // RETRY TO CONNECT
+    try {
+      if (iNode.connect(manager.getConfig().networkTimeoutNode, manager.getConfig().name, manager.getConfig().securityKey))
+        return;
+    } catch (IOException e) {
+      // IO ERROR: THE NODE SEEMED ALWAYS MORE DOWN: START TO COLLECT DATA FOR IT WAITING FOR A FUTURE RE-CONNECTION
+      logger.log(this, Level.WARNING, TYPE.CLUSTER, DIRECTION.NONE,
+          "remote server node %s is down, set it as DISCONNECTED and start to buffer changes", iNode.getId());
+    }
 
-		removePeer(iNode);
-	}
+    removePeer(iNode);
+  }
 
-	public List<ORemotePeer> getPeerNodeList() {
-		synchronized (this) {
+  public ORemotePeer getPeerNode(final String iName) {
+    synchronized (this) {
+      return nodes.get(iName);
+    }
+  }
 
-			if (nodes.isEmpty())
-				return null;
+  public List<ORemotePeer> getPeerNodeList() {
+    synchronized (this) {
 
-			return new ArrayList<ORemotePeer>(nodes.values());
-		}
-	}
+      if (nodes.isEmpty())
+        return null;
 
-	public ODocument updatePeerDatabases(final String iNodeId, final ODocument iConfiguration) throws UnknownHostException {
-		if (iConfiguration == null)
-			return null;
+      return new ArrayList<ORemotePeer>(nodes.values());
+    }
+  }
 
-		// RECEIVE AVAILABLE DATABASES
-		final ODocument answer = new ODocument();
+  public ODocument updatePeerDatabases(final String iNodeId, final ODocument iConfiguration) throws UnknownHostException {
+    if (iConfiguration == null)
+      return null;
 
-		for (String dbName : iConfiguration.fieldNames()) {
-			// UPDATE LEADER'S CONFIGURATION
-			manager.getLeader().addServerInConfiguration(dbName, iNodeId, "synch");
+    // RECEIVE AVAILABLE DATABASES
+    final ODocument answer = new ODocument();
 
-			// ANSWER WITH THE SERVER LIST THAT OWN THE REQUESTED DATABASES
-			answer.field(dbName, manager.getLeader().getClusteredConfigurationForDatabase(dbName));
-		}
+    for (String dbName : iConfiguration.fieldNames()) {
+      // UPDATE LEADER'S CONFIGURATION
+      manager.getLeader().addServerInConfiguration(dbName, iNodeId, "synch");
 
-		return answer;
-	}
+      // ANSWER WITH THE SERVER LIST THAT OWN THE REQUESTED DATABASES
+      answer.field(dbName, manager.getLeader().getClusteredConfigurationForDatabase(dbName));
+    }
 
-	/**
-	 * Returns the Peer Nodes that own a database.
-	 * 
-	 * @param iDatabaseName
-	 *          Database name to search
-	 * @return
-	 */
-	@SuppressWarnings("unchecked")
-	public List<ODocument> getPeerNodesOwnDatabase(final String iDatabaseName) {
-		final ODocument doc = clusterDbConfigurations.field(iDatabaseName);
-		return (List<ODocument>) (doc != null ? doc.field("nodes") : null);
-	}
+    return answer;
+  }
 
-	/**
-	 * Returns the clustered configuration of a database.
-	 * 
-	 * @param iDatabaseName
-	 *          Database name to search
-	 * @return
-	 */
-	public ODocument getClusteredConfigurationForDatabase(final String iDatabaseName) {
-		return clusterDbConfigurations.field(iDatabaseName);
-	}
+  /**
+   * Returns the Peer Nodes that own a database.
+   * 
+   * @param iDatabaseName
+   *          Database name to search
+   * @return
+   */
+  @SuppressWarnings("unchecked")
+  public List<ODocument> getPeerNodesOwnDatabase(final String iDatabaseName) {
+    final ODocument doc = clusterDbConfigurations.field(iDatabaseName);
+    return (List<ODocument>) (doc != null ? doc.field("nodes") : null);
+  }
 
-	public ODocument addServerInConfiguration(final String iDatabaseName, final String iNodeId, final String iReplicationMode)
-			throws UnknownHostException {
+  /**
+   * Returns the clustered configuration of a database.
+   * 
+   * @param iDatabaseName
+   *          Database name to search
+   * @return
+   */
+  public ODocument getClusteredConfigurationForDatabase(final String iDatabaseName) {
+    return clusterDbConfigurations.field(iDatabaseName);
+  }
 
-		ODocument dbConfiguration = clusterDbConfigurations.field(iDatabaseName);
+  /**
+   * Returns the global clustered configuration.
+   */
+  public ODocument getClusteredConfiguration() {
+    return clusterDbConfigurations;
+  }
 
-		final List<OIdentifiable> nodeList;
+  public ODocument addServerInConfiguration(final String iDatabaseName, final String iNodeId, final String iReplicationMode)
+      throws UnknownHostException {
 
-		if (dbConfiguration == null) {
-			dbConfiguration = new ODocument().addOwner(clusterDbConfigurations);
-			nodeList = new ORecordLazyList(dbConfiguration);
-			dbConfiguration.field("nodes", nodeList);
-			clusterDbConfigurations.field(iDatabaseName, dbConfiguration);
-		} else {
-			nodeList = dbConfiguration.field("nodes");
-			for (OIdentifiable d : nodeList) {
-				if (((ODocument) d).field("id").equals(iNodeId))
-					// ALREADY PRESENT
-					return (ODocument) d;
-			}
-		}
+    ODocument dbConfiguration = clusterDbConfigurations.field(iDatabaseName);
 
-		// ADD THE NODE TO THE LIST
-		final ODocument node = new ODocument().addOwner(dbConfiguration);
-		nodeList.add(node);
+    final List<OIdentifiable> nodeList;
 
-		node.field("id", iNodeId);
-		node.field("mode", iReplicationMode);
+    if (dbConfiguration == null) {
+      dbConfiguration = new ODocument().addOwner(clusterDbConfigurations);
+      nodeList = new ORecordLazyList(dbConfiguration);
+      dbConfiguration.field("nodes", nodeList);
+      clusterDbConfigurations.field(iDatabaseName, dbConfiguration);
+    } else {
+      nodeList = dbConfiguration.field("nodes");
+      for (OIdentifiable d : nodeList) {
+        if (((ODocument) d).field("id").equals(iNodeId))
+          // ALREADY PRESENT
+          return (ODocument) d;
+      }
+    }
 
-		manager.sendClusterConfigurationToClients(iDatabaseName, getClusteredConfigurationForDatabase(iDatabaseName));
+    // ADD THE NODE TO THE LIST
+    final ODocument node = new ODocument().addOwner(dbConfiguration);
+    nodeList.add(node);
 
-		return node;
-	}
+    node.field("id", iNodeId);
+    node.field("mode", iReplicationMode);
 
-	public ODistributedServerManager getManager() {
-		return manager;
-	}
+    manager.sendClusterConfigurationToClients(iDatabaseName, getClusteredConfigurationForDatabase(iDatabaseName));
 
-	/**
-	 * Remove the peer node from the node list and databases configuration.
-	 * 
-	 * @param iNode
-	 */
-	protected void removePeer(final ORemotePeer iNode) {
-		synchronized (this) {
-			nodes.remove(iNode.getId());
-			for (Object cfg : clusterDbConfigurations.fieldValues()) {
-				final List<ODocument> servers = ((ODocument) cfg).field("nodes");
-				for (ODocument server : servers) {
-					if (server.field("id").equals(iNode.getId())) {
-						servers.remove(server);
-						break;
-					}
-				}
-			}
-		}
+    return node;
+  }
 
-		logger.log(this, Level.WARNING, TYPE.CLUSTER, DIRECTION.NONE, "removed server node %s", iNode.getId());
-	}
+  public ODistributedServerManager getManager() {
+    return manager;
+  }
+
+  /**
+   * Remove the peer node from the node list and databases configuration.
+   * 
+   * @param iNode
+   */
+  public void removePeer(final ORemotePeer iNode) {
+    synchronized (this) {
+      nodes.remove(iNode.getId());
+      for (Object cfg : clusterDbConfigurations.fieldValues()) {
+        final List<ODocument> servers = ((ODocument) cfg).field("nodes");
+        for (ODocument server : servers) {
+          if (server.field("id").equals(iNode.getId())) {
+            servers.remove(server);
+            break;
+          }
+        }
+      }
+    }
+
+    logger.log(this, Level.WARNING, TYPE.CLUSTER, DIRECTION.NONE, "removed server node %s", iNode.getId());
+  }
 }

@@ -17,6 +17,8 @@ package com.orientechnologies.orient.core.sql;
 
 import java.util.Map;
 
+import com.orientechnologies.common.log.OLogManager;
+import com.orientechnologies.orient.core.command.OCommandRequest;
 import com.orientechnologies.orient.core.command.OCommandRequestText;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.exception.OCommandExecutionException;
@@ -35,88 +37,107 @@ import com.orientechnologies.orient.core.storage.OCluster;
  */
 @SuppressWarnings("unchecked")
 public class OCommandExecutorSQLDropClass extends OCommandExecutorSQLAbstract {
-	public static final String	KEYWORD_DROP	= "DROP";
-	public static final String	KEYWORD_CLASS	= "CLASS";
+  public static final String KEYWORD_DROP  = "DROP";
+  public static final String KEYWORD_CLASS = "CLASS";
 
-	private String							className;
+  private String             className;
 
-	public OCommandExecutorSQLDropClass parse(final OCommandRequestText iRequest) {
-		getDatabase().checkSecurity(ODatabaseSecurityResources.COMMAND, ORole.PERMISSION_DELETE);
+  public OCommandExecutorSQLDropClass parse(final OCommandRequest iRequest) {
+    getDatabase().checkSecurity(ODatabaseSecurityResources.COMMAND, ORole.PERMISSION_READ);
 
-		init(iRequest.getText());
+    init(((OCommandRequestText) iRequest).getText());
 
-		final StringBuilder word = new StringBuilder();
+    final StringBuilder word = new StringBuilder();
 
-		int oldPos = 0;
-		int pos = OSQLHelper.nextWord(text, textUpperCase, oldPos, word, true);
-		if (pos == -1 || !word.toString().equals(KEYWORD_DROP))
-			throw new OCommandSQLParsingException("Keyword " + KEYWORD_DROP + " not found. Use " + getSyntax(), text, oldPos);
+    int oldPos = 0;
+    int pos = OSQLHelper.nextWord(text, textUpperCase, oldPos, word, true);
+    if (pos == -1 || !word.toString().equals(KEYWORD_DROP))
+      throw new OCommandSQLParsingException("Keyword " + KEYWORD_DROP + " not found. Use " + getSyntax(), text, oldPos);
 
-		pos = OSQLHelper.nextWord(text, textUpperCase, pos, word, true);
-		if (pos == -1 || !word.toString().equals(KEYWORD_CLASS))
-			throw new OCommandSQLParsingException("Keyword " + KEYWORD_CLASS + " not found. Use " + getSyntax(), text, oldPos);
+    pos = OSQLHelper.nextWord(text, textUpperCase, pos, word, true);
+    if (pos == -1 || !word.toString().equals(KEYWORD_CLASS))
+      throw new OCommandSQLParsingException("Keyword " + KEYWORD_CLASS + " not found. Use " + getSyntax(), text, oldPos);
 
-		pos = OSQLHelper.nextWord(text, textUpperCase, pos, word, false);
-		if (pos == -1)
-			throw new OCommandSQLParsingException("Expected <class>. Use " + getSyntax(), text, pos);
+    pos = OSQLHelper.nextWord(text, textUpperCase, pos, word, false);
+    if (pos == -1)
+      throw new OCommandSQLParsingException("Expected <class>. Use " + getSyntax(), text, pos);
 
-		className = word.toString();
-		if (className == null)
-			throw new OCommandSQLParsingException("Class is null. Use " + getSyntax(), text, pos);
+    className = word.toString();
+    if (className == null)
+      throw new OCommandSQLParsingException("Class is null. Use " + getSyntax(), text, pos);
 
-		return this;
-	}
+    return this;
+  }
 
-	/**
-	 * Execute the DROP CLASS.
-	 */
-	public Object execute(final Map<Object, Object> iArgs) {
-		if (className == null)
-			throw new OCommandExecutionException("Cannot execute the command because it has not been parsed yet");
+  /**
+   * Execute the DROP CLASS.
+   */
+  public Object execute(final Map<Object, Object> iArgs) {
+    if (className == null)
+      throw new OCommandExecutionException("Cannot execute the command because it has not been parsed yet");
 
-		final ODatabaseRecord database = getDatabase();
-		final OClass oClass = database.getMetadata().getSchema().getClass(className);
-		if (oClass == null)
-			return null;
+    final ODatabaseRecord database = getDatabase();
+    final OClass oClass = database.getMetadata().getSchema().getClass(className);
+    if (oClass == null)
+      return null;
 
-		for (final OIndex<?> oIndex : oClass.getClassIndexes()) {
-			database.getMetadata().getIndexManager().dropIndex(oIndex.getName());
-		}
+    for (final OIndex<?> oIndex : oClass.getClassIndexes()) {
+      database.getMetadata().getIndexManager().dropIndex(oIndex.getName());
+    }
 
-		final int clusterId = oClass.getDefaultClusterId();
+    final OClass superClass = oClass.getSuperClass();
+    final int[] clustersToIndex = oClass.getPolymorphicClusterIds();
 
-		((OSchemaProxy) database.getMetadata().getSchema()).dropClassInternal(className);
-		((OSchemaProxy) database.getMetadata().getSchema()).saveInternal();
-		((OSchemaProxy) database.getMetadata().getSchema()).reload();
+    final String[] clusterNames = new String[clustersToIndex.length];
+    for (int i = 0; i < clustersToIndex.length; i++) {
+      clusterNames[i] = database.getClusterNameById(clustersToIndex[i]);
+    }
 
-		deleteDefaultCluster(clusterId);
+    final int clusterId = oClass.getDefaultClusterId();
 
-		return true;
-	}
+    ((OSchemaProxy) database.getMetadata().getSchema()).dropClassInternal(className);
+    ((OSchemaProxy) database.getMetadata().getSchema()).saveInternal();
+    database.getMetadata().getSchema().reload();
 
-	protected void deleteDefaultCluster(int clusterId) {
-		final ODatabaseRecord database = getDatabase();
-		OCluster cluster = database.getStorage().getClusterById(clusterId);
-		if (cluster.getName().equalsIgnoreCase(className)) {
-			if (isClusterDeletable(clusterId)) {
-				database.getStorage().dropCluster(clusterId);
-			}
-		}
-	}
+    deleteDefaultCluster(clusterId);
 
-	protected boolean isClusterDeletable(int clusterId) {
-		final ODatabaseRecord database = getDatabase();
-		for (OClass iClass : database.getMetadata().getSchema().getClasses()) {
-			for (int i : iClass.getClusterIds()) {
-				if (i == clusterId)
-					return false;
-			}
-		}
-		return true;
-	}
+    if (superClass == null)
+      return true;
 
-	@Override
-	public String getSyntax() {
-		return "DROP CLASS <class>";
-	}
+    for (final OIndex<?> oIndex : superClass.getIndexes()) {
+      for (final String clusterName : clusterNames)
+        oIndex.getInternal().removeCluster(clusterName);
+
+      OLogManager.instance().info("Index %s is used in super class of %s and should be rebuilt.", oIndex.getName(), className);
+      oIndex.rebuild();
+    }
+
+    return true;
+  }
+
+  protected void deleteDefaultCluster(int clusterId) {
+    final ODatabaseRecord database = getDatabase();
+    OCluster cluster = database.getStorage().getClusterById(clusterId);
+    if (cluster.getName().equalsIgnoreCase(className)) {
+      if (isClusterDeletable(clusterId)) {
+        database.getStorage().dropCluster(clusterId);
+      }
+    }
+  }
+
+  protected boolean isClusterDeletable(int clusterId) {
+    final ODatabaseRecord database = getDatabase();
+    for (OClass iClass : database.getMetadata().getSchema().getClasses()) {
+      for (int i : iClass.getClusterIds()) {
+        if (i == clusterId)
+          return false;
+      }
+    }
+    return true;
+  }
+
+  @Override
+  public String getSyntax() {
+    return "DROP CLASS <class>";
+  }
 }

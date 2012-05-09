@@ -17,6 +17,7 @@ package com.orientechnologies.orient.server.replication.conflict;
 
 import java.util.Map;
 
+import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.server.replication.ODistributedDatabaseInfo.SYNCH_TYPE;
 import com.orientechnologies.orient.server.replication.OReplicator;
@@ -29,12 +30,14 @@ import com.orientechnologies.orient.server.replication.OReplicator;
  */
 public interface OReplicationConflictResolver {
 
-	public abstract void config(final OReplicator iReplicator, Map<String, String> iConfig);
+  public abstract void config(final OReplicator iReplicator, Map<String, String> iConfig);
 
-	public void handleCreateConflict(byte iOperation, SYNCH_TYPE iRequestType, ORecordInternal<?> iRecord, long iOtherClusterPosition);
+  public abstract OIdentifiable searchForConflict(OIdentifiable iRecord);
 
-	public void handleUpdateConflict(byte iOperation, SYNCH_TYPE iRequestType, ORecordInternal<?> iRecord, int iCurrentVersion,
-			int iOtherVersion);
+  public void handleCreateConflict(byte iOperation, SYNCH_TYPE iRequestType, ORecordInternal<?> iRecord, long iOtherClusterPosition);
 
-	public void handleDeleteConflict(byte iOperation, SYNCH_TYPE iRequestType, ORecordInternal<?> iRecord);
+  public void handleUpdateConflict(byte iOperation, SYNCH_TYPE iRequestType, ORecordInternal<?> iRecord, int iCurrentVersion,
+      int iOtherVersion);
+
+  public void handleDeleteConflict(byte iOperation, SYNCH_TYPE iRequestType, ORecordInternal<?> iRecord);
 }

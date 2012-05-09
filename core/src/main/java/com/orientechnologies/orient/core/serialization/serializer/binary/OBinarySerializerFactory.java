@@ -19,88 +19,114 @@ package com.orientechnologies.orient.core.serialization.serializer.binary;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.metadata.schema.OType;
-import com.orientechnologies.orient.core.serialization.serializer.binary.impl.*;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OBinaryTypeSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OBooleanSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OByteSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OCharSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.ODateSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.ODateTimeSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.ODecimalSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.ODoubleSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OFloatSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLinkSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLongSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.ONullSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OShortSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OStringSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.index.OCompositeKeySerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.index.OSimpleKeySerializer;
 import com.orientechnologies.orient.core.serialization.serializer.stream.OStreamSerializerRID;
 
 /**
- * This class is responsible for obtaining OBinarySerializer realization,
- * by it's id of type of object that should be serialized.
- *
- *
+ * This class is responsible for obtaining OBinarySerializer realization, by it's id of type of object that should be serialized.
+ * 
+ * 
  * @author <a href="mailto:gmandnepr@gmail.com">Evgeniy Degtiarenko</a>
  */
 public class OBinarySerializerFactory {
 
-	private final Map<Byte, OBinarySerializer<?>> serializerIdMap = new HashMap<Byte, OBinarySerializer<?>>();
-	private final Map<OType, OBinarySerializer<?>> serializerTypeMap = new HashMap<OType, OBinarySerializer<?>>();
+  private final Map<Byte, OBinarySerializer<?>>                  serializerIdMap        = new HashMap<Byte, OBinarySerializer<?>>();
+  private final Map<Byte, Class<? extends OBinarySerializer<?>>> serializerClassesIdMap = new HashMap<Byte, Class<? extends OBinarySerializer<?>>>();
+  private final Map<OType, OBinarySerializer<?>>                 serializerTypeMap      = new HashMap<OType, OBinarySerializer<?>>();
 
-	/**
-	 * Instance of the factory
-	 */
-	public static final OBinarySerializerFactory INSTANCE = new OBinarySerializerFactory();
-	/**
-	 * Size of the type identifier block size
-	 */
-	public static final int TYPE_IDENTIFIER_SIZE = 1;
+  /**
+   * Instance of the factory
+   */
+  public static final OBinarySerializerFactory                   INSTANCE               = new OBinarySerializerFactory();
+  /**
+   * Size of the type identifier block size
+   */
+  public static final int                                        TYPE_IDENTIFIER_SIZE   = 1;
 
+  private OBinarySerializerFactory() {
 
-	private OBinarySerializerFactory() {
+    // STATELESS SERIALIER
+    registerSerializer(new ONullSerializer(), null);
 
-		serializerIdMap.put(ONullSerializer.ID, new ONullSerializer());
+    registerSerializer(OBooleanSerializer.INSTANCE, OType.BOOLEAN);
+    registerSerializer(OIntegerSerializer.INSTANCE, OType.INTEGER);
+    registerSerializer(OShortSerializer.INSTANCE, OType.SHORT);
+    registerSerializer(OLongSerializer.INSTANCE, OType.LONG);
+    registerSerializer(OFloatSerializer.INSTANCE, OType.FLOAT);
+    registerSerializer(ODoubleSerializer.INSTANCE, OType.DOUBLE);
+    registerSerializer(ODateTimeSerializer.INSTANCE, OType.DATETIME);
+    registerSerializer(OCharSerializer.INSTANCE, null);
+    registerSerializer(OStringSerializer.INSTANCE, OType.STRING);
+    registerSerializer(OByteSerializer.INSTANCE, OType.BYTE);
+    registerSerializer(ODateSerializer.INSTANCE, OType.DATE);
+    registerSerializer(OLinkSerializer.INSTANCE, OType.LINK);
+    registerSerializer(OCompositeKeySerializer.INSTANCE, null);
+    registerSerializer(OStreamSerializerRID.INSTANCE, null);
+    registerSerializer(OBinaryTypeSerializer.INSTANCE, OType.BINARY);
+    registerSerializer(ODecimalSerializer.INSTANCE, OType.DECIMAL);
 
-		serializerIdMap.put(OBooleanSerializer.ID, OBooleanSerializer.INSTANCE);
-		serializerIdMap.put(OIntegerSerializer.ID, OIntegerSerializer.INSTANCE);
-		serializerIdMap.put(OShortSerializer.ID, OShortSerializer.INSTANCE);
-		serializerIdMap.put(OLongSerializer.ID, OLongSerializer.INSTANCE);
-		serializerIdMap.put(OFloatSerializer.ID, OFloatSerializer.INSTANCE);
-		serializerIdMap.put(ODoubleSerializer.ID, ODoubleSerializer.INSTANCE);
-		serializerIdMap.put(ODateTimeSerializer.ID, ODateTimeSerializer.INSTANCE);
-		serializerIdMap.put(OCharSerializer.ID, OCharSerializer.INSTANCE);
-		serializerIdMap.put(OStringSerializer.ID, OStringSerializer.INSTANCE);
-		serializerIdMap.put(OByteSerializer.ID, OByteSerializer.INSTANCE);
-		serializerIdMap.put(ODateSerializer.ID, ODateSerializer.INSTANCE);
-		serializerIdMap.put(OLinkSerializer.ID, OLinkSerializer.INSTANCE);
-		serializerIdMap.put(OCompositeKeySerializer.ID, OCompositeKeySerializer.INSTANCE);
-		serializerIdMap.put(OSimpleKeySerializer.ID, OSimpleKeySerializer.INSTANCE);
-		serializerIdMap.put(OStreamSerializerRID.ID, OStreamSerializerRID.INSTANCE);
-		serializerIdMap.put(OBinaryTypeSerializer.ID, OBinaryTypeSerializer.INSTANCE);
-		serializerIdMap.put(ODecimalSerializer.ID, ODecimalSerializer.INSTANCE);
+    // STATEFUL SERIALIER
+    registerSerializer(OSimpleKeySerializer.ID, OSimpleKeySerializer.class);
+  }
 
-		serializerTypeMap.put(OType.BOOLEAN, OBooleanSerializer.INSTANCE);
-		serializerTypeMap.put(OType.INTEGER, OIntegerSerializer.INSTANCE);
-		serializerTypeMap.put(OType.SHORT, OShortSerializer.INSTANCE);
-		serializerTypeMap.put(OType.LONG, OLongSerializer.INSTANCE);
-		serializerTypeMap.put(OType.FLOAT, OFloatSerializer.INSTANCE);
-		serializerTypeMap.put(OType.DOUBLE, ODoubleSerializer.INSTANCE);
-		serializerTypeMap.put(OType.DATETIME, ODateTimeSerializer.INSTANCE);
-		serializerTypeMap.put(OType.STRING, OStringSerializer.INSTANCE);
-		serializerTypeMap.put(OType.BYTE, OByteSerializer.INSTANCE);
-		serializerTypeMap.put(OType.DATE, ODateSerializer.INSTANCE);
-		serializerTypeMap.put(OType.LINK, OLinkSerializer.INSTANCE);
-		serializerTypeMap.put(OType.BINARY, OBinaryTypeSerializer.INSTANCE);
-		serializerTypeMap.put(OType.DECIMAL, ODecimalSerializer.INSTANCE);
-	}
+  public void registerSerializer(final OBinarySerializer<?> iInstance, final OType iType) {
+    serializerIdMap.put(iInstance.getId(), iInstance);
+    if (iType != null)
+      serializerTypeMap.put(iType, iInstance);
+  }
 
-	/**
-	 * Obtain OBinarySerializer instance by it's id.
-	 *
-	 * @param identifier is serializes identifier.
-	 * @return OBinarySerializer instance.
-	 */
-	public OBinarySerializer getObjectSerializer(final byte identifier) {
-		return serializerIdMap.get(identifier);
-	}
+  @SuppressWarnings({ "unchecked", "rawtypes" })
+  public void registerSerializer(final byte iId, final Class<? extends OBinarySerializer> iClass) {
+    serializerClassesIdMap.put(iId, (Class<? extends OBinarySerializer<?>>) iClass);
+  }
 
-	/**
-	 * Obtain OBinarySerializer realization for the OType
-	 *
-	 * @param type is the OType to obtain serializer algorithm for
-	 * @return OBinarySerializer instance
-	 */
-	public OBinarySerializer getObjectSerializer(final OType type) {
-		return serializerTypeMap.get(type);
-	}
+  /**
+   * Obtain OBinarySerializer instance by it's id.
+   * 
+   * @param identifier
+   *          is serializes identifier.
+   * @return OBinarySerializer instance.
+   */
+  public OBinarySerializer<?> getObjectSerializer(final byte identifier) {
+    OBinarySerializer<?> impl = serializerIdMap.get(identifier);
+    if (impl == null) {
+      final Class<? extends OBinarySerializer<?>> cls = serializerClassesIdMap.get(identifier);
+      if (cls != null)
+        try {
+          impl = cls.newInstance();
+        } catch (Exception e) {
+          OLogManager.instance().error(this, "Cannot create an instance of class %s invoking the empty constructor", cls);
+        }
+    }
+    return impl;
+  }
+
+  /**
+   * Obtain OBinarySerializer realization for the OType
+   * 
+   * @param type
+   *          is the OType to obtain serializer algorithm for
+   * @return OBinarySerializer instance
+   */
+  public OBinarySerializer<?> getObjectSerializer(final OType type) {
+    return serializerTypeMap.get(type);
+  }
 }

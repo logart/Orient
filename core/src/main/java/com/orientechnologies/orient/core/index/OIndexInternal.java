@@ -66,4 +66,31 @@ public interface OIndexInternal<T> extends OIndex<T>, Iterable<Entry<Object, T>>
 	 * @see #getConfiguration()
 	 */
 	public ODocument updateConfiguration();
+
+	/**
+	 * Add given cluster to the list of clusters that should be automatically indexed.
+	 *
+	 * @param iClusterName Cluster to add.
+	 * @return Current index instance.
+	 */
+	public OIndex<T> addCluster(final String iClusterName);
+
+	/**
+	 * Remove given cluster from the list of clusters that should be automatically indexed.
+	 *
+	 * @param iClusterName Cluster to remove.
+	 * @return Current index instance.
+	 */
+	public OIndex<T> removeCluster(final String iClusterName);
+
+	/**
+	 * Indicates whether given index can be used to calculate result of
+	 * {@link com.orientechnologies.orient.core.sql.operator.OQueryOperatorEquality} operators.
+	 *
+	 * @return {@code true} if given index can be used to calculate result of
+	 * {@link com.orientechnologies.orient.core.sql.operator.OQueryOperatorEquality} operators.
+	 *
+	 * @see com.orientechnologies.orient.core.sql.operator.OQueryOperatorEquals#executeIndexQuery(OIndex, java.util.List, int)
+	 */
+	public boolean canBeUsedInEqualityOperators();
 }

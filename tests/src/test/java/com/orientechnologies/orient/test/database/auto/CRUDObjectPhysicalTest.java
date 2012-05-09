@@ -23,28 +23,28 @@ import org.testng.Assert;
 import org.testng.annotations.Parameters;
 import org.testng.annotations.Test;
 
-import com.orientechnologies.common.log.OLogManager;
-import com.orientechnologies.orient.core.db.object.ODatabaseObjectPool;
-import com.orientechnologies.orient.core.db.object.ODatabaseObjectTx;
-import com.orientechnologies.orient.core.db.object.OLazyObjectSet;
+import com.orientechnologies.orient.core.db.object.OLazyObjectSetInterface;
 import com.orientechnologies.orient.core.exception.OQueryParsingException;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
-import com.orientechnologies.orient.core.iterator.OObjectIteratorCluster;
 import com.orientechnologies.orient.core.metadata.security.OUser;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
+import com.orientechnologies.orient.object.db.OObjectDatabasePool;
+import com.orientechnologies.orient.object.db.OObjectDatabaseTx;
+import com.orientechnologies.orient.object.iterator.OObjectIteratorCluster;
 import com.orientechnologies.orient.test.domain.business.Account;
 import com.orientechnologies.orient.test.domain.business.Address;
 import com.orientechnologies.orient.test.domain.business.City;
 import com.orientechnologies.orient.test.domain.business.Country;
+import com.orientechnologies.orient.test.domain.business.JavaObjectTestClass;
 import com.orientechnologies.orient.test.domain.whiz.Profile;
 
 @Test(groups = { "crud", "object" })
 public class CRUDObjectPhysicalTest {
 	protected static final int	TOT_RECORDS	= 100;
 	protected long							startRecordNumber;
-	private ODatabaseObjectTx		database;
+	private OObjectDatabaseTx		database;
 	private City								rome				= new City(new Country("Italy"), "Rome");
 	private String							url;
 
@@ -55,7 +55,7 @@ public class CRUDObjectPhysicalTest {
 
 	@Test
 	public void create() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
 		database.getEntityManager().registerEntityClasses("com.orientechnologies.orient.test.domain");
 
 		startRecordNumber = database.countClusterElements("Account");
@@ -80,7 +80,7 @@ public class CRUDObjectPhysicalTest {
 
 	@Test(dependsOnMethods = "testReleasedPoolDatabase")
 	public void testCreate() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
 
 		Assert.assertEquals(database.countClusterElements("Account") - startRecordNumber, TOT_RECORDS);
 
@@ -89,7 +89,7 @@ public class CRUDObjectPhysicalTest {
 
 	@Test(dependsOnMethods = "testCreate")
 	public void testAutoCreateClass() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
 
 		Assert.assertNull(database.getMetadata().getSchema().getClass(Dummy.class.getSimpleName()));
 
@@ -102,16 +102,42 @@ public class CRUDObjectPhysicalTest {
 		database.close();
 	}
 
+	public void testSimpleTypes() {
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+		JavaObjectTestClass javaObj = database.newInstance(JavaObjectTestClass.class);
+		javaObj.setText("test");
+		javaObj.setNumberSimple(12345);
+		javaObj.setDoubleSimple(12.34d);
+		javaObj.setFloatSimple(123.45f);
+		javaObj.setLongSimple(12345678l);
+		javaObj.setByteSimple((byte) 1);
+		javaObj.setFlagSimple(true);
+
+		JavaObjectTestClass savedJavaObj = database.save(javaObj);
+		ORecordId id = (ORecordId) savedJavaObj.getId();
+		database.close();
+
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+		JavaObjectTestClass loadedJavaObj = (JavaObjectTestClass) database.load(id);
+		Assert.assertEquals(loadedJavaObj.getText(), "test");
+		Assert.assertEquals(loadedJavaObj.getNumberSimple(), 12345);
+		Assert.assertEquals(loadedJavaObj.getDoubleSimple(), 12.34d);
+		Assert.assertEquals(loadedJavaObj.getFloatSimple(), 123.45f);
+		Assert.assertEquals(loadedJavaObj.getLongSimple(), 12345678l);
+		Assert.assertEquals(loadedJavaObj.getByteSimple(), (byte) 1);
+		Assert.assertEquals(loadedJavaObj.getFlagSimple(), true);
+	}
+
 	@Test(dependsOnMethods = "testAutoCreateClass")
 	public void readAndBrowseDescendingAndCheckHoleUtilization() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
 
 		database.getLevel1Cache().invalidate();
 		database.getLevel2Cache().clear();
 
 		// BROWSE ALL THE OBJECTS
 		int i = 0;
-		for (Account a : database.browseClass(Account.class).setFetchPlan("*:-1")) {
+		for (Account a : database.browseClass(Account.class)) {
 
 			Assert.assertEquals(a.getId(), i);
 			Assert.assertEquals(a.getName(), "Bill");
@@ -131,7 +157,7 @@ public class CRUDObjectPhysicalTest {
 
 	@Test(dependsOnMethods = "testAutoCreateClass")
 	public void synchQueryCollectionsFetch() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
 
 		database.getLevel1Cache().invalidate();
 		database.getLevel2Cache().clear();
@@ -159,7 +185,7 @@ public class CRUDObjectPhysicalTest {
 
 	@Test(dependsOnMethods = "testAutoCreateClass")
 	public void synchQueryCollectionsFetchNoLazyLoad() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
 
 		database.getLevel1Cache().invalidate();
 		database.getLevel2Cache().clear();
@@ -188,7 +214,7 @@ public class CRUDObjectPhysicalTest {
 
 	@Test(dependsOnMethods = "readAndBrowseDescendingAndCheckHoleUtilization")
 	public void mapEnumAndInternalObjects() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
 
 		// BROWSE ALL THE OBJECTS
 		for (OUser u : database.browseClass(OUser.class)) {
@@ -200,19 +226,22 @@ public class CRUDObjectPhysicalTest {
 
 	@Test(dependsOnMethods = "mapEnumAndInternalObjects")
 	public void afterDeserializationCall() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		// COMMENTED SINCE SERIALIZATION AND DESERIALIZATION
 
-		// BROWSE ALL THE OBJECTS
-		for (Account a : database.browseClass(Account.class)) {
-			Assert.assertTrue(a.isInitialized());
-		}
-
-		database.close();
+		// database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+		// // TODO TO DELETE WHEN IMPLEMENTED STATIC ENTITY MANAGER
+		// database.getEntityManager().registerEntityClasses("com.orientechnologies.orient.test.domain");
+		//
+		// // BROWSE ALL THE OBJECTS
+		// for (Account a : database.browseClass(Account.class)) {
+		// Assert.assertTrue(a.isInitialized());
+		// }
+		// database.close();
 	}
 
 	@Test(dependsOnMethods = "afterDeserializationCall")
 	public void update() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
 
 		int i = 0;
 		Account a;
@@ -234,7 +263,7 @@ public class CRUDObjectPhysicalTest {
 
 	@Test(dependsOnMethods = "update")
 	public void testUpdate() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
 
 		int i = 0;
 		Account a;
@@ -257,7 +286,7 @@ public class CRUDObjectPhysicalTest {
 
 	@Test(dependsOnMethods = "testUpdate")
 	public void createLinked() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
 
 		long profiles = database.countClass("Profile");
 
@@ -275,7 +304,7 @@ public class CRUDObjectPhysicalTest {
 
 	@Test(dependsOnMethods = "createLinked")
 	public void browseLinked() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
 
 		for (Profile obj : database.browseClass(Profile.class).setFetchPlan("*:1")) {
 			if (obj.getNick().equals("Neo")) {
@@ -292,12 +321,14 @@ public class CRUDObjectPhysicalTest {
 
 	@Test(dependsOnMethods = "createLinked")
 	public void checkLazyLoadingOff() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
 
 		database.setLazyLoading(false);
 		for (Profile obj : database.browseClass(Profile.class).setFetchPlan("*:1")) {
-			Assert.assertFalse(obj.getFollowings() instanceof OLazyObjectSet);
-			Assert.assertFalse(obj.getFollowers() instanceof OLazyObjectSet);
+			Assert.assertTrue(!(obj.getFollowings() instanceof OLazyObjectSetInterface)
+					|| ((OLazyObjectSetInterface<Profile>) obj.getFollowings()).isConverted());
+			Assert.assertTrue(!(obj.getFollowers() instanceof OLazyObjectSetInterface)
+					|| ((OLazyObjectSetInterface<Profile>) obj.getFollowers()).isConverted());
 			if (obj.getNick().equals("Neo")) {
 				Assert.assertEquals(obj.getFollowers().size(), 0);
 				Assert.assertEquals(obj.getFollowings().size(), 2);
@@ -313,7 +344,7 @@ public class CRUDObjectPhysicalTest {
 
 	@Test(dependsOnMethods = "checkLazyLoadingOff")
 	public void queryPerFloat() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
 
 		final List<Account> result = database.query(new OSQLSynchQuery<ODocument>("select * from Account where salary = 500.10"));
 
@@ -331,7 +362,8 @@ public class CRUDObjectPhysicalTest {
 
 	@Test(dependsOnMethods = "queryPerFloat")
 	public void queryCross3Levels() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
 		database.getMetadata().getSchema().reload();
 
 		final List<Profile> result = database.query(new OSQLSynchQuery<Profile>(
@@ -351,7 +383,8 @@ public class CRUDObjectPhysicalTest {
 
 	@Test(dependsOnMethods = "queryCross3Levels")
 	public void deleteFirst() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
 		database.getMetadata().getSchema().reload();
 
 		startRecordNumber = database.countClusterElements("Account");
@@ -369,7 +402,8 @@ public class CRUDObjectPhysicalTest {
 
 	@Test
 	public void commandWithPositionalParameters() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
 		database.getMetadata().getSchema().reload();
 
 		final OSQLSynchQuery<Profile> query = new OSQLSynchQuery<Profile>("select from Profile where name = ? and surname = ?");
@@ -382,7 +416,8 @@ public class CRUDObjectPhysicalTest {
 
 	@Test
 	public void queryWithPositionalParameters() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
 		database.getMetadata().getSchema().reload();
 
 		final OSQLSynchQuery<Profile> query = new OSQLSynchQuery<Profile>("select from Profile where name = ? and surname = ?");
@@ -395,7 +430,8 @@ public class CRUDObjectPhysicalTest {
 
 	@Test
 	public void queryWithRidAsParameters() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
 		database.getMetadata().getSchema().reload();
 
 		Profile profile = (Profile) database.browseClass("Profile").next();
@@ -410,7 +446,8 @@ public class CRUDObjectPhysicalTest {
 
 	@Test
 	public void queryWithRidStringAsParameters() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
 		database.getMetadata().getSchema().reload();
 
 		Profile profile = (Profile) database.browseClass("Profile").next();
@@ -431,7 +468,8 @@ public class CRUDObjectPhysicalTest {
 
 	@Test
 	public void commandWithNamedParameters() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
 		database.getMetadata().getSchema().reload();
 
 		final OSQLSynchQuery<Profile> query = new OSQLSynchQuery<Profile>(
@@ -449,7 +487,8 @@ public class CRUDObjectPhysicalTest {
 
 	@Test(expectedExceptions = OQueryParsingException.class)
 	public void commandWithWrongNamedParameters() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
 		database.getMetadata().getSchema().reload();
 
 		final OSQLSynchQuery<Profile> query = new OSQLSynchQuery<Profile>(
@@ -467,7 +506,8 @@ public class CRUDObjectPhysicalTest {
 
 	@Test
 	public void queryWithNamedParameters() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
 		database.getMetadata().getSchema().reload();
 
 		final OSQLSynchQuery<Profile> query = new OSQLSynchQuery<Profile>(
@@ -485,7 +525,8 @@ public class CRUDObjectPhysicalTest {
 
 	@Test
 	public void queryWithObjectAsParameter() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
 		database.getMetadata().getSchema().reload();
 
 		final OSQLSynchQuery<Profile> query = new OSQLSynchQuery<Profile>(
@@ -508,7 +549,8 @@ public class CRUDObjectPhysicalTest {
 
 	@Test
 	public void queryConcatAttrib() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
 		database.getMetadata().getSchema().reload();
 
 		Assert.assertTrue(database.query(new OSQLSynchQuery<Profile>("select from City where country.@class = 'Country'")).size() > 0);
@@ -520,7 +562,8 @@ public class CRUDObjectPhysicalTest {
 
 	@Test
 	public void queryPreparredTwice() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
 		database.getMetadata().getSchema().reload();
 
 		final OSQLSynchQuery<Profile> query = new OSQLSynchQuery<Profile>(
@@ -541,7 +584,8 @@ public class CRUDObjectPhysicalTest {
 
 	@Test
 	public void commandPreparredTwice() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
 		database.getMetadata().getSchema().reload();
 
 		final OSQLSynchQuery<Profile> query = new OSQLSynchQuery<Profile>(
@@ -561,25 +605,28 @@ public class CRUDObjectPhysicalTest {
 	}
 
 	public void testEmbeddedBinary() {
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
 		database.getMetadata().getSchema().reload();
 
 		Account a = new Account(0, "Chris", "Martin");
 		a.setThumbnail(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 });
-		database.save(a);
+		a = database.save(a);
 		database.close();
 
-		database = ODatabaseObjectPool.global().acquire(url, "admin", "admin");
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
 		Account aa = (Account) database.load((ORID) a.getRid());
 		Assert.assertNotNull(a.getThumbnail());
+		Assert.assertNotNull(aa.getThumbnail());
 		byte[] b = aa.getThumbnail();
 		for (int i = 0; i < 10; ++i)
 			Assert.assertEquals(b[i], i);
 
-		Assert.assertNotNull(aa.getPhoto());
-		b = aa.getPhoto();
-		for (int i = 0; i < 10; ++i)
-			Assert.assertEquals(b[i], i);
+		// TO REFACTOR OR DELETE SINCE SERIALIZATION AND DESERIALIZATION DON'T APPLY ANYMORE
+		// Assert.assertNotNull(aa.getPhoto());
+		// b = aa.getPhoto();
+		// for (int i = 0; i < 10; ++i)
+		// Assert.assertEquals(b[i], i);
 
 		database.close();
 	}
