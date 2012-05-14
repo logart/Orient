@@ -16,10 +16,12 @@
 package com.orientechnologies.orient.server.replication.conflict;
 
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 
-import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
+import com.orientechnologies.orient.core.db.ODatabaseComplex;
+import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.db.record.ORecordOperation;
 import com.orientechnologies.orient.core.index.OIndex;
@@ -29,6 +31,7 @@ import com.orientechnologies.orient.core.metadata.schema.OProperty;
 import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.record.impl.ODocument;
+import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 import com.orientechnologies.orient.core.storage.impl.local.OStorageLocal;
 import com.orientechnologies.orient.server.clustering.OClusterLogger;
 import com.orientechnologies.orient.server.clustering.OClusterLogger.DIRECTION;
@@ -44,6 +47,13 @@ import com.orientechnologies.orient.server.replication.OReplicator;
 public class ODefaultReplicationConflictResolver implements OReplicationConflictResolver {
 
   public static final String   DISTRIBUTED_CONFLICT_CLASS = "ODistributedConflict";
+  private static final String  FIELD_RECORD               = "record";
+  private static final String  FIELD_DATE                 = "date";
+  private static final String  FIELD_OPERATION            = "operation";
+  private static final String  FIELD_OTHER_CLUSTER_POS    = "otherClusterPos";
+  private static final String  FIELD_OTHER_VERSION        = "otherVersion";
+  private static final String  FIELD_CURRENT_VERSION      = "currentVersion";
+
   private OReplicator          replicator;
   private final OClusterLogger logger                     = new OClusterLogger();
 
@@ -61,6 +71,27 @@ public class ODefaultReplicationConflictResolver implements OReplicationConflict
     ignoreIfSameContent = Boolean.parseBoolean(iConfig.get("ignoreIfSameContent"));
     ignoreIfMergeOk = Boolean.parseBoolean(iConfig.get("ignoreIfMergeOk"));
     latestAlwaysWin = Boolean.parseBoolean(iConfig.get("latestAlwaysWin"));
+  }
+
+  public void init(final ODatabaseComplex<?> iDatabase) {
+    synchronized (this) {
+      if (index != null)
+        return;
+
+      OClass cls = iDatabase.getMetadata().getSchema().getClass(DISTRIBUTED_CONFLICT_CLASS);
+      final OProperty p;
+      if (cls == null) {
+        cls = iDatabase.getMetadata().getSchema().createClass(DISTRIBUTED_CONFLICT_CLASS);
+        index = cls.createProperty(FIELD_RECORD, OType.LINK).createIndex(INDEX_TYPE.UNIQUE);
+      } else {
+        p = cls.getProperty(FIELD_RECORD);
+        if (p == null)
+          index = cls.createProperty(FIELD_RECORD, OType.LINK).createIndex(INDEX_TYPE.UNIQUE);
+        else {
+          index = p.getIndex();
+        }
+      }
+    }
   }
 
   /*
@@ -83,7 +114,7 @@ public class ODefaultReplicationConflictResolver implements OReplicationConflict
 
       // WRITE THE CONFLICT AS RECORD
       final ODocument doc = createConflictDocument(iOperation, iRecord);
-      doc.field("otherClusterPos", iOtherClusterPosition);
+      doc.field(FIELD_OTHER_CLUSTER_POS, iOtherClusterPosition);
       doc.save();
     }
   }
@@ -108,8 +139,8 @@ public class ODefaultReplicationConflictResolver implements OReplicationConflict
 
       // WRITE THE CONFLICT AS RECORD
       final ODocument doc = createConflictDocument(iOperation, iRecord);
-      doc.field("currentVersion", iCurrentVersion);
-      doc.field("otherVersion", iOtherVersion);
+      doc.field(FIELD_CURRENT_VERSION, iCurrentVersion);
+      doc.field(FIELD_OTHER_VERSION, iOtherVersion);
       doc.save();
     }
   }
@@ -138,6 +169,23 @@ public class ODefaultReplicationConflictResolver implements OReplicationConflict
     }
   }
 
+  @Override
+  public ODocument getAllConflicts(final ODatabaseRecord iDatabase) {
+    final List<OIdentifiable> entries = iDatabase.query(new OSQLSynchQuery<OIdentifiable>("select from "
+        + DISTRIBUTED_CONFLICT_CLASS));
+
+    // EARLY LOAD CONTENT
+    final ODocument result = new ODocument().field("entries", entries);
+    for (int i = 0; i < entries.size(); ++i) {
+      final ODocument record = entries.get(i).getRecord();
+      record.setClassName(null);
+      record.addOwner(result);
+      record.getIdentity().reset();
+      entries.set(i, record);
+    }
+    return result;
+  }
+
   /**
    * Searches for a conflict by record.
    * 
@@ -146,39 +194,19 @@ public class ODefaultReplicationConflictResolver implements OReplicationConflict
    * @return The document if any, otherwise null
    */
   public OIdentifiable searchForConflict(final OIdentifiable iRecord) {
-    init();
     return (OIdentifiable) index.get(iRecord);
   }
 
   protected ODocument createConflictDocument(final byte iOperation, final ORecordInternal<?> iRecord) {
-    init();
     final ODocument doc = new ODocument(DISTRIBUTED_CONFLICT_CLASS);
-    doc.field("operation", iOperation);
-    doc.field("date", new Date());
-    doc.field("record", iRecord.getIdentity());
+    doc.field(FIELD_OPERATION, iOperation);
+    doc.field(FIELD_DATE, new Date());
+    doc.field(FIELD_RECORD, iRecord.getIdentity());
     return doc;
   }
 
   @Override
   public String toString() {
     return replicator.getManager().getId();
-  }
-
-  protected void init() {
-    synchronized (this) {
-      OClass cls = ODatabaseRecordThreadLocal.INSTANCE.get().getMetadata().getSchema().getClass(DISTRIBUTED_CONFLICT_CLASS);
-      final OProperty p;
-      if (cls == null) {
-        cls = ODatabaseRecordThreadLocal.INSTANCE.get().getMetadata().getSchema().createClass(DISTRIBUTED_CONFLICT_CLASS);
-        index = cls.createProperty("record", OType.LINK).createIndex(INDEX_TYPE.UNIQUE);
-      } else {
-        p = cls.getProperty("record");
-        if (p == null)
-          index = cls.createProperty("record", OType.LINK).createIndex(INDEX_TYPE.UNIQUE);
-        else {
-          index = p.getIndex();
-        }
-      }
-    }
   }
 }

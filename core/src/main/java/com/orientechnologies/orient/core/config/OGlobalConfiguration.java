@@ -230,9 +230,8 @@ public enum OGlobalConfiguration {
   NETWORK_BINARY_MAX_CONTENT_LENGTH("network.binary.maxLength", "TCP/IP max content length in bytes of BINARY requests",
       Integer.class, 32736),
 
-  NETWORK_BINARY_READ_RESPONSE_MAX_TIME("network.binary.readResponse.maxTime",
-      "Maximum time (in seconds) to wait until response will be read. Otherwise response will be dropped from chanel",
-      Integer.class, 10),
+  NETWORK_BINARY_READ_RESPONSE_MAX_TIMES("network.binary.readResponse.maxTimes",
+      "Maximum times to wait until response will be read. Otherwise response will be dropped from chanel", Integer.class, 10),
 
   NETWORK_BINARY_DEBUG("network.binary.debug", "Debug mode: print all data incoming on the binary channel", Boolean.class, false),
 
@@ -317,7 +316,9 @@ public enum OGlobalConfiguration {
       Boolean.class, Boolean.FALSE),
 
   DISTRIBUTED_ALIGN_RECORD_BLOCK("distributed.align.recordBlock",
-      "Number of records to send in block to the remote server during alignment", Integer.class, 200);
+      "Number of records to send in block to the remote server during alignment", Integer.class, 200),
+
+  DISTRIBUTED_SOCKET_TIMEOUT("distributed.socketTimeout", "TCP/IP Socket timeout in ms", Integer.class, 2000);
 
   private final String                 key;
   private final Object                 defValue;

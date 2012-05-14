@@ -17,6 +17,7 @@ package com.orientechnologies.orient.server.clustering.leader;
 import java.io.IOException;
 import java.util.Date;
 
+import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.enterprise.channel.binary.OAsynchChannelServiceThread;
 import com.orientechnologies.orient.enterprise.channel.binary.OChannelBinaryClient;
 import com.orientechnologies.orient.server.clustering.OClusterLogger;
@@ -27,76 +28,90 @@ import com.orientechnologies.orient.server.clustering.OClusterLogger;
  * @author Luca Garulli (l.garulli--at--orientechnologies.com)
  * 
  */
-public class ORemoteNodeAbstract {
-	protected String											id;
-	protected String											networkAddress;
-	protected int													networkPort;
-	protected Date												connectedOn;
-	protected OChannelBinaryClient				channel;
-	protected final int										sessionId	= 0;
-	protected OAsynchChannelServiceThread	serviceThread;
-	protected OClusterLogger							logger		= new OClusterLogger();
+public abstract class ORemoteNodeAbstract {
+  protected String                      id;
+  protected String                      networkAddress;
+  protected int                         networkPort;
+  protected Date                        connectedOn;
+  protected OChannelBinaryClient        channel;
+  protected final int                   sessionId = 0;
+  protected OAsynchChannelServiceThread serviceThread;
+  protected OClusterLogger              logger    = new OClusterLogger();
+  protected final int                   timeout;
 
-	public ORemoteNodeAbstract(final String iServerAddress, final int iServerPort) {
-		networkAddress = iServerAddress;
-		networkPort = iServerPort;
-		connectedOn = new Date();
-		id = networkAddress + ":" + networkPort;
-	}
+  public ORemoteNodeAbstract(final String iServerAddress, final int iServerPort) {
+    networkAddress = iServerAddress;
+    networkPort = iServerPort;
+    connectedOn = new Date();
+    id = networkAddress + ":" + networkPort;
+    timeout = OGlobalConfiguration.DISTRIBUTED_SOCKET_TIMEOUT.getValueAsInteger();
+  }
 
-	public OChannelBinaryClient beginRequest(final byte iRequestType) throws IOException {
-		channel.beginRequest();
-		channel.writeByte(iRequestType);
-		channel.writeInt(sessionId);
-		return channel;
-	}
+  protected abstract void connect() throws IOException;
 
-	public void endRequest() throws IOException {
-		if (channel != null)
-			channel.endRequest();
-	}
+  public OChannelBinaryClient beginRequest(final byte iRequestType) throws IOException {
+    if (!checkConnection())
+      connect();
 
-	public void beginResponse() throws IOException {
-		if (channel != null)
-			channel.beginResponse(sessionId);
-	}
+    channel.beginRequest();
+    channel.writeByte(iRequestType);
+    channel.writeInt(sessionId);
+    return channel;
+  }
 
-	public void endResponse() {
-		if (channel != null)
-			channel.endResponse();
-	}
+  public void endRequest() throws IOException {
+    if (channel != null)
+      channel.endRequest();
+  }
 
-	/**
-	 * Check if a remote node is really connected.
-	 * 
-	 * @return true if it's connected, otherwise false
-	 */
-	public boolean checkConnection() {
-		boolean connected = false;
+  public void parseResponse() throws IOException {
+    if (channel != null) {
+      channel.beginResponse(sessionId);
+      channel.endResponse();
+    }
+  }
 
-		if (channel != null && channel.socket != null)
-			try {
-				connected = channel.socket.isConnected();
-			} catch (Exception e) {
-			}
+  public void beginResponse() throws IOException {
+    if (channel != null)
+      channel.beginResponse(sessionId, timeout);
+  }
 
-		return connected;
-	}
+  public void endResponse() {
+    if (channel != null)
+      channel.endResponse();
+  }
 
-	public void disconnect() {
-		if (channel != null)
-			channel.close();
-		channel = null;
-		if (serviceThread != null)
-			serviceThread.sendShutdown();
-	}
+  /**
+   * Check if a remote node is really connected.
+   * 
+   * @return true if it's connected, otherwise false
+   */
+  public boolean checkConnection() {
+    boolean connected = false;
 
-	@Override
-	public String toString() {
-		return id;
-	}
+    if (channel != null && channel.socket != null)
+      try {
+        connected = channel.socket.isConnected();
+      } catch (Exception e) {
+      }
 
-	public String getId() {
-		return id;
-	}
+    return connected;
+  }
+
+  public void disconnect() {
+    if (channel != null)
+      channel.close();
+    channel = null;
+    if (serviceThread != null)
+      serviceThread.sendShutdown();
+  }
+
+  @Override
+  public String toString() {
+    return id;
+  }
+
+  public String getId() {
+    return id;
+  }
 }
