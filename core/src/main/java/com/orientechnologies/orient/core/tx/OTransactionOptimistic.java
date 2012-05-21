@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2010 Luca Garulli (l.garulli--at--orientechnologies.com)
+ * Copyright 2010-2012 Luca Garulli (l.garulli--at--orientechnologies.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +23,12 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.db.ODatabaseComplex.OPERATION_MODE;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecordTx;
 import com.orientechnologies.orient.core.db.record.ORecordOperation;
+import com.orientechnologies.orient.core.hook.ORecordHook.TYPE;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.index.OIndex;
@@ -178,35 +180,48 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
 
   public void saveRecord(final ORecordInternal<?> iRecord, final String iClusterName, final OPERATION_MODE iMode,
       final ORecordCallback<? extends Number> iCallback) {
+    if (iRecord == null)
+      return;
     addRecord(iRecord, iRecord.getIdentity().isValid() ? ORecordOperation.UPDATED : ORecordOperation.CREATED, iClusterName);
   }
 
-  private void addRecord(final ORecordInternal<?> iRecord, final byte iStatus, final String iClusterName) {
+  protected void addRecord(final ORecordInternal<?> iRecord, final byte iStatus, final String iClusterName) {
     checkTransaction();
+
+    switch (iStatus) {
+    case ORecordOperation.CREATED:
+      database.callbackHooks(TYPE.BEFORE_CREATE, iRecord);
+      break;
+    case ORecordOperation.LOADED:
+      database.callbackHooks(TYPE.BEFORE_READ, iRecord);
+      break;
+    case ORecordOperation.UPDATED:
+      database.callbackHooks(TYPE.BEFORE_UPDATE, iRecord);
+      break;
+    case ORecordOperation.DELETED:
+      database.callbackHooks(TYPE.BEFORE_DELETE, iRecord);
+      break;
+    }
+
+    if (iRecord.getIdentity().isTemporary())
+      temp2persistent.put(iRecord.getIdentity().copy(), iRecord);
 
     if ((status == OTransaction.TXSTATUS.COMMITTING) && database.getStorage() instanceof OStorageEmbedded) {
       // I'M COMMITTING: BYPASS LOCAL BUFFER
       switch (iStatus) {
       case ORecordOperation.CREATED:
       case ORecordOperation.UPDATED:
-        database.executeSaveRecord(iRecord, iClusterName, iRecord.getVersion(), iRecord.getRecordType(),
+        database.executeSaveRecord(iRecord, iClusterName, iRecord.getVersion(), iRecord.getRecordType(), false,
             OPERATION_MODE.SYNCHRONOUS, null);
         break;
       case ORecordOperation.DELETED:
-        database.executeDeleteRecord(iRecord, iRecord.getVersion(), false, OPERATION_MODE.SYNCHRONOUS);
+        database.executeDeleteRecord(iRecord, iRecord.getVersion(), false, false, OPERATION_MODE.SYNCHRONOUS);
         break;
       }
     } else {
       final ORecordId rid = (ORecordId) iRecord.getIdentity();
 
       if (!rid.isValid()) {
-        // // TODO: NEED IT FOR REAL?
-        // // NEW RECORD: CHECK IF IT'S ALREADY IN
-        // for (OTransactionRecordEntry entry : recordEntries.values()) {
-        // if (entry.getRecord() == iRecord)
-        // return;
-        // }
-
         iRecord.onBeforeIdentityChanged(rid);
 
         // ASSIGN A UNIQUE SERIAL TEMPORARY ID
@@ -261,6 +276,22 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
         }
       }
     }
+
+    switch (iStatus) {
+    case ORecordOperation.CREATED:
+      database.callbackHooks(TYPE.AFTER_CREATE, iRecord);
+      break;
+    case ORecordOperation.LOADED:
+      database.callbackHooks(TYPE.AFTER_READ, iRecord);
+      break;
+    case ORecordOperation.UPDATED:
+      database.callbackHooks(TYPE.AFTER_UPDATE, iRecord);
+      break;
+    case ORecordOperation.DELETED:
+      database.callbackHooks(TYPE.AFTER_DELETE, iRecord);
+      break;
+    }
+
   }
 
   @Override

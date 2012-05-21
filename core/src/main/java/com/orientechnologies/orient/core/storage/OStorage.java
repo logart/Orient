@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2010 Luca Garulli (l.garulli--at--orientechnologies.com)
+ * Copyright 2010-2012 Luca Garulli (l.garulli--at--orientechnologies.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,10 @@ public interface OStorage extends OSharedContainer {
 
   public enum SIZE {
     TINY, MEDIUM, LARGE, HUGE
+  }
+
+  public enum STATUS {
+    CLOSED, OPEN, CLOSING
   }
 
   public void open(String iUserName, String iUserPassword, final Map<String, Object> iProperties);
@@ -194,4 +198,11 @@ public interface OStorage extends OSharedContainer {
   public int getDataSegmentIdByName(String iDataSegmentName);
 
   public boolean dropDataSegment(String iName);
+
+  /**
+   * Returns the current storage's status
+   * 
+   * @return
+   */
+  public STATUS getStatus();
 }

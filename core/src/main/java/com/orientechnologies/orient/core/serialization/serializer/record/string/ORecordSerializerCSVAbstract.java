@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2010 Luca Garulli (l.garulli--at--orientechnologies.com)
+ * Copyright 2010-2012 Luca Garulli (l.garulli--at--orientechnologies.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -711,7 +711,8 @@ public abstract class ORecordSerializerCSVAbstract extends ORecordSerializerStri
         } else
           database.save((ORecordInternal<?>) record);
 
-        rid = record.getIdentity();
+        if (record != null)
+          rid = record.getIdentity();
         resultRid = rid;
       }
     } else {

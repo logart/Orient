@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2010 Luca Garulli (l.garulli--at--orientechnologies.com)
+ * Copyright 2010-2012 Luca Garulli (l.garulli--at--orientechnologies.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@ package com.orientechnologies.orient.core.tx;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +42,8 @@ import com.orientechnologies.orient.core.tx.OTransactionIndexChanges.OPERATION;
 import com.orientechnologies.orient.core.tx.OTransactionIndexChangesPerKey.OTransactionIndexEntry;
 
 public abstract class OTransactionRealAbstract extends OTransactionAbstract {
-  protected Map<ORID, ORecordOperation>           allEntries       = new LinkedHashMap<ORID, ORecordOperation>();
+  protected Map<ORID, ORecord<?>>                 temp2persistent  = new HashMap<ORID, ORecord<?>>();
+  protected Map<ORID, ORecordOperation>           allEntries       = new IdentityHashMap<ORID, ORecordOperation>();
   protected Map<ORID, ORecordOperation>           recordEntries    = new LinkedHashMap<ORID, ORecordOperation>();
   protected Map<String, OTransactionIndexChanges> indexEntries     = new LinkedHashMap<String, OTransactionIndexChanges>();
   protected int                                   id;
@@ -57,6 +60,7 @@ public abstract class OTransactionRealAbstract extends OTransactionAbstract {
   }
 
   public void close() {
+    temp2persistent.clear();
     allEntries.clear();
     recordEntries.clear();
     indexEntries.clear();
@@ -83,7 +87,13 @@ public abstract class OTransactionRealAbstract extends OTransactionAbstract {
     return allEntries.values();
   }
 
-  public ORecordOperation getRecordEntry(final ORID rid) {
+  public ORecordOperation getRecordEntry(ORID rid) {
+    if (rid.isTemporary()) {
+      final ORecord<?> record = temp2persistent.get(rid);
+      if (record != null && !record.getIdentity().equals(rid))
+        rid = record.getIdentity();
+    }
+
     ORecordOperation e = recordEntries.get(rid);
     if (e != null)
       return e;
@@ -167,7 +177,6 @@ public abstract class OTransactionRealAbstract extends OTransactionAbstract {
   }
 
   public ODocument getIndexChanges() {
-    final StringBuilder value = new StringBuilder();
 
     final ODocument result = new ODocument();
 
@@ -181,42 +190,12 @@ public abstract class OTransactionRealAbstract extends OTransactionAbstract {
       final List<ODocument> entries = new ArrayList<ODocument>();
       indexDoc.field("entries", entries, OType.EMBEDDEDLIST);
 
+      if (indexEntry.getValue().changesCrossKey != null)
+        serializeIndexChangeEntry(indexEntry.getValue().changesCrossKey, indexDoc, entries);
+
       // STORE INDEX ENTRIES
-      for (OTransactionIndexChangesPerKey entry : indexEntry.getValue().changesPerKey.values()) {
-        // SERIALIZE KEY
-        value.setLength(0);
-        if (entry.key != null) {
-          if (entry.key instanceof OCompositeKey) {
-            final List<Comparable<?>> keys = ((OCompositeKey) entry.key).getKeys();
-            ORecordSerializerStringAbstract.fieldTypeToString(value, OType.EMBEDDEDLIST, keys);
-          } else
-            ORecordSerializerStringAbstract.fieldTypeToString(value, OType.getTypeByClass(entry.key.getClass()), entry.key);
-        } else
-          value.append('*');
-        String key = value.toString();
-
-        final List<ODocument> operations = new ArrayList<ODocument>();
-
-        // SERIALIZE VALUES
-        if (entry.entries != null && !entry.entries.isEmpty()) {
-          for (OTransactionIndexEntry e : entry.entries) {
-            final ODocument changeDoc = new ODocument().addOwner(indexDoc);
-
-            // SERIALIZE OPERATION
-            changeDoc.field("o", e.operation.ordinal());
-
-            if (e.value instanceof ORecord<?> && e.value.getIdentity().isNew())
-              ((ORecord<?>) e.value).save();
-
-            changeDoc.field("v", e.value != null ? e.value.getIdentity() : null);
-
-            operations.add(changeDoc);
-          }
-        }
-
-        entries.add(new ODocument().addOwner(indexDoc).field("k", OStringSerializerHelper.encode(key))
-            .field("ops", operations, OType.EMBEDDEDLIST));
-      }
+      for (OTransactionIndexChangesPerKey entry : indexEntry.getValue().changesPerKey.values())
+        serializeIndexChangeEntry(entry, indexDoc, entries);
     }
 
     indexEntries.clear();
@@ -246,12 +225,75 @@ public abstract class OTransactionRealAbstract extends OTransactionAbstract {
 
     if (iOperation == OPERATION.CLEAR)
       indexEntry.setCleared();
-    else
-      indexEntry.getChangesPerKey(iKey).add(iValue, iOperation);
+    else {
+      if (iOperation == OPERATION.REMOVE && iValue != null && iValue.getIdentity().isTemporary()) {
+
+        // TEMPORARY RECORD: JUST REMOVE IT
+        for (OTransactionIndexChangesPerKey changes : indexEntry.changesPerKey.values())
+          for (int i = 0; i < changes.entries.size(); ++i)
+            if (changes.entries.get(i).value.equals(iValue)) {
+              changes.entries.remove(i);
+              break;
+            }
+
+        OTransactionIndexChangesPerKey changes = indexEntry.getChangesCrossKey();
+        for (int i = 0; i < changes.entries.size(); ++i)
+          if (changes.entries.get(i).value.equals(iValue)) {
+            changes.entries.remove(i);
+            break;
+          }
+      }
+
+      OTransactionIndexChangesPerKey changes = iKey != null ? indexEntry.getChangesPerKey(iKey) : indexEntry.getChangesCrossKey();
+
+      changes.add(iValue, iOperation);
+    }
   }
 
   protected void checkTransaction() {
     if (status == TXSTATUS.INVALID)
       throw new OTransactionException("Invalid state of the transaction. The transaction must be begun.");
+  }
+
+  protected void serializeIndexChangeEntry(OTransactionIndexChangesPerKey entry, final ODocument indexDoc,
+      final List<ODocument> entries) {
+    // SERIALIZE KEY
+    final StringBuilder value = new StringBuilder();
+    if (entry.key != null) {
+      if (entry.key instanceof OCompositeKey) {
+        final List<Comparable<?>> keys = ((OCompositeKey) entry.key).getKeys();
+        ORecordSerializerStringAbstract.fieldTypeToString(value, OType.EMBEDDEDLIST, keys);
+      } else
+        ORecordSerializerStringAbstract.fieldTypeToString(value, OType.getTypeByClass(entry.key.getClass()), entry.key);
+    } else
+      value.append('*');
+    String key = value.toString();
+
+    final List<ODocument> operations = new ArrayList<ODocument>();
+
+    // SERIALIZE VALUES
+    if (entry.entries != null && !entry.entries.isEmpty()) {
+      for (OTransactionIndexEntry e : entry.entries) {
+        final ODocument changeDoc = new ODocument().addOwner(indexDoc);
+
+        // SERIALIZE OPERATION
+        changeDoc.field("o", e.operation.ordinal());
+
+        if (e.value instanceof ORecord<?> && e.value.getIdentity().isNew()) {
+          final ORecord<?> saved = temp2persistent.get(e.value.getIdentity());
+          if (saved != null)
+            e.value = saved;
+          else
+            ((ORecord<?>) e.value).save();
+        }
+
+        changeDoc.field("v", e.value != null ? e.value.getIdentity() : null);
+
+        operations.add(changeDoc);
+      }
+    }
+
+    entries.add(new ODocument().addOwner(indexDoc).field("k", OStringSerializerHelper.encode(key))
+        .field("ops", operations, OType.EMBEDDEDLIST));
   }
 }

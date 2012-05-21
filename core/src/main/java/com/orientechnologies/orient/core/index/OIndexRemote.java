@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2010 Luca Garulli (l.garulli--at--orientechnologies.com)
+ * Copyright 2010-2012 Luca Garulli (l.garulli--at--orientechnologies.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ public abstract class OIndexRemote<T> implements OIndex<T> {
 	private final static String		QUERY_REMOVE																			= "delete from index:%s where key = %s";
 	private final static String		QUERY_REMOVE2																			= "delete from index:%s where key = %s and rid = %s";
 	private final static String		QUERY_REMOVE3																			= "delete from index:%s where rid = ?";
-	private final static String		QUERY_CONTAINS																		= "select count(*) as size from	index:%s where key = ?";
+	private final static String		QUERY_CONTAINS																		= "select count(*) as size from index:%s where key = ?";
 	private final static String		QUERY_SIZE																				= "select count(*) as size from index:%s";
 	private final static String		QUERY_KEYS																				= "select key from index:%s";
 	private final static String		QUERY_REBUILD																			= "rebuild index %s";
@@ -176,7 +176,7 @@ public abstract class OIndexRemote<T> implements OIndex<T> {
 
 	public boolean contains(final Object iKey) {
 		final OCommandRequest cmd = formatCommand(QUERY_CONTAINS, name);
-		final List<ODocument> result = getDatabase().command(cmd).execute();
+		final List<ODocument> result = getDatabase().command(cmd).execute(iKey);
 		return (Long) result.get(0).field("size") > 0;
 	}
 

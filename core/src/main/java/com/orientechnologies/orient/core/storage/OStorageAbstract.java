@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2010 Luca Garulli (l.garulli--at--orientechnologies.com)
+ * Copyright 2010-2012 Luca Garulli (l.garulli--at--orientechnologies.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,10 +41,6 @@ public abstract class OStorageAbstract extends OSharedContainerImpl implements O
   protected volatile STATUS                 status  = STATUS.CLOSED;
   protected OSharedResourceAdaptiveExternal lock    = new OSharedResourceAdaptiveExternal(
                                                         OGlobalConfiguration.ENVIRONMENT_CONCURRENT.getValueAsBoolean(), 0, true);
-
-  protected enum STATUS {
-    CLOSED, OPEN, CLOSING
-  }
 
   public OStorageAbstract(final String iName, final String iURL, final String iMode) {
     if (OStringSerializerHelper.contains(iName, '/'))
@@ -179,5 +175,9 @@ public abstract class OStorageAbstract extends OSharedContainerImpl implements O
   @Override
   public String toString() {
     return url != null ? url : "?";
+  }
+
+  public STATUS getStatus() {
+    return status;
   }
 }

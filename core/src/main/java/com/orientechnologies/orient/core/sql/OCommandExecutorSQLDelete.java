@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2010 Luca Garulli (l.garulli--at--orientechnologies.com)
+ * Copyright 2010-2012 Luca Garulli (l.garulli--at--orientechnologies.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -155,6 +155,8 @@ public class OCommandExecutorSQLDelete extends OCommandExecutorSQLAbstract imple
     final ORecordAbstract<?> record = (ORecordAbstract<?>) iRecord;
 
     if (record.getIdentity().isValid()) {
+      // RESET VERSION TO DISABLE MVCC AVOIDING THE CONCURRENT EXCEPTION IF LOCAL CACHE IS NOT UPDATED
+      record.setVersion(-1);
       record.delete();
       recordCount++;
       return true;

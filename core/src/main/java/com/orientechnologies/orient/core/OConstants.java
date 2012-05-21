@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2010 Luca Garulli (l.garulli--at--orientechnologies.com)
+ * Copyright 2010-2012 Luca Garulli (l.garulli--at--orientechnologies.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 package com.orientechnologies.orient.core;
 
 public class OConstants {
-	public static final String	ORIENT_VERSION	= "1.0-SNAPSHOT";
+	public static final String	ORIENT_VERSION	= "1.0.1-SNAPSHOT";
 	public static final String	ORIENT_URL			= "www.orientechnologies.com";
 
 	public static String getVersion() {

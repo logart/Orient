@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2010 Luca Garulli (l.garulli--at--orientechnologies.com)
+ * Copyright 2010-2012 Luca Garulli (l.garulli--at--orientechnologies.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,10 +69,12 @@ public abstract class ORecordSchemaAwareAbstract<T> extends ORecordAbstract<T> i
   }
 
   public OClass getSchemaClass() {
-    if (_clazz == null)
+    if (_clazz == null){
       // DESERIALIZE ONLY IF THE CLASS IS NOT SETTED: THIS PREVENT TO
       // UNMARSHALL THE RECORD EVEN IF SETTED BY fromString()
+      checkForLoading();
       checkForFields();
+    }
     return _clazz;
   }
 

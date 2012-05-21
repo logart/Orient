@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2010 Luca Garulli (l.garulli--at--orientechnologies.com)
+ * Copyright 2010-2012 Luca Garulli (l.garulli--at--orientechnologies.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,42 +28,42 @@ import com.orientechnologies.orient.core.tx.OTransactionIndexChanges.OPERATION;
  * 
  */
 public class OTransactionIndexChangesPerKey {
-	public static class OTransactionIndexEntry {
-		public OPERATION			operation;
-		public OIdentifiable	value;
+  public Object                       key;
+  public List<OTransactionIndexEntry> entries;
 
-		public OTransactionIndexEntry(final OIdentifiable iValue, final OPERATION iOperation) {
-			value = iValue;
-			operation = iOperation;
-		}
-	}
+  public static class OTransactionIndexEntry {
+    public OPERATION     operation;
+    public OIdentifiable value;
 
-	public Object												key;
-	public List<OTransactionIndexEntry>	entries;
+    public OTransactionIndexEntry(final OIdentifiable iValue, final OPERATION iOperation) {
+      value = iValue;
+      operation = iOperation;
+    }
+  }
 
-	public OTransactionIndexChangesPerKey(final Object iKey) {
-		this.key = iKey;
-		entries = new ArrayList<OTransactionIndexEntry>();
-	}
+  public OTransactionIndexChangesPerKey(final Object iKey) {
+    this.key = iKey;
+    entries = new ArrayList<OTransactionIndexEntry>();
+  }
 
-	public void add(final OIdentifiable iValue, final OPERATION iOperation) {
-		entries.add(new OTransactionIndexEntry(iValue, iOperation));
-	}
+  public void add(final OIdentifiable iValue, final OPERATION iOperation) {
+    entries.add(new OTransactionIndexEntry(iValue, iOperation));
+  }
 
-	@Override
-	public String toString() {
-		final StringBuilder builder = new StringBuilder();
-		builder.append(key).append(" [");
-		boolean first = true;
-		for (OTransactionIndexEntry entry : entries) {
-			if (first) {
-				first = false;
-				builder.append(',');
-			}
+  @Override
+  public String toString() {
+    final StringBuilder builder = new StringBuilder();
+    builder.append(key).append(" [");
+    boolean first = true;
+    for (OTransactionIndexEntry entry : entries) {
+      if (first)
+        first = false;
+      else
+        builder.append(',');
 
-			builder.append(entry.value).append(" (").append(entry.operation).append(")");
-		}
-		builder.append("]");
-		return builder.toString();
-	}
+      builder.append(entry.value).append(" (").append(entry.operation).append(")");
+    }
+    builder.append("]");
+    return builder.toString();
+  }
 }

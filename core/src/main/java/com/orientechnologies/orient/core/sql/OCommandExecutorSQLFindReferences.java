@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2010 Luca Garulli (l.garulli--at--orientechnologies.com)
+ * Copyright 2010-2012 Luca Garulli (l.garulli--at--orientechnologies.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ import com.orientechnologies.orient.core.serialization.serializer.OStringSeriali
  * 
  */
 @SuppressWarnings("unchecked")
-public class OCommandExecutorSQLFindReferences extends OCommandExecutorSQLAbstract {
+public class OCommandExecutorSQLFindReferences extends OCommandExecutorSQLEarlyResultsetAbstract {
   public static final String KEYWORD_FIND       = "FIND";
   public static final String KEYWORD_REFERENCES = "REFERENCES";
 

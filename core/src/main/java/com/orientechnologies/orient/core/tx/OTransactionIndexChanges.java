@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2010 Luca Garulli (l.garulli--at--orientechnologies.com)
+ * Copyright 2010-2012 Luca Garulli (l.garulli--at--orientechnologies.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,29 +26,40 @@ import java.util.TreeMap;
  */
 public class OTransactionIndexChanges {
 
-	public static enum OPERATION {
-		PUT, REMOVE, CLEAR
-	}
+  public static enum OPERATION {
+    PUT, REMOVE, CLEAR
+  }
 
-	public Map<Object, OTransactionIndexChangesPerKey>	changesPerKey	= new TreeMap<Object, OTransactionIndexChangesPerKey>();
-	public boolean																			cleared				= false;
+  public Map<Object, OTransactionIndexChangesPerKey> changesPerKey = new TreeMap<Object, OTransactionIndexChangesPerKey>();
+  public OTransactionIndexChangesPerKey              changesCrossKey;
+  public boolean                                     cleared       = false;
 
-	public OTransactionIndexChangesPerKey getChangesPerKey(final Object iKey) {
-		OTransactionIndexChangesPerKey changes = changesPerKey.get(iKey);
-		if (changes == null) {
-			changes = new OTransactionIndexChangesPerKey(iKey);
-			changesPerKey.put(iKey, changes);
-		}
+  public OTransactionIndexChangesPerKey getChangesPerKey(final Object iKey) {
+    OTransactionIndexChangesPerKey changes = changesPerKey.get(iKey);
+    if (changes == null) {
+      changes = new OTransactionIndexChangesPerKey(iKey);
+      changesPerKey.put(iKey, changes);
+    }
 
-		return changes;
-	}
+    return changes;
+  }
 
-	public void setCleared() {
-		changesPerKey.clear();
-		cleared = true;
-	}
+  public void setCleared() {
+    changesPerKey.clear();
+    cleared = true;
+  }
 
-	public boolean containsChangesPerKey(final Object iKey) {
-		return changesPerKey.containsKey(iKey);
-	}
+  public boolean containsChangesPerKey(final Object iKey) {
+    return changesPerKey.containsKey(iKey);
+  }
+
+  public boolean containsChangesCrossKey() {
+    return changesCrossKey != null;
+  }
+
+  public OTransactionIndexChangesPerKey getChangesCrossKey() {
+    if (changesCrossKey == null)
+      changesCrossKey = new OTransactionIndexChangesPerKey(null);
+    return changesCrossKey;
+  }
 }
