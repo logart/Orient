@@ -18,6 +18,7 @@ package com.orientechnologies.orient.core.type.tree;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
 import org.testng.Assert;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -30,17 +31,24 @@ import java.util.Set;
  * @since 09.05.12
  */
 @Test
-public class OffHeapTreeCacheBufferTest {
-	private OffHeapMemory memory;
+public class OffHeapTreeCacheBufferAddTest {
+  private OffHeapMemory memory = new OffHeapMemory(1000000, 20);
 	private OffHeapTreeCacheBuffer<Integer> treeCacheBuffer;
 
 	@BeforeMethod
 	public void setUp() {
-		memory = new OffHeapMemory(10000000, 20);
 		treeCacheBuffer =
 						new OffHeapTreeCacheBuffer<Integer>(memory, OIntegerSerializer.INSTANCE);
+    treeCacheBuffer.setDebug(true);
+    treeCacheBuffer.setPrintStructureForNItems(1000);
 	}
 
+  @AfterMethod
+  public void tearDown() {
+    memory.clear();
+  }
+
+  @Test
 	public void testAddOneItem() {
 		boolean result = treeCacheBuffer.add(createCacheEntry(1));
 		Assert.assertTrue(result);
@@ -50,6 +58,7 @@ public class OffHeapTreeCacheBufferTest {
 		Assert.assertEquals(cacheEntry, createCacheEntry(1));
 	}
 
+  @Test
 	public void testAddTwoOrderedItems() {
 		boolean resultOne = treeCacheBuffer.add(createCacheEntry(1));
 		Assert.assertTrue(resultOne);
@@ -66,6 +75,7 @@ public class OffHeapTreeCacheBufferTest {
 		Assert.assertEquals(cacheEntryTwo, createCacheEntry(2));
 	}
 
+  @Test
 	public void testAddTwoReverseOrderedItems() {
 		boolean resultOne = treeCacheBuffer.add(createCacheEntry(2));
 		Assert.assertTrue(resultOne);
@@ -82,6 +92,7 @@ public class OffHeapTreeCacheBufferTest {
 		Assert.assertEquals(cacheEntryTwo, createCacheEntry(2));
 	}
 
+  @Test
 	public void testAddThreeOrderedItems() {
 		boolean resultOne = treeCacheBuffer.add(createCacheEntry(1));
 		Assert.assertTrue(resultOne);
@@ -106,6 +117,7 @@ public class OffHeapTreeCacheBufferTest {
 		Assert.assertEquals(cacheEntryThree, createCacheEntry(3));
 	}
 
+  @Test
 	public void testAddThreeReversOrderedItems() {
 		boolean resultOne = treeCacheBuffer.add(createCacheEntry(3));
 		Assert.assertTrue(resultOne);
@@ -130,6 +142,7 @@ public class OffHeapTreeCacheBufferTest {
 		Assert.assertEquals(cacheEntryThree, createCacheEntry(3));
 	}
 
+  @Test
 	public void testAddThreeNonOrderedItems() {
 		boolean resultOne = treeCacheBuffer.add(createCacheEntry(2));
 		Assert.assertTrue(resultOne);
@@ -154,6 +167,7 @@ public class OffHeapTreeCacheBufferTest {
 		Assert.assertEquals(cacheEntryThree, createCacheEntry(3));
 	}
 
+  @Test
 	public void testAdd10000NonOrderedItems() {
 		Set<Integer> addedKeys = new HashSet<Integer>();
 		Random random = new Random();

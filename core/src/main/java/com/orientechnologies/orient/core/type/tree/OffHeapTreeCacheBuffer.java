@@ -38,6 +38,12 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
   private int[]                      header;
 
+  private long size = 0;
+
+  private boolean debug = false;
+
+  private int printStructureForNItems = 100;
+
   public OffHeapTreeCacheBuffer(final OffHeapMemory memory, final OBinarySerializer<K> keySerializer) {
     this.memory = memory;
 
@@ -45,6 +51,14 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
     header = new int[MAX_LEVEL + 1];
     Arrays.fill(header, OffHeapMemory.NULL_POINTER);
+  }
+
+  public void setDebug(boolean debug) {
+    this.debug = debug;
+  }
+
+  public void setPrintStructureForNItems(int printStructureForNItems) {
+    this.printStructureForNItems = printStructureForNItems;
   }
 
   public boolean add(CacheEntry<K> entry) {
@@ -69,6 +83,12 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
         return false;
 
       Arrays.fill(header, 0, pointers.length, itemPointer);
+
+      size++;
+
+      if(debug && size % printStructureForNItems == 0)
+        printStructure();
+
       return true;
     }
 
@@ -143,6 +163,11 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
     if (contentIsDirty)
       memory.update(updatePointer, updateContent);
 
+    size++;
+
+    if(debug && size % printStructureForNItems == 0)
+      printStructure();
+
     return true;
   }
 
@@ -192,6 +217,10 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
     return null;
   }
 
+  public long size() {
+    return size;
+  }
+
   public CacheEntry<?> getCeiling(K firstKey) {
     return null;
   }
@@ -200,8 +229,95 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
     return null;
   }
 
-  public CacheEntry<?> remove(K firstKey) {
-    return null;
+  public CacheEntry<K> remove(K firstKey) {
+    final int[] update = new int[MAX_LEVEL];
+    Arrays.fill(update, OffHeapMemory.NULL_POINTER);
+
+    int level = MAX_LEVEL;
+    int forwardPointer = header[level];
+
+    while (forwardPointer == OffHeapMemory.NULL_POINTER && level > 0) {
+      level--;
+      forwardPointer = header[level];
+    }
+
+    if (forwardPointer == OffHeapMemory.NULL_POINTER) {
+       return null;
+    }
+
+    byte[] content = null;
+    int pointer = OffHeapMemory.NULL_POINTER;
+
+    int compareResult = -1;
+    byte[] forwardContent = null;
+    while (level >= 0) {
+      if (content == null)
+        forwardPointer = header[level];
+      else
+        forwardPointer = getNPointer(content, level);
+
+      if (forwardPointer == OffHeapMemory.NULL_POINTER) {
+        update[level] = pointer;
+        level--;
+
+        continue;
+      }
+
+      forwardContent = memory.get(forwardPointer);
+
+      K key = getKey(forwardContent);
+      compareResult = firstKey.compareTo(key);
+
+      if (compareResult <= 0) {
+        update[level] = pointer;
+        level--;
+        continue;
+      }
+
+      content = forwardContent;
+      pointer = forwardPointer;
+    }
+
+    if(compareResult != 0)
+      return null;
+
+    memory.remove(forwardPointer);
+
+    final CacheEntry<K> removed = fromContent(forwardContent);
+    final int itemLevel = getPointersSize(forwardContent);
+    boolean contentIsDirty = false;
+    int updatePointer = OffHeapMemory.NULL_POINTER;
+    byte[] updateContent = null;
+
+    for(int i = itemLevel - 1; i >= 0; i--) {
+      if (update[i] != updatePointer) {
+        if (contentIsDirty) {
+          memory.update(updatePointer, updateContent);
+          contentIsDirty = false;
+        }
+
+        updatePointer = update[i];
+
+        if (updatePointer != OffHeapMemory.NULL_POINTER)
+          updateContent = memory.get(updatePointer);
+      }
+
+      if (updatePointer != OffHeapMemory.NULL_POINTER) {
+        setNPointer(updateContent, i, getNPointer(forwardContent, i));
+        contentIsDirty = true;
+      } else
+        header[i] = getNPointer(forwardContent, i);
+    }
+
+    if (contentIsDirty)
+      memory.update(updatePointer, updateContent);
+
+    size--;
+
+    if(debug && size % printStructureForNItems == 0)
+      printStructure();
+
+    return removed;
   }
 
   public void update(CacheEntry<?> entry) {
@@ -316,6 +432,43 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
   private void setNPointer(byte[] content, int level, int pointer) {
     final int offset = OIntegerSerializer.INT_SIZE + level * OIntegerSerializer.INT_SIZE;
     OIntegerSerializer.INSTANCE.serialize(pointer, content, offset);
+  }
+
+  private void printStructure() {
+    System.out.println("---------------------------------------------------------------------------------------------");
+    System.out.println("Size : " + size);
+
+    int level = MAX_LEVEL;
+    int forwardPointer = header[level];
+
+    while (forwardPointer == OffHeapMemory.NULL_POINTER && level > 0) {
+      level--;
+      forwardPointer = header[level];
+    }
+
+    System.out.println("Max level : " + level);
+
+    for(int n = level; n>=0; n--) {
+      int itemsCount = 0;
+
+      byte[] content = null;
+
+      while (true) {
+        if (content == null)
+          forwardPointer = header[n];
+        else
+          forwardPointer = getNPointer(content, n);
+
+        if(forwardPointer == OffHeapMemory.NULL_POINTER)
+          break;
+
+        content = memory.get(forwardPointer);
+        itemsCount++;
+      }
+      System.out.println("Current level :" + n + ", items :" + itemsCount);
+    }
+
+    System.out.println("---------------------------------------------------------------------------------------------");
   }
 
   public static final class CacheEntry<K> {

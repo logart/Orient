@@ -16,9 +16,12 @@
 
 package com.orientechnologies.orient.core.type.tree;
 
+import com.orientechnologies.common.log.OLogManager;
+import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OShortSerializer;
 
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +31,16 @@ import java.util.List;
  * @since 07.04.12
  */
 public class OffHeapMemory {
+  private static Class<?>	sunClass = null;
+
+  static {
+    // GET SUN JDK METHOD TO CLEAN MMAP BUFFERS
+    try {
+      sunClass = Class.forName("sun.nio.ch.DirectBuffer");
+    } catch (Exception e) {
+    }
+  }
+
   public static final int  SYSTEM_INFO_SIZE = OIntegerSerializer.INT_SIZE + 2 * OShortSerializer.SHORT_SIZE;
 
   public static final int  NULL_POINTER     = -1;
@@ -141,6 +154,32 @@ public class OffHeapMemory {
     freeSize += freeListTailSize;
 
     return freeSize;
+  }
+
+  public void clear() {
+    freeListHead = 0;
+    freeListTail = 0;
+
+    freeListHeadSize = byteBuffer.capacity();
+    freeListTailSize = freeListHeadSize;
+
+    byteBuffer.clear();
+    byteBuffer.putInt(freeListHeadSize);
+  }
+
+  @Override
+  protected void finalize() throws Throwable {
+    super.finalize();
+    if (sunClass != null) {
+      // USE SUN JVM SPECIAL METHOD TO FREE RESOURCES
+      try {
+        final Method m = sunClass.getMethod("cleaner");
+        final Object cleaner = m.invoke(byteBuffer);
+        cleaner.getClass().getMethod("clean").invoke(cleaner);
+      } catch (Exception e) {
+        OLogManager.instance().error(this, "Error on calling Sun's MMap buffer clean", e);
+      }
+    }
   }
 
   private boolean canAdd(AllocationInfo allocationInfo, int offset, int size) {
