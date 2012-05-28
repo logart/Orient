@@ -164,6 +164,15 @@ public abstract class OSQLFilterItemAbstract implements OSQLFilterItem {
                       } catch (ORecordNotFoundException e) {
                         ioResult = null;
                       }
+                    else if (o instanceof Map<?, ?>) {
+                      newColl.add(ODocumentHelper.getFieldValue(o, op.value.get(0)));
+
+                    } else if (OMultiValue.isMultiValue(o)) {
+                      // ADD SINGLE ITEMS AS FLAT COLLECTION
+                      for (Object subO : OMultiValue.getMultiValueIterable(o))
+                        newColl.add(subO);
+                    } else
+                      newColl.add(o);
                   }
                   ioResult = newColl;
                 } else if (ioResult instanceof ODocument)
