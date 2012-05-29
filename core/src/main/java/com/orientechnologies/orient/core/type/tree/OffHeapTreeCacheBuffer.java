@@ -234,8 +234,56 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
     return null;
   }
 
-  public CacheEntry<?> getFloor(K firstKey) {
-    return null;
+  public CacheEntry<K> getFloor(K firstKey) {
+    int level = MAX_LEVEL;
+    int forwardPointer = header[level];
+
+    while (forwardPointer == OffHeapMemory.NULL_POINTER && level > 0) {
+      level--;
+      forwardPointer = header[level];
+    }
+
+    if (forwardPointer == OffHeapMemory.NULL_POINTER) {
+      return null;
+    }
+
+    byte[] stream = null;
+    while (level >= 0) {
+      byte[] forwardStream;
+
+      if (stream == null)
+        forwardPointer = header[level];
+      else
+        forwardPointer = getNPointer(stream, level);
+
+      if (forwardPointer == OffHeapMemory.NULL_POINTER) {
+        level--;
+        continue;
+      }
+
+      forwardStream = memory.get(forwardPointer);
+
+      K key = getKey(forwardStream);
+      int compareResult = firstKey.compareTo(key);
+
+      if (compareResult == 0) {
+        byte[] dataStream = memory.get(getDataPointer(forwardStream));
+        return fromStreamToEntry(key, dataStream);
+      }
+
+      if (compareResult < 0) {
+        level--;
+        continue;
+      }
+
+      stream = forwardStream;
+    }
+
+    if(stream == null)
+      return null;
+
+    byte[] dataStream = memory.get(getDataPointer(stream));
+    return fromStreamToEntry(getKey(stream), dataStream);
   }
 
   public CacheEntry<K> remove(K firstKey) {
