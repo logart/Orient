@@ -136,6 +136,10 @@ public class OffHeapMemory {
     return count;
   }
 
+  public int capacity() {
+    return byteBuffer.capacity();
+  }
+
   public int freeSpace() {
     if (freeListHead == -1)
       return 0;

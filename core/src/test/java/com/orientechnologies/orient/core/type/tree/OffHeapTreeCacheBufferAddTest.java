@@ -32,7 +32,7 @@ import java.util.Set;
  */
 @Test
 public class OffHeapTreeCacheBufferAddTest {
-  private OffHeapMemory memory = new OffHeapMemory(1000000, 20);
+  private OffHeapMemory memory = new OffHeapMemory(2000000, 20);
 	private OffHeapTreeCacheBuffer<Integer> treeCacheBuffer;
 
 	@BeforeMethod

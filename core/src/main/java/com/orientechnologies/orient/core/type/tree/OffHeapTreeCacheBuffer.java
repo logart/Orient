@@ -75,9 +75,12 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
     if (forwardPointer == OffHeapMemory.NULL_POINTER) {
       int[] pointers = createPointers(update);
-      byte[] content = toContent(pointers, entry);
+      byte[] dataStream = fromEntryToStream(entry);
+      int dataPointer = memory.add(dataStream);
 
-      final int itemPointer = memory.add(content);
+      byte[] stream  = fromItemToStream(pointers, entry.firstKey, dataPointer);
+
+      final int itemPointer = memory.add(stream);
 
       if (itemPointer == OffHeapMemory.NULL_POINTER)
         return false;
@@ -92,16 +95,16 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
       return true;
     }
 
-    byte[] content = null;
+    byte[] stream = null;
     int pointer = OffHeapMemory.NULL_POINTER;
 
     while (level >= 0) {
-      byte[] forwardContent;
+      byte[] forwardStream;
 
-      if (content == null)
+      if (stream == null)
         forwardPointer = header[level];
       else
-        forwardPointer = getNPointer(content, level);
+        forwardPointer = getNPointer(stream, level);
 
       if (forwardPointer == OffHeapMemory.NULL_POINTER) {
         update[level] = pointer;
@@ -110,9 +113,9 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
         continue;
       }
 
-      forwardContent = memory.get(forwardPointer);
+      forwardStream = memory.get(forwardPointer);
 
-      K key = getKey(forwardContent);
+      K key = getKey(forwardStream);
       int compareResult = entry.firstKey.compareTo(key);
 
       if (compareResult == 0)
@@ -124,44 +127,48 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
         continue;
       }
 
-      content = forwardContent;
+      stream = forwardStream;
       pointer = forwardPointer;
     }
 
-    final int[] pointers = createPointers(update);
-    content = toContent(pointers, entry);
 
-    final int newItemPointer = memory.add(content);
+    final int[] pointers = createPointers(update);
+    byte[] dataStream = fromEntryToStream(entry);
+    int dataPointer = memory.add(dataStream);
+
+    stream = fromItemToStream(pointers, entry.firstKey, dataPointer);
+
+    final int newItemPointer = memory.add(stream);
 
     if (newItemPointer == OffHeapMemory.NULL_POINTER)
       return false;
 
-    byte[] updateContent = null;
+    byte[] updateStream = null;
     int updatePointer = OffHeapMemory.NULL_POINTER;
 
-    boolean contentIsDirty = false;
+    boolean streamIsDirty = false;
     for (int i = 0; i < pointers.length; i++) {
       if (update[i] != updatePointer) {
-        if (contentIsDirty) {
-          memory.update(updatePointer, updateContent);
-          contentIsDirty = false;
+        if (streamIsDirty) {
+          memory.update(updatePointer, updateStream);
+          streamIsDirty = false;
         }
 
         updatePointer = update[i];
 
         if (updatePointer != OffHeapMemory.NULL_POINTER)
-          updateContent = memory.get(updatePointer);
+          updateStream = memory.get(updatePointer);
       }
 
       if (updatePointer != OffHeapMemory.NULL_POINTER) {
-        setNPointer(updateContent, i, newItemPointer);
-        contentIsDirty = true;
+        setNPointer(updateStream, i, newItemPointer);
+        streamIsDirty = true;
       } else
         header[i] = newItemPointer;
     }
 
-    if (contentIsDirty)
-      memory.update(updatePointer, updateContent);
+    if (streamIsDirty)
+      memory.update(updatePointer, updateStream);
 
     size++;
 
@@ -184,34 +191,36 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
       return null;
     }
 
-    byte[] content = null;
+    byte[] stream = null;
     while (level >= 0) {
-      byte[] forwardContent;
+      byte[] forwardStream;
 
-      if (content == null)
+      if (stream == null)
         forwardPointer = header[level];
       else
-        forwardPointer = getNPointer(content, level);
+        forwardPointer = getNPointer(stream, level);
 
       if (forwardPointer == OffHeapMemory.NULL_POINTER) {
         level--;
         continue;
       }
 
-      forwardContent = memory.get(forwardPointer);
+      forwardStream = memory.get(forwardPointer);
 
-      K key = getKey(forwardContent);
+      K key = getKey(forwardStream);
       int compareResult = firstKey.compareTo(key);
 
-      if (compareResult == 0)
-        return fromContent(forwardContent);
+      if (compareResult == 0) {
+        byte[] dataStream = memory.get(getDataPointer(forwardStream));
+        return fromStreamToEntry(key, dataStream);
+      }
 
       if (compareResult < 0) {
         level--;
         continue;
       }
 
-      content = forwardContent;
+      stream = forwardStream;
     }
 
     return null;
@@ -245,16 +254,16 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
        return null;
     }
 
-    byte[] content = null;
+    byte[] stream = null;
     int pointer = OffHeapMemory.NULL_POINTER;
 
     int compareResult = -1;
-    byte[] forwardContent = null;
+    byte[] forwardStream = null;
     while (level >= 0) {
-      if (content == null)
+      if (stream == null)
         forwardPointer = header[level];
       else
-        forwardPointer = getNPointer(content, level);
+        forwardPointer = getNPointer(stream, level);
 
       if (forwardPointer == OffHeapMemory.NULL_POINTER) {
         update[level] = pointer;
@@ -263,9 +272,9 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
         continue;
       }
 
-      forwardContent = memory.get(forwardPointer);
+      forwardStream = memory.get(forwardPointer);
 
-      K key = getKey(forwardContent);
+      K key = getKey(forwardStream);
       compareResult = firstKey.compareTo(key);
 
       if (compareResult <= 0) {
@@ -274,7 +283,7 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
         continue;
       }
 
-      content = forwardContent;
+      stream = forwardStream;
       pointer = forwardPointer;
     }
 
@@ -283,41 +292,44 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
     memory.remove(forwardPointer);
 
-    final CacheEntry<K> removed = fromContent(forwardContent);
-    final int itemLevel = getPointersSize(forwardContent);
-    boolean contentIsDirty = false;
+    final int itemLevel = getPointersSize(forwardStream);
+    boolean streamIsDirty = false;
     int updatePointer = OffHeapMemory.NULL_POINTER;
-    byte[] updateContent = null;
+    byte[] updateStream = null;
 
     for(int i = itemLevel - 1; i >= 0; i--) {
       if (update[i] != updatePointer) {
-        if (contentIsDirty) {
-          memory.update(updatePointer, updateContent);
-          contentIsDirty = false;
+        if (streamIsDirty) {
+          memory.update(updatePointer, updateStream);
+          streamIsDirty = false;
         }
 
         updatePointer = update[i];
 
         if (updatePointer != OffHeapMemory.NULL_POINTER)
-          updateContent = memory.get(updatePointer);
+          updateStream = memory.get(updatePointer);
       }
 
       if (updatePointer != OffHeapMemory.NULL_POINTER) {
-        setNPointer(updateContent, i, getNPointer(forwardContent, i));
-        contentIsDirty = true;
+        setNPointer(updateStream, i, getNPointer(forwardStream, i));
+        streamIsDirty = true;
       } else
-        header[i] = getNPointer(forwardContent, i);
+        header[i] = getNPointer(forwardStream, i);
     }
 
-    if (contentIsDirty)
-      memory.update(updatePointer, updateContent);
+    if (streamIsDirty)
+      memory.update(updatePointer, updateStream);
 
     size--;
 
     if(debug && size % printStructureForNItems == 0)
       printStructure();
 
-    return removed;
+    int dataPointer = getDataPointer(forwardStream);
+    byte[] dataStream = memory.get(dataPointer);
+    memory.remove(dataPointer);
+
+    return fromStreamToEntry(firstKey, dataStream);
   }
 
   public void update(CacheEntry<?> entry) {
@@ -345,12 +357,8 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
     return newLevel;
   }
 
-  private CacheEntry<K> fromContent(byte[] content) {
-    final int pointersLen = OIntegerSerializer.INSTANCE.deserialize(content, 0);
-    int offset = OIntegerSerializer.INT_SIZE + pointersLen * 4;
-
-    final K firstKey = keySerializer.deserialize(content, offset);
-    offset += keySerializer.getObjectSize(firstKey);
+  private CacheEntry<K> fromStreamToEntry(K firstKey, byte[] content) {
+    int offset = 0;
 
     final K lastKey = keySerializer.deserialize(content, offset);
     offset += keySerializer.getObjectSize(lastKey);
@@ -367,14 +375,11 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
 		final ORID parentRid = OLinkSerializer.INSTANCE.deserialize(content, offset);
 		offset += OLinkSerializer.INSTANCE.getObjectSize(parentRid);
 
-
 		return new CacheEntry<K>(firstKey, lastKey, rid, parentRid, leftRid, rightRid);
   }
 
-  private byte[] toContent(int[] pointers, CacheEntry<K> entry) {
-    int size = OIntegerSerializer.INT_SIZE + OIntegerSerializer.INT_SIZE * pointers.length;
-    size += keySerializer.getObjectSize(entry.firstKey);
-    size += keySerializer.getObjectSize(entry.lastKey);
+  private byte[] fromEntryToStream(CacheEntry<K> entry) {
+    int size = keySerializer.getObjectSize(entry.lastKey);
     size += OLinkSerializer.INSTANCE.getObjectSize(entry.rid);
     size += OLinkSerializer.INSTANCE.getObjectSize(entry.leftRid);
     size += OLinkSerializer.INSTANCE.getObjectSize(entry.rightRid);
@@ -383,17 +388,6 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
     final byte[] content = new byte[size];
 
     int offset = 0;
-
-    OIntegerSerializer.INSTANCE.serialize(pointers.length, content, offset);
-    offset += OIntegerSerializer.INT_SIZE;
-
-    for (int pointer : pointers) {
-      OIntegerSerializer.INSTANCE.serialize(pointer, content, offset);
-      offset += OIntegerSerializer.INT_SIZE;
-    }
-
-    keySerializer.serialize(entry.firstKey, content, offset);
-    offset += keySerializer.getObjectSize(entry.firstKey);
 
     keySerializer.serialize(entry.lastKey, content, offset);
     offset += keySerializer.getObjectSize(entry.lastKey);
@@ -413,20 +407,52 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
 		return content;
   }
 
-  private K getKey(byte[] content) {
-    int pointersLen = OIntegerSerializer.INSTANCE.deserialize(content, 0);
+  private byte[] fromItemToStream(int[] pointers, K firstKey, int dataPointer) {
+    int size = 2* OIntegerSerializer.INT_SIZE + OIntegerSerializer.INT_SIZE * pointers.length;
+    size += keySerializer.getObjectSize(firstKey);
 
-    return keySerializer.deserialize(content, OIntegerSerializer.INT_SIZE + pointersLen * OIntegerSerializer.INT_SIZE);
+    byte[] stream = new byte[size];
+
+    int offset = 0;
+
+    OIntegerSerializer.INSTANCE.serialize(pointers.length, stream, offset);
+    offset += OIntegerSerializer.INT_SIZE;
+
+    for (int pointer : pointers) {
+      OIntegerSerializer.INSTANCE.serialize(pointer, stream, offset);
+      offset += OIntegerSerializer.INT_SIZE;
+    }
+
+    keySerializer.serialize(firstKey, stream, offset);
+    offset += keySerializer.getObjectSize(firstKey);
+
+    OIntegerSerializer.INSTANCE.serialize(dataPointer, stream, offset);
+
+    return stream;
   }
 
-  private int getNPointer(byte[] content, int level) {
+  private K getKey(byte[] stream) {
+    int pointersLen = OIntegerSerializer.INSTANCE.deserialize(stream, 0);
+
+    return keySerializer.deserialize(stream, OIntegerSerializer.INT_SIZE + pointersLen * OIntegerSerializer.INT_SIZE);
+  }
+
+  private int getNPointer(byte[] stream, int level) {
     final int offset = OIntegerSerializer.INT_SIZE + level * OIntegerSerializer.INT_SIZE;
 
-    return OIntegerSerializer.INSTANCE.deserialize(content, offset);
+    return OIntegerSerializer.INSTANCE.deserialize(stream, offset);
   }
 
-  private int getPointersSize(byte[] content) {
-    return OIntegerSerializer.INSTANCE.deserialize(content, 0);
+  private int getPointersSize(byte[] stream) {
+    return OIntegerSerializer.INSTANCE.deserialize(stream, 0);
+  }
+
+  private int getDataPointer(byte[] stream) {
+    int offset =  OIntegerSerializer.INT_SIZE + OIntegerSerializer.INSTANCE.deserialize(stream, 0) * OIntegerSerializer.INT_SIZE;
+
+    offset += keySerializer.getObjectSize(stream, offset);
+
+    return OIntegerSerializer.INSTANCE.deserialize(stream, offset);
   }
 
   private void setNPointer(byte[] content, int level, int pointer) {

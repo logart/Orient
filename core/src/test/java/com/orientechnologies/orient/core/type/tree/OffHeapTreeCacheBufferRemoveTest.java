@@ -12,7 +12,7 @@ import java.util.Set;
 
 @Test
 public class OffHeapTreeCacheBufferRemoveTest {
-  private OffHeapMemory memory = new OffHeapMemory(1000000, 20);
+  private OffHeapMemory memory = new OffHeapMemory(2000000, 20);
   private OffHeapTreeCacheBuffer<Integer> treeCacheBuffer;
 
   @BeforeMethod
@@ -32,7 +32,7 @@ public class OffHeapTreeCacheBufferRemoveTest {
     Assert.assertEquals(treeCacheBuffer.size(), 0);
     Assert.assertNull(treeCacheBuffer.get(1));
 
-    Assert.assertEquals(1000000, memory.freeSpace());
+    Assert.assertEquals(memory.capacity(), memory.freeSpace());
   }
 
   @Test
@@ -45,7 +45,7 @@ public class OffHeapTreeCacheBufferRemoveTest {
     Assert.assertEquals(treeCacheBuffer.remove(2), createCacheEntry(2));
     Assert.assertEquals(treeCacheBuffer.size(), 0);
 
-    Assert.assertEquals(1000000, memory.freeSpace());
+    Assert.assertEquals(memory.capacity(), memory.freeSpace());
   }
 
   @Test
@@ -58,7 +58,7 @@ public class OffHeapTreeCacheBufferRemoveTest {
     Assert.assertEquals(treeCacheBuffer.remove(1), createCacheEntry(1));
     Assert.assertEquals(treeCacheBuffer.size(), 0);
 
-    Assert.assertEquals(1000000, memory.freeSpace());
+    Assert.assertEquals(memory.capacity(), memory.freeSpace());
   }
 
   @Test
@@ -74,7 +74,7 @@ public class OffHeapTreeCacheBufferRemoveTest {
     Assert.assertEquals(treeCacheBuffer.remove(3), createCacheEntry(3));
     Assert.assertEquals(treeCacheBuffer.size(), 0);
 
-    Assert.assertEquals(1000000, memory.freeSpace());
+    Assert.assertEquals(memory.capacity(), memory.freeSpace());
   }
 
   @Test
@@ -90,7 +90,7 @@ public class OffHeapTreeCacheBufferRemoveTest {
     Assert.assertEquals(treeCacheBuffer.remove(1), createCacheEntry(1));
     Assert.assertEquals(treeCacheBuffer.size(), 0);
 
-    Assert.assertEquals(1000000, memory.freeSpace());
+    Assert.assertEquals(memory.capacity(), memory.freeSpace());
   }
 
   @Test
@@ -106,7 +106,7 @@ public class OffHeapTreeCacheBufferRemoveTest {
     Assert.assertEquals(treeCacheBuffer.remove(1), createCacheEntry(1));
     Assert.assertEquals(treeCacheBuffer.size(), 0);
 
-    Assert.assertEquals(1000000, memory.freeSpace());
+    Assert.assertEquals(memory.capacity(), memory.freeSpace());
   }
 
   @Test
@@ -128,7 +128,7 @@ public class OffHeapTreeCacheBufferRemoveTest {
     }
 
     Assert.assertEquals(treeCacheBuffer.size(), 0);
-    Assert.assertEquals(1000000, memory.freeSpace());
+    Assert.assertEquals(memory.capacity(), memory.freeSpace());
   }
 
   private OffHeapTreeCacheBuffer.CacheEntry<Integer> createCacheEntry(int key) {
