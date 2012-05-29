@@ -19,8 +19,6 @@ public class OffHeapTreeCacheBufferRemoveTest {
   public void setUp() {
     treeCacheBuffer =
             new OffHeapTreeCacheBuffer<Integer>(memory, OIntegerSerializer.INSTANCE);
-    treeCacheBuffer.setDebug(true);
-    treeCacheBuffer.setPrintStructureForNItems(1000);
   }
 
   @Test

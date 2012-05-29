@@ -332,7 +332,61 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
     return fromStreamToEntry(firstKey, dataStream);
   }
 
-  public void update(CacheEntry<?> entry) {
+  public boolean update(CacheEntry<K> entry) {
+    int level = MAX_LEVEL;
+    int forwardPointer = header[level];
+
+    while (forwardPointer == OffHeapMemory.NULL_POINTER && level > 0) {
+      level--;
+      forwardPointer = header[level];
+    }
+
+    if (forwardPointer == OffHeapMemory.NULL_POINTER) {
+      return false;
+    }
+
+    byte[] stream = null;
+    while (level >= 0) {
+      byte[] forwardStream;
+
+      if (stream == null)
+        forwardPointer = header[level];
+      else
+        forwardPointer = getNPointer(stream, level);
+
+      if (forwardPointer == OffHeapMemory.NULL_POINTER) {
+        level--;
+        continue;
+      }
+
+      forwardStream = memory.get(forwardPointer);
+
+      K key = getKey(forwardStream);
+      int compareResult = entry.firstKey.compareTo(key);
+
+      if (compareResult == 0) {
+        int dataPointer = getDataPointer(forwardStream);
+        memory.remove(dataPointer);
+
+        byte[] dataStream = fromEntryToStream(entry);
+
+        dataPointer = memory.add(dataStream);
+
+        setDataPointer(forwardStream, dataPointer);
+        memory.update(forwardPointer, forwardStream);
+
+        return true;
+      }
+
+      if (compareResult < 0) {
+        level--;
+        continue;
+      }
+
+      stream = forwardStream;
+    }
+
+    return false;
   }
 
   private int[] createPointers(int[] update) {
@@ -453,6 +507,14 @@ public class OffHeapTreeCacheBuffer<K extends Comparable<K>> {
     offset += keySerializer.getObjectSize(stream, offset);
 
     return OIntegerSerializer.INSTANCE.deserialize(stream, offset);
+  }
+
+  private void setDataPointer(byte[] stream, int dataPointer) {
+    int offset =  OIntegerSerializer.INT_SIZE + OIntegerSerializer.INSTANCE.deserialize(stream, 0) * OIntegerSerializer.INT_SIZE;
+
+    offset += keySerializer.getObjectSize(stream, offset);
+
+    OIntegerSerializer.INSTANCE.serialize(dataPointer, stream, offset);
   }
 
   private void setNPointer(byte[] content, int level, int pointer) {

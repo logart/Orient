@@ -39,8 +39,6 @@ public class OffHeapTreeCacheBufferAddTest {
 	public void setUp() {
 		treeCacheBuffer =
 						new OffHeapTreeCacheBuffer<Integer>(memory, OIntegerSerializer.INSTANCE);
-    treeCacheBuffer.setDebug(true);
-    treeCacheBuffer.setPrintStructureForNItems(1000);
 	}
 
   @AfterMethod
