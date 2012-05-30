@@ -13,13 +13,13 @@ import java.util.Set;
 
 @Test
 public class OffHeapTreeCacheBufferUpdateTest {
-  private OffHeapMemory memory = new OffHeapMemory(2000000, 20);
-  private OffHeapTreeCacheBuffer<Integer> treeCacheBuffer;
+  private OOffHeapMemory memory = new OOffHeapMemory(2000000, 20);
+  private OOffHeapTreeCacheBuffer<Integer> treeCacheBuffer;
 
   @BeforeMethod
   public void setUp() {
     treeCacheBuffer =
-            new OffHeapTreeCacheBuffer<Integer>(memory, OIntegerSerializer.INSTANCE);
+            new OOffHeapTreeCacheBuffer<Integer>(memory, OIntegerSerializer.INSTANCE);
   }
 
   @AfterMethod
@@ -33,7 +33,7 @@ public class OffHeapTreeCacheBufferUpdateTest {
     boolean result = treeCacheBuffer.update(createUpdateCacheEntry(1));
 
     Assert.assertTrue(result);
-    final OffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntry = treeCacheBuffer.get(1);
+    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntry = treeCacheBuffer.get(1);
     Assert.assertNotNull(cacheEntry);
     Assert.assertEquals(cacheEntry, createUpdateCacheEntry(1));
 
@@ -54,11 +54,11 @@ public class OffHeapTreeCacheBufferUpdateTest {
     boolean resultTwo = treeCacheBuffer.update(createUpdateCacheEntry(2));
     Assert.assertTrue(resultTwo);
 
-    final OffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryOne = treeCacheBuffer.get(1);
+    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryOne = treeCacheBuffer.get(1);
     Assert.assertNotNull(cacheEntryOne);
     Assert.assertEquals(cacheEntryOne, createUpdateCacheEntry(1));
 
-    final OffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryTwo = treeCacheBuffer.get(2);
+    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryTwo = treeCacheBuffer.get(2);
     Assert.assertNotNull(cacheEntryTwo);
     Assert.assertEquals(cacheEntryTwo, createUpdateCacheEntry(2));
 
@@ -79,11 +79,11 @@ public class OffHeapTreeCacheBufferUpdateTest {
     boolean resultTwo = treeCacheBuffer.update(createUpdateCacheEntry(1));
     Assert.assertTrue(resultTwo);
 
-    final OffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryOne = treeCacheBuffer.get(1);
+    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryOne = treeCacheBuffer.get(1);
     Assert.assertNotNull(cacheEntryOne);
     Assert.assertEquals(cacheEntryOne, createUpdateCacheEntry(1));
 
-    final OffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryTwo = treeCacheBuffer.get(2);
+    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryTwo = treeCacheBuffer.get(2);
     Assert.assertNotNull(cacheEntryTwo);
     Assert.assertEquals(cacheEntryTwo, createUpdateCacheEntry(2));
 
@@ -108,15 +108,15 @@ public class OffHeapTreeCacheBufferUpdateTest {
     boolean resultThree = treeCacheBuffer.update(createUpdateCacheEntry(3));
     Assert.assertTrue(resultThree);
 
-    final OffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryOne = treeCacheBuffer.get(1);
+    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryOne = treeCacheBuffer.get(1);
     Assert.assertNotNull(cacheEntryOne);
     Assert.assertEquals(cacheEntryOne, createUpdateCacheEntry(1));
 
-    final OffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryTwo = treeCacheBuffer.get(2);
+    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryTwo = treeCacheBuffer.get(2);
     Assert.assertNotNull(cacheEntryTwo);
     Assert.assertEquals(cacheEntryTwo, createUpdateCacheEntry(2));
 
-    final OffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryThree = treeCacheBuffer.get(3);
+    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryThree = treeCacheBuffer.get(3);
     Assert.assertNotNull(cacheEntryThree);
     Assert.assertEquals(cacheEntryThree, createUpdateCacheEntry(3));
 
@@ -143,15 +143,15 @@ public class OffHeapTreeCacheBufferUpdateTest {
     boolean resultThree = treeCacheBuffer.update(createUpdateCacheEntry(1));
     Assert.assertTrue(resultThree);
 
-    final OffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryOne = treeCacheBuffer.get(1);
+    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryOne = treeCacheBuffer.get(1);
     Assert.assertNotNull(cacheEntryOne);
     Assert.assertEquals(cacheEntryOne, createUpdateCacheEntry(1));
 
-    final OffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryTwo = treeCacheBuffer.get(2);
+    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryTwo = treeCacheBuffer.get(2);
     Assert.assertNotNull(cacheEntryTwo);
     Assert.assertEquals(cacheEntryTwo, createUpdateCacheEntry(2));
 
-    final OffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryThree = treeCacheBuffer.get(3);
+    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryThree = treeCacheBuffer.get(3);
     Assert.assertNotNull(cacheEntryThree);
     Assert.assertEquals(cacheEntryThree, createUpdateCacheEntry(3));
 
@@ -178,15 +178,15 @@ public class OffHeapTreeCacheBufferUpdateTest {
     boolean resultThree = treeCacheBuffer.update(createUpdateCacheEntry(2));
     Assert.assertTrue(resultThree);
 
-    final OffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryOne = treeCacheBuffer.get(1);
+    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryOne = treeCacheBuffer.get(1);
     Assert.assertNotNull(cacheEntryOne);
     Assert.assertEquals(cacheEntryOne, createUpdateCacheEntry(1));
 
-    final OffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryTwo = treeCacheBuffer.get(2);
+    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryTwo = treeCacheBuffer.get(2);
     Assert.assertNotNull(cacheEntryTwo);
     Assert.assertEquals(cacheEntryTwo, createUpdateCacheEntry(2));
 
-    final OffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryThree = treeCacheBuffer.get(3);
+    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryThree = treeCacheBuffer.get(3);
     Assert.assertNotNull(cacheEntryThree);
     Assert.assertEquals(cacheEntryThree, createUpdateCacheEntry(3));
 
@@ -218,7 +218,7 @@ public class OffHeapTreeCacheBufferUpdateTest {
     }
 
     for(int key : addedKeys) {
-      OffHeapTreeCacheBuffer.CacheEntry<Integer> cacheEntry = treeCacheBuffer.get(key);
+      OOffHeapTreeCacheBuffer.CacheEntry<Integer> cacheEntry = treeCacheBuffer.get(key);
       Assert.assertEquals(cacheEntry, createUpdateCacheEntry(key));
     }
 
@@ -228,13 +228,13 @@ public class OffHeapTreeCacheBufferUpdateTest {
     Assert.assertEquals(memory.freeSpace(), memory.capacity());
   }
 
-  private OffHeapTreeCacheBuffer.CacheEntry<Integer> createCacheEntry(int key) {
-    return new OffHeapTreeCacheBuffer.CacheEntry<Integer>(key, 1, new ORecordId(1, 1),
+  private OOffHeapTreeCacheBuffer.CacheEntry<Integer> createCacheEntry(int key) {
+    return new OOffHeapTreeCacheBuffer.CacheEntry<Integer>(key, 1, new ORecordId(1, 1),
             new ORecordId(1, 2), new ORecordId(1, 3), new ORecordId(1, 4));
   }
 
-  private OffHeapTreeCacheBuffer.CacheEntry<Integer> createUpdateCacheEntry(int key) {
-    return new OffHeapTreeCacheBuffer.CacheEntry<Integer>(key, 2, new ORecordId(2, 1),
+  private OOffHeapTreeCacheBuffer.CacheEntry<Integer> createUpdateCacheEntry(int key) {
+    return new OOffHeapTreeCacheBuffer.CacheEntry<Integer>(key, 2, new ORecordId(2, 1),
             new ORecordId(2, 2), new ORecordId(2, 3), new ORecordId(2, 4));
   }
 }

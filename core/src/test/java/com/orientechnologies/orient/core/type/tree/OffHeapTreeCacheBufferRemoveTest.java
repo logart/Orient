@@ -12,13 +12,13 @@ import java.util.Set;
 
 @Test
 public class OffHeapTreeCacheBufferRemoveTest {
-  private OffHeapMemory memory = new OffHeapMemory(2000000, 20);
-  private OffHeapTreeCacheBuffer<Integer> treeCacheBuffer;
+  private OOffHeapMemory memory = new OOffHeapMemory(2000000, 20);
+  private OOffHeapTreeCacheBuffer<Integer> treeCacheBuffer;
 
   @BeforeMethod
   public void setUp() {
     treeCacheBuffer =
-            new OffHeapTreeCacheBuffer<Integer>(memory, OIntegerSerializer.INSTANCE);
+            new OOffHeapTreeCacheBuffer<Integer>(memory, OIntegerSerializer.INSTANCE);
   }
 
   @Test
@@ -121,7 +121,7 @@ public class OffHeapTreeCacheBufferRemoveTest {
     }
 
     for(int key : addedKeys) {
-      OffHeapTreeCacheBuffer.CacheEntry<Integer> cacheEntry = treeCacheBuffer.remove(key);
+      OOffHeapTreeCacheBuffer.CacheEntry<Integer> cacheEntry = treeCacheBuffer.remove(key);
       Assert.assertEquals(cacheEntry, createCacheEntry(key));
     }
 
@@ -129,8 +129,8 @@ public class OffHeapTreeCacheBufferRemoveTest {
     Assert.assertEquals(memory.capacity(), memory.freeSpace());
   }
 
-  private OffHeapTreeCacheBuffer.CacheEntry<Integer> createCacheEntry(int key) {
-    return new OffHeapTreeCacheBuffer.CacheEntry<Integer>(key,1, new ORecordId(1, 1),
+  private OOffHeapTreeCacheBuffer.CacheEntry<Integer> createCacheEntry(int key) {
+    return new OOffHeapTreeCacheBuffer.CacheEntry<Integer>(key,1, new ORecordId(1, 1),
             new ORecordId(1, 2), new ORecordId(1, 3), new ORecordId(1, 4) );
   }
 }

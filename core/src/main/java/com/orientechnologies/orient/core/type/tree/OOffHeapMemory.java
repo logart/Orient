@@ -30,7 +30,7 @@ import java.util.List;
  * @author Andrey Lomakin
  * @since 07.04.12
  */
-public class OffHeapMemory {
+public class OOffHeapMemory {
   private static Class<?>	sunClass = null;
 
   static {
@@ -54,7 +54,7 @@ public class OffHeapMemory {
   private final ByteBuffer byteBuffer;
   private final int        dataChunkSize;
 
-  public OffHeapMemory(int capacity, int dataChunkSize) {
+  public OOffHeapMemory(int capacity, int dataChunkSize) {
     capacity = (int) (Math.floor(1.0 * capacity / dataChunkSize) * dataChunkSize);
     byteBuffer = ByteBuffer.allocateDirect(capacity);
 
