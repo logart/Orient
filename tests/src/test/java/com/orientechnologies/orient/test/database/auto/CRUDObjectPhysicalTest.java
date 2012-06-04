@@ -35,10 +35,13 @@ import com.orientechnologies.orient.object.db.OObjectDatabaseTx;
 import com.orientechnologies.orient.object.iterator.OObjectIteratorCluster;
 import com.orientechnologies.orient.test.domain.business.Account;
 import com.orientechnologies.orient.test.domain.business.Address;
+import com.orientechnologies.orient.test.domain.business.Child;
 import com.orientechnologies.orient.test.domain.business.City;
 import com.orientechnologies.orient.test.domain.business.Country;
 import com.orientechnologies.orient.test.domain.business.EnumTest;
-import com.orientechnologies.orient.test.domain.business.JavaObjectTestClass;
+import com.orientechnologies.orient.test.domain.business.JavaMapsTestClass;
+import com.orientechnologies.orient.test.domain.business.JavaSimpleTestClass;
+import com.orientechnologies.orient.test.domain.business.JavaTestInterface;
 import com.orientechnologies.orient.test.domain.whiz.Profile;
 
 @Test(groups = { "crud", "object" })
@@ -105,7 +108,8 @@ public class CRUDObjectPhysicalTest {
 
 	public void testSimpleTypes() {
 		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
-		JavaObjectTestClass javaObj = database.newInstance(JavaObjectTestClass.class);
+		JavaSimpleTestClass javaObj = database.newInstance(JavaSimpleTestClass.class);
+		Assert.assertEquals(javaObj.getText(), "initTest");
 		javaObj.setText("test");
 		javaObj.setNumberSimple(12345);
 		javaObj.setDoubleSimple(12.34d);
@@ -115,12 +119,12 @@ public class CRUDObjectPhysicalTest {
 		javaObj.setFlagSimple(true);
 		javaObj.setEnumeration(EnumTest.ENUM1);
 
-		JavaObjectTestClass savedJavaObj = database.save(javaObj);
+		JavaSimpleTestClass savedJavaObj = database.save(javaObj);
 		ORecordId id = (ORecordId) savedJavaObj.getId();
 		database.close();
 
 		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
-		JavaObjectTestClass loadedJavaObj = (JavaObjectTestClass) database.load(id);
+		JavaSimpleTestClass loadedJavaObj = (JavaSimpleTestClass) database.load(id);
 		Assert.assertEquals(loadedJavaObj.getText(), "test");
 		Assert.assertEquals(loadedJavaObj.getNumberSimple(), 12345);
 		Assert.assertEquals(loadedJavaObj.getDoubleSimple(), 12.34d);
@@ -129,14 +133,24 @@ public class CRUDObjectPhysicalTest {
 		Assert.assertEquals(loadedJavaObj.getByteSimple(), (byte) 1);
 		Assert.assertEquals(loadedJavaObj.getFlagSimple(), true);
 		Assert.assertEquals(loadedJavaObj.getEnumeration(), EnumTest.ENUM1);
+		Assert.assertTrue(loadedJavaObj.getTestAnonymous() instanceof JavaTestInterface);
+		Assert.assertEquals(loadedJavaObj.getTestAnonymous().getNumber(), -1);
 		loadedJavaObj.setEnumeration(EnumTest.ENUM2);
+		loadedJavaObj.setTestAnonymous(new JavaTestInterface() {
+
+			public int getNumber() {
+				return 0;
+			}
+		});
 		database.save(loadedJavaObj);
 
 		database.close();
 
 		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
-		loadedJavaObj = (JavaObjectTestClass) database.load(id);
+		loadedJavaObj = (JavaSimpleTestClass) database.load(id);
 		Assert.assertEquals(loadedJavaObj.getEnumeration(), EnumTest.ENUM2);
+		Assert.assertTrue(loadedJavaObj.getTestAnonymous() instanceof JavaTestInterface);
+		Assert.assertEquals(loadedJavaObj.getTestAnonymous().getNumber(), -1);
 	}
 
 	@Test(dependsOnMethods = "testAutoCreateClass")
@@ -231,6 +245,27 @@ public class CRUDObjectPhysicalTest {
 		for (OUser u : database.browseClass(OUser.class)) {
 			u.save();
 		}
+
+		database.close();
+	}
+
+	@Test(dependsOnMethods = "mapEnumAndInternalObjects")
+	public void mapObjectsTest() {
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
+		JavaMapsTestClass p = database.newInstance(JavaMapsTestClass.class);
+		p.setName("Silvester");
+
+		Child c = database.newInstance(Child.class);
+		c.setName("John");
+
+		p.getChildren().put("first", c);
+
+		database.save(p);
+
+		List<Child> cresult = database.query(new OSQLSynchQuery<Child>("select * from Child"));
+
+		Assert.assertTrue(cresult.size() > 0);
 
 		database.close();
 	}
