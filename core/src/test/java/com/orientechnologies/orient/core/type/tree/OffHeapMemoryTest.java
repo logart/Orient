@@ -48,7 +48,7 @@ public class OffHeapMemoryTest {
 
       int pointer = memory.allocate(bytes);
       Assert.assertFalse(pointer == OOffHeapMemory.NULL_POINTER);
-      byte[] loadedData = memory.get(pointer);
+      byte[] loadedData = memory.get(pointer, 0, -1);
       Assert.assertEquals(loadedData, bytes);
 
       if (i % 3 == 0)
@@ -67,7 +67,7 @@ public class OffHeapMemoryTest {
       final byte[] bytes = data.get(i);
       int pointer = pointers.get(i);
 
-      byte[] loadedData = memory.get(pointer);
+      byte[] loadedData = memory.get(pointer, 0, -1);
       Assert.assertEquals(loadedData, bytes);
     }
 
@@ -96,7 +96,7 @@ public class OffHeapMemoryTest {
 
       int pointer = memory.allocate(bytes);
       Assert.assertFalse(pointer == OOffHeapMemory.NULL_POINTER);
-      byte[] loadedData = memory.get(pointer);
+      byte[] loadedData = memory.get(pointer, 0, -1);
       Assert.assertEquals(loadedData, bytes);
 
       pointers.add(pointer);
@@ -114,7 +114,7 @@ public class OffHeapMemoryTest {
       final byte[] bytes = data.get(i);
       int pointer = pointers.get(i);
 
-      byte[] loadedData = memory.get(pointer);
+      byte[] loadedData = memory.get(pointer, 0, -1);
       Assert.assertEquals(loadedData, bytes);
     }
 
@@ -273,7 +273,7 @@ public class OffHeapMemoryTest {
 
   private void checkData(OOffHeapMemory memory, List<Integer> pointers, List<byte[]> data) {
     for (int i = 0; i < pointers.size(); i++) {
-      final byte[] loadedData = memory.get(pointers.get(i));
+      final byte[] loadedData = memory.get(pointers.get(i), 0, -1);
       Assert.assertEquals(loadedData, data.get(i), i + "-th dat element is broken");
     }
   }
@@ -290,7 +290,7 @@ public class OffHeapMemoryTest {
       lastSize = dataToStore.length;
 
       if (pointer != OOffHeapMemory.NULL_POINTER) {
-        final byte[] loadedData = memory.get(pointer);
+        final byte[] loadedData = memory.get(pointer, 0, -1);
         Assert.assertEquals(loadedData, dataToStore);
 
         pointers.add(pointer);

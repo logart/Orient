@@ -93,37 +93,128 @@ public class OOffHeapMemory {
     doFree(pointer);
   }
 
-  public byte[] get(int pointer) {
-		int length = dataLength(pointer);
-		byte[] content = new byte[length];
+  public byte[] get(int pointer, final int offset, final int length) {
+		int dataLength = dataLength(pointer);
 
-		int offset = 0;
+		final  byte[] content;
+		if(length > 0 )
+		 content = new byte[Math.min(dataLength, length)];
+		else
+		 content = new byte[dataLength];
+
+		int dataOffset = 0;
+		int contentOffset = 0;
+		boolean startReading = false;
 		do {
 			byteBuffer.position(pointer + OShortSerializer.SHORT_SIZE);
 
 			final int chunkSize = byteBuffer.getShort() - SYSTEM_INFO_SIZE;
 
-			pointer = byteBuffer.getInt();
+			final int nextPointer = byteBuffer.getInt();
 
-			byteBuffer.get(content, offset, chunkSize);
-			offset += chunkSize;
-		} while (pointer != NULL_POINTER);
+			if(startReading) {
+				final int readSize = Math.min(chunkSize, content.length - contentOffset);
+				byteBuffer.get(content, contentOffset, readSize);
+				contentOffset += readSize;
+			}	else {
+				startReading = dataOffset + chunkSize > offset;
+				if(startReading) {
+					byteBuffer.position(pointer + SYSTEM_INFO_SIZE + offset - dataOffset);
+					final int readSize = Math.min(chunkSize, content.length);
+					byteBuffer.get(content, 0, readSize);
+					contentOffset += readSize;
+				}
+				dataOffset += chunkSize;
+			}
+
+			pointer =  nextPointer;
+		} while (contentOffset < content.length && pointer != NULL_POINTER);
 
 		return content;
   }
 
-	public void set(int pointer, byte[] content) {
-		int offset = 0;
+	public void set(int pointer, final int offset, final int length, final byte[] content) {
+		boolean startWriting = false;
+		int dataOffset = 0;
+		int contentOffset = 0;
+
 		do {
 			byteBuffer.position(pointer + OShortSerializer.SHORT_SIZE);
 
 			final int chunkSize = byteBuffer.getShort() - SYSTEM_INFO_SIZE;
 
-			pointer = byteBuffer.getInt();
+			final int nextPointer = byteBuffer.getInt();
 
-			byteBuffer.put(content, offset, chunkSize);
-			offset += chunkSize;
+			if(startWriting) {
+				final int writeSize = Math.min(chunkSize, content.length - contentOffset);
+				byteBuffer.put(content, contentOffset, writeSize);
+				contentOffset += writeSize;
+			}	else {
+				startWriting = dataOffset + chunkSize > offset;
+				if(startWriting) {
+					byteBuffer.position(pointer + SYSTEM_INFO_SIZE + offset - dataOffset);
+					final int writeSize = Math.min(chunkSize, content.length);
+					byteBuffer.put(content, 0, writeSize);
+					contentOffset += writeSize;
+				}
+				dataOffset += chunkSize;
+			}
+
+			pointer =  nextPointer;
+		} while (contentOffset < length && pointer != NULL_POINTER);
+	}
+
+	public int getInt(int pointer, final int offset) {
+		do {
+			int dataOffset = 0;
+
+			byteBuffer.position(pointer + OShortSerializer.SHORT_SIZE);
+
+			final int chunkSize = byteBuffer.getShort() - SYSTEM_INFO_SIZE;
+
+			final int nextPointer = byteBuffer.getInt();
+
+			if(dataOffset + chunkSize > offset) {
+				if(chunkSize - (offset - dataOffset) >= OIntegerSerializer.INT_SIZE)
+					return byteBuffer.getInt(pointer + SYSTEM_INFO_SIZE + offset - dataOffset);
+				else
+					return OIntegerSerializer.INSTANCE.deserialize(get(pointer, offset - dataOffset, OIntegerSerializer.INT_SIZE), 0);
+			}
+
+			dataOffset += chunkSize;
+			pointer = nextPointer;
 		} while (pointer != NULL_POINTER);
+
+		throw new IllegalArgumentException("Passed in offset out of the allocated memory bounds");
+	}
+
+	public void setInt(int pointer, final int offset, final int value) {
+		do {
+			int dataOffset = 0;
+
+			byteBuffer.position(pointer + OShortSerializer.SHORT_SIZE);
+
+			final int chunkSize = byteBuffer.getShort() - SYSTEM_INFO_SIZE;
+
+			final int nextPointer = byteBuffer.getInt();
+
+			if(dataOffset + chunkSize > offset) {
+				if(chunkSize - (offset - dataOffset) >= OIntegerSerializer.INT_SIZE) {
+					byteBuffer.putInt(pointer + SYSTEM_INFO_SIZE + offset - dataOffset, value);
+					return;
+				}	else  {
+					byte[] content =  new byte[OIntegerSerializer.INT_SIZE];
+					OIntegerSerializer.INSTANCE.serialize(value, content, 0);
+					set(pointer, offset - dataOffset, OIntegerSerializer.INT_SIZE, content);
+					return;
+				}
+			}
+
+			dataOffset += chunkSize;
+			pointer = nextPointer;
+		} while (pointer != NULL_POINTER);
+
+		throw new IllegalArgumentException("Passed in offset out of the allocated memory bounds");
 	}
 
   public int freeChunkCount() {
