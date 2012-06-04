@@ -78,12 +78,12 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     if (forwardPointer == OOffHeapMemory.NULL_POINTER) {
       int[] pointers = createPointers(update);
       byte[] dataStream = fromEntryToStream(entry);
-      int dataPointer = memory.add(dataStream);
+      int dataPointer = memory.allocate(dataStream);
 
       byte[] stream  = fromItemToStream(pointers, entry.firstKey, dataPointer, OOffHeapMemory.NULL_POINTER,
               OOffHeapMemory.NULL_POINTER);
 
-      final int itemPointer = memory.add(stream);
+      final int itemPointer = memory.allocate(stream);
 
       if (itemPointer == OOffHeapMemory.NULL_POINTER)
         return evict() && add(entry);
@@ -136,11 +136,11 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
     final int[] pointers = createPointers(update);
     byte[] dataStream = fromEntryToStream(entry);
-    int dataPointer = memory.add(dataStream);
+    int dataPointer = memory.allocate(dataStream);
 
     stream = fromItemToStream(pointers, entry.firstKey, dataPointer, OOffHeapMemory.NULL_POINTER,
             OOffHeapMemory.NULL_POINTER);
-    final int newItemPointer = memory.add(stream);
+    final int newItemPointer = memory.allocate(stream);
     addItemToLRU(newItemPointer, stream);
 
     if(newItemPointer == OOffHeapMemory.NULL_POINTER)
@@ -153,7 +153,7 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     for (int i = 0; i < pointers.length; i++) {
       if (update[i] != updatePointer) {
         if (streamIsDirty) {
-          memory.update(updatePointer, updateStream);
+          memory.set(updatePointer, updateStream);
           streamIsDirty = false;
         }
 
@@ -171,7 +171,7 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     }
 
     if (streamIsDirty)
-      memory.update(updatePointer, updateStream);
+      memory.set(updatePointer, updateStream);
 
     size++;
 
@@ -404,7 +404,7 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     if(compareResult != 0)
       return null;
 
-    memory.remove(forwardPointer);
+    memory.free(forwardPointer);
     removeItemFromLRU(forwardPointer, forwardStream);
 
     final int itemLevel = getPointersSize(forwardStream);
@@ -415,7 +415,7 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     for(int i = itemLevel - 1; i >= 0; i--) {
       if (update[i] != updatePointer) {
         if (streamIsDirty) {
-          memory.update(updatePointer, updateStream);
+          memory.set(updatePointer, updateStream);
           streamIsDirty = false;
         }
 
@@ -433,14 +433,14 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     }
 
     if (streamIsDirty)
-      memory.update(updatePointer, updateStream);
+      memory.set(updatePointer, updateStream);
 
     size--;
 
 
     int dataPointer = getDataPointer(forwardStream);
     byte[] dataStream = memory.get(dataPointer);
-    memory.remove(dataPointer);
+    memory.free(dataPointer);
 
     return fromStreamToEntry(firstKey, dataStream);
   }
@@ -479,14 +479,14 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
       if (compareResult == 0) {
         int dataPointer = getDataPointer(forwardStream);
-        memory.remove(dataPointer);
+        memory.free(dataPointer);
 
         byte[] dataStream = fromEntryToStream(entry);
 
-        dataPointer = memory.add(dataStream);
+        dataPointer = memory.allocate(dataStream);
 
         setDataPointer(forwardStream, dataPointer);
-        memory.update(forwardPointer, forwardStream);
+        memory.set(forwardPointer, forwardStream);
 
         updateItemInLRU(forwardPointer, forwardStream);
         return true;
@@ -517,7 +517,7 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
     int evicted = 0;
     int currentVictim = lruTail;
-    byte[] stream = null;
+    byte[] stream;
     while (currentVictim != OOffHeapMemory.NULL_POINTER && evicted < evictionSize) {
       stream = memory.get(currentVictim);
 
@@ -532,11 +532,31 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     if(lruTail != OOffHeapMemory.NULL_POINTER) {
       stream = memory.get(lruTail);
       setNextLRUPointer(stream, OOffHeapMemory.NULL_POINTER);
-      memory.update(lruTail, stream);
+      memory.set(lruTail, stream);
     }
 
     return true;
   }
+
+	private void printLRU() {
+		System.out.println("from head----------------------------------------------------------------------------------------------");
+		int pointer = lruHeader;
+		while (pointer != OOffHeapMemory.NULL_POINTER) {
+			byte[] stream = memory.get(pointer);
+			System.out.print(getKey(stream) + "-");
+			pointer = getNextLRUPointer(stream);
+		}
+		System.out.println("\nfrom tail----------------------------------------------------------------------------------------------");
+
+		pointer = lruTail;
+		while (pointer != OOffHeapMemory.NULL_POINTER) {
+			byte[] stream = memory.get(pointer);
+			System.out.print(getKey(stream) + "-");
+			pointer = getPrevLRUPointer(stream);
+		}
+		System.out.println("\n----------------------------------------------------------------------------------------------");
+
+	}
 
   private void evictItem(int pointer, byte[] stream) {
     int pointersLen = getPointersSize(stream);
@@ -567,7 +587,7 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     for(int i = update.length - 1; i >= 0; i--) {
       if (update[i] != updatePointer) {
         if (streamIsDirty) {
-          memory.update(updatePointer, updateStream);
+          memory.set(updatePointer, updateStream);
           streamIsDirty = false;
         }
 
@@ -585,11 +605,11 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     }
 
     if (streamIsDirty)
-      memory.update(updatePointer, updateStream);
+      memory.set(updatePointer, updateStream);
 
     int dataPointer = getDataPointer(stream);
-    memory.remove(pointer);
-    memory.remove(dataPointer);
+    memory.free(pointer);
+    memory.free(dataPointer);
 
     size--;
   }
@@ -598,7 +618,6 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     if(lruHeader == OOffHeapMemory.NULL_POINTER) {
       lruHeader = pointer;
       lruTail = pointer;
-
       return;
     }
 
@@ -610,47 +629,62 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
     setPrevLRUPointer(nextStream, pointer);
 
-    memory.update(pointer, stream);
-    memory.update(nextPointer, nextStream);
+    memory.set(pointer, stream);
+    memory.set(nextPointer, nextStream);
   }
 
-  private void updateItemInLRU(int pointer, byte[] stream) {
+  private void updateItemInLRU(final int pointer,final byte[] stream) {
     if(pointer == lruHeader)
       return;
 
-    int prevPointer = getPrevLRUPointer(stream);
-    int nextPointer = getNextLRUPointer(stream);
+    final int prevPointer = getPrevLRUPointer(stream);
+    final int nextPointer = getNextLRUPointer(stream);
 
-    byte[] prevStream = null;
+    final byte[] prevStream;
     if(prevPointer != OOffHeapMemory.NULL_POINTER)
       prevStream = memory.get(prevPointer);
+		else
+		 prevStream = null;
 
-    byte[] nextStream = null;
+    final byte[] nextStream;
 
     if(nextPointer != OOffHeapMemory.NULL_POINTER)
       nextStream = memory.get(nextPointer);
+		else
+		  nextStream = null;
+
+		final byte[] headerStream;
+		if(lruHeader != prevPointer)
+			headerStream = memory.get(lruHeader);
+		else
+			headerStream = prevStream;
+
+		int prevHeader = lruHeader;
+
+		if(prevStream != null)
+			setNextLRUPointer(prevStream, nextPointer);
+
+		if(nextStream != null)
+			setPrevLRUPointer(nextStream, prevPointer);
 
     if(prevPointer != OOffHeapMemory.NULL_POINTER)
       setPrevLRUPointer(stream, OOffHeapMemory.NULL_POINTER);
 
     setNextLRUPointer(stream, lruHeader);
 
+		setPrevLRUPointer(headerStream, pointer);
+
     lruHeader = pointer;
 
     if(lruTail == pointer)
       lruTail = prevPointer;
 
+    memory.set(pointer, stream);
+		memory.set(prevHeader, headerStream);
     if(prevStream != null)
-      setNextLRUPointer(prevStream, nextPointer);
-
+      memory.set(prevPointer, prevStream);
     if(nextStream != null)
-      setPrevLRUPointer(nextStream, prevPointer);
-
-    memory.update(pointer, stream);
-    if(prevStream != null)
-      memory.update(prevPointer, prevStream);
-    if(nextStream != null)
-      memory.update(nextPointer, nextStream);
+      memory.set(nextPointer, nextStream);
   }
 
   private void removeItemFromLRU(int pointer, byte[] stream) {
@@ -685,9 +719,9 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
       setPrevLRUPointer(nextStream, prevPointer);
 
     if(prevStream != null)
-      memory.update(prevPointer, prevStream);
+      memory.set(prevPointer, prevStream);
     if(nextStream != null)
-      memory.update(nextPointer, nextStream);
+      memory.set(nextPointer, nextStream);
   }
 
   private int[] createPointers(int[] update) {

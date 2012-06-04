@@ -17,7 +17,6 @@
 package com.orientechnologies.orient.core.type.tree;
 
 import com.orientechnologies.common.log.OLogManager;
-import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OShortSerializer;
 
@@ -69,18 +68,29 @@ public class OOffHeapMemory {
     byteBuffer.putInt(freeListHeadSize);
   }
 
-  public int add(byte[] bytes) {
+  public int allocate(byte[] bytes) {
     final AllocationInfo allocationInfo = new AllocationInfo(freeListHead, freeListHeadSize, freeListTail, freeListTailSize,
         new ArrayList<DataChunkInfo>());
 
-    if (!canAdd(allocationInfo, 0, bytes.length))
+    if (!canAllocate(allocationInfo, 0, bytes.length))
       return NULL_POINTER;
 
-    return addInBuffer(allocationInfo, bytes);
+    return doAllocation(allocationInfo, bytes);
   }
 
-  public void remove(int pointer) {
-    removeFromBuffer(pointer);
+	public int allocate(int size) {
+		final AllocationInfo allocationInfo = new AllocationInfo(freeListHead, freeListHeadSize, freeListTail, freeListTailSize,
+						new ArrayList<DataChunkInfo>());
+
+		if (!canAllocate(allocationInfo, 0, size))
+			return NULL_POINTER;
+
+		return doAllocation(allocationInfo, null);
+	}
+
+
+	public void free(int pointer) {
+    doFree(pointer);
   }
 
   public byte[] get(int pointer) {
@@ -102,7 +112,7 @@ public class OOffHeapMemory {
 		return content;
   }
 
-	public void update(int pointer, byte[] content) {
+	public void set(int pointer, byte[] content) {
 		int offset = 0;
 		do {
 			byteBuffer.position(pointer + OShortSerializer.SHORT_SIZE);
@@ -186,7 +196,7 @@ public class OOffHeapMemory {
     }
   }
 
-  private boolean canAdd(AllocationInfo allocationInfo, int offset, int size) {
+  private boolean canAllocate(AllocationInfo allocationInfo, int offset, int size) {
     if (allocationInfo.freeListHead == -1)
       return false;
 
@@ -223,12 +233,12 @@ public class OOffHeapMemory {
     allocationInfo.dataChunks.add(new DataChunkInfo(pos, allocationSize, recordSize));
     final int chunkSize = recordSize - SYSTEM_INFO_SIZE;
     if (size - offset > chunkSize)
-      return canAdd(allocationInfo, offset + chunkSize, size);
+      return canAllocate(allocationInfo, offset + chunkSize, size);
     else
       return true;
   }
 
-  private int addInBuffer(AllocationInfo allocationInfo, byte[] bytes) {
+  private int doAllocation(AllocationInfo allocationInfo, byte[] bytes) {
     freeListHead = allocationInfo.freeListHead;
     freeListTail = allocationInfo.freeListTail;
     freeListHeadSize = allocationInfo.freeListHeadSize;
@@ -256,14 +266,15 @@ public class OOffHeapMemory {
         byteBuffer.putInt(-1);
 
       final int chunkSize = dataChunkInfo.recordSize - SYSTEM_INFO_SIZE;
-      byteBuffer.put(bytes, offset, chunkSize);
+			if(bytes != null)
+      	byteBuffer.put(bytes, offset, chunkSize);
       offset += chunkSize;
     }
 
     return allocationInfo.dataChunks.get(0).pointer;
   }
 
-  private void removeFromBuffer(int pos) {
+  private void doFree(int pos) {
     byteBuffer.position(pos);
     final int allocationSize = byteBuffer.getShort();
     byteBuffer.position(byteBuffer.position() + OShortSerializer.SHORT_SIZE);
@@ -294,7 +305,7 @@ public class OOffHeapMemory {
       freeListHeadSize = freeListTailSize;
 
     if (next != NULL_POINTER)
-      removeFromBuffer(next);
+      doFree(next);
   }
 
   private int dataLength(int pos) {

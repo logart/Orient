@@ -46,13 +46,13 @@ public class OffHeapMemoryTest {
         bytes[j] = (byte) (i + j);
       }
 
-      int pointer = memory.add(bytes);
+      int pointer = memory.allocate(bytes);
       Assert.assertFalse(pointer == OOffHeapMemory.NULL_POINTER);
       byte[] loadedData = memory.get(pointer);
       Assert.assertEquals(loadedData, bytes);
 
       if (i % 3 == 0)
-        memory.remove(pointer);
+        memory.free(pointer);
       else {
         pointers.add(pointer);
         data.add(bytes);
@@ -73,11 +73,11 @@ public class OffHeapMemoryTest {
 
     byte[] stub = new byte[32];
     for (int i = 0; i < 5; i++) {
-      int pointer = memory.add(stub);
+      int pointer = memory.allocate(stub);
       Assert.assertFalse(pointer == OOffHeapMemory.NULL_POINTER);
     }
 
-    int nullPointer = memory.add(stub);
+    int nullPointer = memory.allocate(stub);
     Assert.assertEquals(nullPointer, OOffHeapMemory.NULL_POINTER);
   }
 
@@ -94,7 +94,7 @@ public class OffHeapMemoryTest {
         bytes[j] = (byte) (i + j);
       }
 
-      int pointer = memory.add(bytes);
+      int pointer = memory.allocate(bytes);
       Assert.assertFalse(pointer == OOffHeapMemory.NULL_POINTER);
       byte[] loadedData = memory.get(pointer);
       Assert.assertEquals(loadedData, bytes);
@@ -104,7 +104,7 @@ public class OffHeapMemoryTest {
 
       if ((i + 1) % 5 == 0) {
         int index = pointers.size() - 5;
-        memory.remove(pointers.get(index));
+        memory.free(pointers.get(index));
         pointers.remove(index);
         data.remove(index);
       }
@@ -121,7 +121,7 @@ public class OffHeapMemoryTest {
     byte[] stub = new byte[12];
     int pointer;
     do {
-      pointer = memory.add(stub);
+      pointer = memory.allocate(stub);
 
     } while (pointer != OOffHeapMemory.NULL_POINTER);
 
@@ -263,7 +263,7 @@ public class OffHeapMemoryTest {
     int removed = 0;
     for (int i = 0; i < pointers.size(); i++) {
       if (i % interval == 0) {
-        memory.remove(pointers.get(i - removed));
+        memory.free(pointers.get(i - removed));
         pointers.remove(i - removed);
         data.remove(i - removed);
         removed++;
@@ -286,7 +286,7 @@ public class OffHeapMemoryTest {
       final byte[] dataToStore = new byte[sizes[sizeIndex]];
       random.nextBytes(dataToStore);
 
-      pointer = memory.add(dataToStore);
+      pointer = memory.allocate(dataToStore);
       lastSize = dataToStore.length;
 
       if (pointer != OOffHeapMemory.NULL_POINTER) {
