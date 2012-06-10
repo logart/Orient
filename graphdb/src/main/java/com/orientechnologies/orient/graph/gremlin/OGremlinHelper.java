@@ -44,7 +44,7 @@ import com.orientechnologies.orient.core.exception.OCommandExecutionException;
 import com.orientechnologies.orient.core.exception.OConfigurationException;
 import com.orientechnologies.orient.core.exception.OSecurityException;
 import com.orientechnologies.orient.core.record.impl.ODocument;
-import com.tinkerpop.blueprints.impls.orientdb.OrientGraph;
+import com.tinkerpop.blueprints.impls.orient.OrientGraph;
 import com.tinkerpop.gremlin.groovy.jsr223.GremlinGroovyScriptEngineFactory;
 import com.tinkerpop.gremlin.java.GremlinPipeline;
 
@@ -157,7 +157,7 @@ public class OGremlinHelper {
 
   public OrientGraph acquireGraph(final OGraphDatabase iDatabase) {
     checkStatus();
-    return ((OrientGraph) graphPool.getResource(iDatabase.getUser().getName() + "," + iDatabase.getURL(), Long.MAX_VALUE))
+    return (OrientGraph) ((OrientGraph) graphPool.getResource(iDatabase.getUser().getName() + "," + iDatabase.getURL(), Long.MAX_VALUE))
         .reuse(iDatabase);
   }
 

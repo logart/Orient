@@ -25,8 +25,6 @@ import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.object.enhancement.OObjectEntitySerializer;
 
 /**
- * Lazy implementation of Set. It's bound to a source ORecord object to keep track of changes. This avoid to call the makeDirty() by
- * hand when the set is changed.
  * 
  * @author Luca Molino (molino.luca--at--gmail.com)
  * 
