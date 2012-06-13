@@ -5,6 +5,7 @@ import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
 import com.orientechnologies.orient.core.type.tree.OOffHeapMemory;
 import com.orientechnologies.orient.core.type.tree.OOffHeapTreeCacheBuffer;
+import org.testng.annotations.Test;
 
 /**
  * @author LomakiA <a href="mailto:Andrey.Lomakin@exigenservices.com">Andrey Lomakin</a>
@@ -23,6 +24,7 @@ public class OffHeapTreeCacheBufferSpeedTest  extends SpeedTestMonoThread {
 	}
 
 	@Override
+	@Test(enabled = false)
 	public void cycle() throws Exception {
 		treeCacheBuffer.add(createCacheEntry(key));
 		treeCacheBuffer.get(key);
@@ -31,6 +33,7 @@ public class OffHeapTreeCacheBufferSpeedTest  extends SpeedTestMonoThread {
 	}
 
 	@Override
+	@Test(enabled = false)
 	public void deinit() throws Exception {
 		System.out.println();
 		System.out.println("Cache size : " + treeCacheBuffer.size());

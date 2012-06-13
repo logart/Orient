@@ -29,16 +29,16 @@ import java.util.Random;
  * @since 07.04.12
  */
 public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
-  private static final int           MAX_LEVEL = 25;
+  private static final int MAX_LEVEL = 25;
 
   private final OBinarySerializer<K> keySerializer;
   private final OOffHeapMemory memory;
 
-  private static final Random               random    = new Random();
+  private static final Random random    = new Random();
 
 	private int seed;
 
-  private int[]                      header;
+  private int[] header;
 
   private int lruHeader = OOffHeapMemory.NULL_POINTER;
   private int lruTail = OOffHeapMemory.NULL_POINTER;
@@ -71,38 +71,33 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     final int[] update = new int[MAX_LEVEL];
     Arrays.fill(update, OOffHeapMemory.NULL_POINTER);
 
-    int level = MAX_LEVEL;
-    int forwardPointer = header[level];
-
-    while (forwardPointer == OOffHeapMemory.NULL_POINTER && level > 0) {
-      level--;
-      forwardPointer = header[level];
-    }
-
-    if (forwardPointer == OOffHeapMemory.NULL_POINTER) {
-      int[] pointers = createPointers(update);
-      int dataPointer = storeEntry(entry);
+		if(size == 0) {
+			int[] pointers = createPointers(update);
+			int dataPointer = storeEntry(entry);
 
 			if (dataPointer == OOffHeapMemory.NULL_POINTER)
 				return evict() && add(entry);
 
-      final int itemPointer = storeItem(pointers, entry.firstKey, dataPointer);
+			final int itemPointer = storeItem(pointers, entry.firstKey, dataPointer);
 
-      if (itemPointer == OOffHeapMemory.NULL_POINTER) {
+			if (itemPointer == OOffHeapMemory.NULL_POINTER) {
 				freeEntry(dataPointer);
 				return evict() && add(entry);
 			}
 
 
-      Arrays.fill(header, 0, pointers.length, itemPointer);
+			Arrays.fill(header, 0, pointers.length, itemPointer);
 
-      size++;
+			size++;
 
-      addItemToLRU(itemPointer);
+			addItemToLRU(itemPointer);
 
-      return true;
-    }
+			return true;
+		}
 
+    int level = getStartLevel();
+
+    int forwardPointer;
     int pointer = OOffHeapMemory.NULL_POINTER;
 		int oldForwardPointer = OOffHeapMemory.NULL_POINTER;
 		int oldCompareResult = -1;
@@ -178,21 +173,15 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
   }
 
   public CacheEntry<K> get(K firstKey) {
-    int level = MAX_LEVEL;
-    int forwardPointer = header[level];
+		if(size == 0)
+			return null;
 
-    while (forwardPointer == OOffHeapMemory.NULL_POINTER && level > 0) {
-      level--;
-      forwardPointer = header[level];
-    }
-
-    if (forwardPointer == OOffHeapMemory.NULL_POINTER) {
-      return null;
-    }
+    int level = getStartLevel();
 
 		int pointer = OOffHeapMemory.NULL_POINTER;
 		int oldForwardPointer = OOffHeapMemory.NULL_POINTER;
 		int oldCompareResult = -1;
+		int forwardPointer;
 
 		while (level >= 0) {
       if (pointer == OOffHeapMemory.NULL_POINTER)
@@ -238,21 +227,14 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
   }
 
   public CacheEntry<K> getCeiling(K firstKey) {
-    int level = MAX_LEVEL;
-    int forwardPointer = header[level];
+		if(size == 0)
+			return null;
 
-    while (forwardPointer == OOffHeapMemory.NULL_POINTER && level > 0) {
-      level--;
-      forwardPointer = header[level];
-    }
-
-    if (forwardPointer == OOffHeapMemory.NULL_POINTER) {
-      return null;
-    }
-
+    int level = getStartLevel();
     int pointer = OOffHeapMemory.NULL_POINTER;
 		int oldForwardPointer = OOffHeapMemory.NULL_POINTER;
 		int oldCompareResult = -1;
+		int forwardPointer;
 		while (level >= 0) {
       if (pointer == OOffHeapMemory.NULL_POINTER)
         forwardPointer = header[level];
@@ -304,19 +286,9 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
   }
 
   public CacheEntry<K> getFloor(K firstKey) {
-    int level = MAX_LEVEL;
-    int forwardPointer = header[level];
+    int level = getStartLevel();
 
-    while (forwardPointer == OOffHeapMemory.NULL_POINTER && level > 0) {
-      level--;
-      forwardPointer = header[level];
-    }
-
-    if (forwardPointer == OOffHeapMemory.NULL_POINTER) {
-      return null;
-    }
-
-
+    int forwardPointer;
     int pointer = OOffHeapMemory.NULL_POINTER;
 		int oldForwardPointer = OOffHeapMemory.NULL_POINTER;
 		int oldCompareResult = -1;
@@ -367,24 +339,13 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     final int[] update = new int[MAX_LEVEL];
     Arrays.fill(update, OOffHeapMemory.NULL_POINTER);
 
-    int level = MAX_LEVEL;
-    int forwardPointer = header[level];
-
-    while (forwardPointer == OOffHeapMemory.NULL_POINTER && level > 0) {
-      level--;
-      forwardPointer = header[level];
-    }
-
-    if (forwardPointer == OOffHeapMemory.NULL_POINTER) {
-       return null;
-    }
-
+    int level = getStartLevel();
+    int forwardPointer =  header[level];
     int pointer = OOffHeapMemory.NULL_POINTER;
-
-    int compareResult = -1;
 		int oldForwardPointer = OOffHeapMemory.NULL_POINTER;
-		int oldCompareResult = -1;
 
+		int oldCompareResult = -1;
+		int compareResult = -1;
     while (level >= 0) {
       if (pointer == OOffHeapMemory.NULL_POINTER)
         forwardPointer = header[level];
@@ -440,18 +401,8 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
   }
 
   public boolean update(CacheEntry<K> entry) {
-    int level = MAX_LEVEL;
-    int forwardPointer = header[level];
-
-    while (forwardPointer == OOffHeapMemory.NULL_POINTER && level > 0) {
-      level--;
-      forwardPointer = header[level];
-    }
-
-    if (forwardPointer == OOffHeapMemory.NULL_POINTER) {
-      return false;
-    }
-
+    int level = getStartLevel();
+    int forwardPointer;
     int pointer = OOffHeapMemory.NULL_POINTER;
     while (level >= 0) {
       if (pointer == OOffHeapMemory.NULL_POINTER)
@@ -523,22 +474,16 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     return true;
   }
 
-	private void printLRU() {
-		System.out.println("from head----------------------------------------------------------------------------------------------");
-		int pointer = lruHeader;
-		while (pointer != OOffHeapMemory.NULL_POINTER) {
-			System.out.print(getKey(pointer) + "-");
-			pointer = getNextLRUPointer(pointer);
-		}
-		System.out.println("\nfrom tail----------------------------------------------------------------------------------------------");
+	private int getStartLevel() {
+		int level = MAX_LEVEL;
+		int forwardPointer = header[level];
 
-		pointer = lruTail;
-		while (pointer != OOffHeapMemory.NULL_POINTER) {
-			System.out.print(getKey(pointer) + "-");
-			pointer = getPrevLRUPointer(pointer);
+		while (forwardPointer == OOffHeapMemory.NULL_POINTER && level > 0) {
+			level--;
+			forwardPointer = header[level];
 		}
-		System.out.println("\n----------------------------------------------------------------------------------------------");
 
+		return level;
 	}
 
   private void addItemToLRU(int pointer) {
