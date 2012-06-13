@@ -104,6 +104,8 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     }
 
     int pointer = OOffHeapMemory.NULL_POINTER;
+		int oldForwardPointer = OOffHeapMemory.NULL_POINTER;
+		int oldCompareResult = -1;
 
     while (level >= 0) {
       if (pointer == OOffHeapMemory.NULL_POINTER)
@@ -114,12 +116,16 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
       if (forwardPointer == OOffHeapMemory.NULL_POINTER) {
         update[level] = pointer;
         level--;
-
+				oldForwardPointer = forwardPointer;
         continue;
       }
 
       K key = getKey(forwardPointer);
-      int compareResult = entry.firstKey.compareTo(key);
+			int compareResult;
+			if(oldForwardPointer == forwardPointer)
+				compareResult = oldCompareResult;
+			else
+				compareResult = entry.firstKey.compareTo(key);
 
       if (compareResult == 0)
         return false;
@@ -127,10 +133,13 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
       if (compareResult < 0) {
         update[level] = pointer;
         level--;
+				oldForwardPointer = forwardPointer;
+				oldCompareResult = compareResult;
         continue;
       }
 
       pointer = forwardPointer;
+			oldForwardPointer = OOffHeapMemory.NULL_POINTER;
     }
 
 
@@ -182,7 +191,10 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     }
 
 		int pointer = OOffHeapMemory.NULL_POINTER;
-    while (level >= 0) {
+		int oldForwardPointer = OOffHeapMemory.NULL_POINTER;
+		int oldCompareResult = -1;
+
+		while (level >= 0) {
       if (pointer == OOffHeapMemory.NULL_POINTER)
         forwardPointer = header[level];
       else
@@ -190,11 +202,16 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
       if (forwardPointer == OOffHeapMemory.NULL_POINTER) {
         level--;
+				oldForwardPointer = forwardPointer;
         continue;
       }
 
       K key = getKey(forwardPointer);
-      int compareResult = firstKey.compareTo(key);
+      int compareResult;
+			if(oldForwardPointer == forwardPointer)
+				compareResult = oldCompareResult;
+			else
+				compareResult = firstKey.compareTo(key);
 
       if (compareResult == 0) {
         final int dataPointer = getDataPointer(forwardPointer);
@@ -204,10 +221,13 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
       if (compareResult < 0) {
         level--;
+				oldForwardPointer = forwardPointer;
+				oldCompareResult = compareResult;
         continue;
       }
 
       pointer = forwardPointer;
+			oldForwardPointer = OOffHeapMemory.NULL_POINTER;
     }
 
     return null;
@@ -231,7 +251,9 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     }
 
     int pointer = OOffHeapMemory.NULL_POINTER;
-    while (level >= 0) {
+		int oldForwardPointer = OOffHeapMemory.NULL_POINTER;
+		int oldCompareResult = -1;
+		while (level >= 0) {
       if (pointer == OOffHeapMemory.NULL_POINTER)
         forwardPointer = header[level];
       else
@@ -239,11 +261,16 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
       if (forwardPointer == OOffHeapMemory.NULL_POINTER) {
         level--;
+				oldForwardPointer = forwardPointer;
         continue;
       }
 
       K key = getKey(forwardPointer);
-      int compareResult = firstKey.compareTo(key);
+			int compareResult;
+			if(oldForwardPointer == forwardPointer)
+				compareResult = oldCompareResult;
+			else
+				compareResult = firstKey.compareTo(key);
 
       if (compareResult == 0) {
         final int dataPointer = getDataPointer(forwardPointer);
@@ -253,10 +280,13 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
       if (compareResult < 0) {
         level--;
+				oldForwardPointer = forwardPointer;
+				oldCompareResult = compareResult;
         continue;
       }
 
 			pointer = forwardPointer;
+			oldForwardPointer = OOffHeapMemory.NULL_POINTER;
     }
 
     int nextPointer;
@@ -288,6 +318,8 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
 
     int pointer = OOffHeapMemory.NULL_POINTER;
+		int oldForwardPointer = OOffHeapMemory.NULL_POINTER;
+		int oldCompareResult = -1;
     while (level >= 0) {
       if (pointer == OOffHeapMemory.NULL_POINTER)
         forwardPointer = header[level];
@@ -295,12 +327,17 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
         forwardPointer = getNPointer(pointer, level);
 
       if (forwardPointer == OOffHeapMemory.NULL_POINTER) {
+				oldForwardPointer = forwardPointer;
         level--;
         continue;
       }
 
       K key = getKey(forwardPointer);
-      int compareResult = firstKey.compareTo(key);
+			int compareResult;
+			if(oldForwardPointer == forwardPointer)
+				compareResult = oldCompareResult;
+			else
+				compareResult = firstKey.compareTo(key);
 
       if (compareResult == 0) {
         final int dataPointer = getDataPointer(forwardPointer);
@@ -309,6 +346,8 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
       }
 
       if (compareResult < 0) {
+				oldForwardPointer = forwardPointer;
+				oldCompareResult = compareResult;
         level--;
         continue;
       }
@@ -343,6 +382,9 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     int pointer = OOffHeapMemory.NULL_POINTER;
 
     int compareResult = -1;
+		int oldForwardPointer = OOffHeapMemory.NULL_POINTER;
+		int oldCompareResult = -1;
+
     while (level >= 0) {
       if (pointer == OOffHeapMemory.NULL_POINTER)
         forwardPointer = header[level];
@@ -352,20 +394,26 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
       if (forwardPointer == OOffHeapMemory.NULL_POINTER) {
         update[level] = pointer;
         level--;
-
+				oldForwardPointer = forwardPointer;
         continue;
       }
 
       K key = getKey(forwardPointer);
-      compareResult = firstKey.compareTo(key);
+			if(oldForwardPointer == forwardPointer)
+				compareResult = oldCompareResult;
+			else
+				compareResult = firstKey.compareTo(key);
 
       if (compareResult <= 0) {
         update[level] = pointer;
         level--;
+				oldForwardPointer = forwardPointer;
+				oldCompareResult = compareResult;
         continue;
       }
 
       pointer = forwardPointer;
+			oldForwardPointer = OOffHeapMemory.NULL_POINTER;
     }
 
     if(compareResult != 0)
