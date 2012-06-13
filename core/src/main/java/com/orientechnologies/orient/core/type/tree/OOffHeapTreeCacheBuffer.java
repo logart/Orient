@@ -34,7 +34,9 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
   private final OBinarySerializer<K> keySerializer;
   private final OOffHeapMemory memory;
 
-  private final Random               random    = new Random();
+  private static final Random               random    = new Random();
+
+	private int seed;
 
   private int[]                      header;
 
@@ -53,6 +55,8 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
     header = new int[MAX_LEVEL + 1];
     Arrays.fill(header, OOffHeapMemory.NULL_POINTER);
+
+		seed = random.nextInt() | 0x0100;
   }
 
   public void setEvictionSize(int evictionSize) {
@@ -77,19 +81,18 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
     if (forwardPointer == OOffHeapMemory.NULL_POINTER) {
       int[] pointers = createPointers(update);
-      byte[] dataStream = fromEntryToStream(entry);
-      int dataPointer = memory.allocate(dataStream);
+      int dataPointer = storeEntry(entry);
 
 			if (dataPointer == OOffHeapMemory.NULL_POINTER)
 				return evict() && add(entry);
 
-			byte[] stream  = fromItemToStream(pointers, entry.firstKey, dataPointer, OOffHeapMemory.NULL_POINTER,
-              OOffHeapMemory.NULL_POINTER);
+      final int itemPointer = storeItem(pointers, entry.firstKey, dataPointer);
 
-      final int itemPointer = memory.allocate(stream);
+      if (itemPointer == OOffHeapMemory.NULL_POINTER) {
+				freeEntry(dataPointer);
+				return evict() && add(entry);
+			}
 
-      if (itemPointer == OOffHeapMemory.NULL_POINTER)
-        return evict() && add(entry);
 
       Arrays.fill(header, 0, pointers.length, itemPointer);
 
@@ -132,19 +135,18 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
 
     final int[] pointers = createPointers(update);
-    byte[] dataStream = fromEntryToStream(entry);
-    int dataPointer = memory.allocate(dataStream);
+    int dataPointer = storeEntry(entry);
 
 		if (dataPointer == OOffHeapMemory.NULL_POINTER)
 			return evict() && add(entry);
 
-		final byte[] stream = fromItemToStream(pointers, entry.firstKey, dataPointer, OOffHeapMemory.NULL_POINTER,
-            OOffHeapMemory.NULL_POINTER);
+    final int newItemPointer = storeItem(pointers, entry.firstKey, dataPointer);
 
-    final int newItemPointer = memory.allocate(stream);
-
-		if(newItemPointer == OOffHeapMemory.NULL_POINTER)
+		if(newItemPointer == OOffHeapMemory.NULL_POINTER) {
+			freeEntry(dataPointer);
 			return evict() && add(entry);
+		}
+
 
     addItemToLRU(newItemPointer);
 
@@ -195,9 +197,9 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
       int compareResult = firstKey.compareTo(key);
 
       if (compareResult == 0) {
-        byte[] dataStream = memory.get(getDataPointer(forwardPointer), 0, -1);
+        final int dataPointer = getDataPointer(forwardPointer);
         updateItemInLRU(forwardPointer);
-        return fromStreamToEntry(key, dataStream);
+        return loadEntry(key, dataPointer);
       }
 
       if (compareResult < 0) {
@@ -244,9 +246,9 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
       int compareResult = firstKey.compareTo(key);
 
       if (compareResult == 0) {
-        byte[] dataStream = memory.get(getDataPointer(forwardPointer), 0, -1);
+        final int dataPointer = getDataPointer(forwardPointer);
         updateItemInLRU(forwardPointer);
-        return fromStreamToEntry(key, dataStream);
+        return loadEntry(key, dataPointer);
       }
 
       if (compareResult < 0) {
@@ -267,8 +269,8 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
       return null;
 
     updateItemInLRU(nextPointer);
-    byte[] dataStream = memory.get(getDataPointer(nextPointer), 0, -1);
-    return fromStreamToEntry(getKey(nextPointer), dataStream);
+    final int dataPointer = getDataPointer(nextPointer);
+    return loadEntry(getKey(nextPointer), dataPointer);
   }
 
   public CacheEntry<K> getFloor(K firstKey) {
@@ -301,9 +303,9 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
       int compareResult = firstKey.compareTo(key);
 
       if (compareResult == 0) {
-        byte[] dataStream = memory.get(getDataPointer(forwardPointer), 0, -1);
+        final int dataPointer = getDataPointer(forwardPointer);
         updateItemInLRU(forwardPointer);
-        return fromStreamToEntry(key, dataStream);
+        return loadEntry(key, dataPointer);
       }
 
       if (compareResult < 0) {
@@ -318,8 +320,8 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
       return null;
 
     updateItemInLRU(pointer);
-    byte[] dataStream = memory.get(getDataPointer(pointer), 0, -1);
-    return fromStreamToEntry(getKey(pointer), dataStream);
+    final int dataPointer = getDataPointer(pointer);
+    return loadEntry(getKey(pointer), dataPointer);
   }
 
   public CacheEntry<K> remove(K firstKey) {
@@ -369,9 +371,7 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     if(compareResult != 0)
       return null;
 
-
 		final int itemLevel = getPointersSize(forwardPointer);
-
 
     int updatePointer;
     for(int i = itemLevel - 1; i >= 0; i--) {
@@ -383,16 +383,12 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     }
 
 		removeItemFromLRU(forwardPointer);
-		memory.free(forwardPointer);
+		final int dataPointer = getDataPointer(forwardPointer);
+		final CacheEntry<K> cacheEntry = loadEntry(firstKey, dataPointer);
+		freeItem(forwardPointer);
 
 		size--;
-
-
-    int dataPointer = getDataPointer(forwardPointer);
-    byte[] dataStream = memory.get(dataPointer, 0, -1);
-    memory.free(dataPointer);
-
-    return fromStreamToEntry(firstKey, dataStream);
+    return cacheEntry;
   }
 
   public boolean update(CacheEntry<K> entry) {
@@ -425,11 +421,10 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
       if (compareResult == 0) {
         int dataPointer = getDataPointer(forwardPointer);
-        memory.free(dataPointer);
+        freeEntry(dataPointer);
+				setDataPointer(forwardPointer, OOffHeapMemory.NULL_POINTER);
 
-        byte[] dataStream = fromEntryToStream(entry);
-
-        dataPointer = memory.allocate(dataStream);
+        dataPointer = storeEntry(entry);
 
 				if(dataPointer == OOffHeapMemory.NULL_POINTER)
 					return evict() && update(entry);
@@ -469,7 +464,7 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
       int evictedItem = currentVictim;
       currentVictim = getPrevLRUPointer(evictedItem);
 
-      evictItem(evictedItem);
+      remove(getKey(evictedItem));
       evicted++;
     }
 
@@ -497,44 +492,6 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
 		System.out.println("\n----------------------------------------------------------------------------------------------");
 
 	}
-
-  private void evictItem(int pointer) {
-    int pointersLen = getPointersSize(pointer);
-
-    int update[] = new int[pointersLen];
-    Arrays.fill(update, OOffHeapMemory.NULL_POINTER);
-
-    int forwardPointer = header[0];
-
-    while (forwardPointer != pointer) {
-      int currentPointer = forwardPointer;
-
-      forwardPointer = getNPointer(currentPointer, 0);
-
-      pointersLen = getPointersSize(currentPointer);
-
-      int updateSize = Math.min(update.length, pointersLen);
-      for(int i = 0; i < updateSize; i++) {
-        update[i] = currentPointer;
-      }
-    }
-
-    int updatePointer;
-    for(int i = update.length - 1; i >= 0; i--) {
-      updatePointer = update[i];
-
-      if (updatePointer != OOffHeapMemory.NULL_POINTER) {
-        setNPointer(updatePointer, i, getNPointer(pointer, i));
-      } else
-        header[i] = getNPointer(pointer, i);
-    }
-
-    int dataPointer = getDataPointer(pointer);
-    memory.free(pointer);
-    memory.free(dataPointer);
-
-    size--;
-  }
 
   private void addItemToLRU(int pointer) {
     if(lruHeader == OOffHeapMemory.NULL_POINTER) {
@@ -575,8 +532,7 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
 
     if(lruTail == pointer)
       lruTail = prevPointer;
-
-  }
+	}
 
   private void removeItemFromLRU(int pointer) {
     if(lruHeader == pointer && lruTail == pointer) {
@@ -602,7 +558,7 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
   }
 
   private int[] createPointers(int[] update) {
-    int[] pointers = new int[randomLevel()];
+    int[] pointers = new int[randomLevel() + 1];
     for (int i = 0; i < pointers.length; i++)
       if (update[i] == OOffHeapMemory.NULL_POINTER)
         pointers[i] = header[i];
@@ -614,156 +570,231 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
   }
 
   private int randomLevel() {
-    int newLevel = 1;
-    // TODO: should be converted from double to int generation.
-    while (random.nextDouble() < 0.5 && newLevel <= MAX_LEVEL)
-      newLevel++;
+		int x = seed;
+		x ^= x << 13;
+		x ^= x >>> 17;
+		seed = x ^= x << 5;
+		if ((x & 0x8001) != 0) // test highest and lowest bits
+			return 0;
 
-    return newLevel;
+		int level = 1;
+		while (((x >>>= 1) & 1) != 0) ++level;
+		return level;
   }
 
-  private CacheEntry<K> fromStreamToEntry(K firstKey, byte[] content) {
+  private int storeEntry(CacheEntry<K> entry) {
+		final int lastKeySize = keySerializer.getObjectSize(entry.lastKey);
+		final int ridSize = OLinkSerializer.RID_SIZE;
+		final int size = OIntegerSerializer.INT_SIZE + 4 * ridSize;
+
+		final int lastKeyPointer = memory.allocate(lastKeySize);
+		if(lastKeyPointer == OOffHeapMemory.NULL_POINTER)
+			return OOffHeapMemory.NULL_POINTER;
+
+		final int pointer = memory.allocate(size);
+		if(pointer == OOffHeapMemory.NULL_POINTER) {
+			memory.free(lastKeyPointer);
+			return OOffHeapMemory.NULL_POINTER;
+		}
+
     int offset = 0;
+		memory.setInt(pointer, offset, lastKeyPointer);
+		offset += OIntegerSerializer.INT_SIZE;
 
-    final K lastKey = keySerializer.deserialize(content, offset);
-    offset += keySerializer.getObjectSize(lastKey);
+		final byte[] serializedRid = new byte[ridSize];
+		OLinkSerializer.INSTANCE.serialize(entry.rid, serializedRid, 0);
+		memory.set(pointer, offset,ridSize, serializedRid);
+		offset += ridSize;
 
-    final ORID rid = OLinkSerializer.INSTANCE.deserialize(content, offset);
-		offset += OLinkSerializer.INSTANCE.getObjectSize(rid);
+		OLinkSerializer.INSTANCE.serialize(entry.leftRid, serializedRid, 0);
+		memory.set(pointer, offset,ridSize, serializedRid);
+		offset += ridSize;
 
-		final ORID leftRid = OLinkSerializer.INSTANCE.deserialize(content, offset);
-		offset += OLinkSerializer.INSTANCE.getObjectSize(leftRid);
+		OLinkSerializer.INSTANCE.serialize(entry.rightRid, serializedRid, 0);
+		memory.set(pointer, offset,ridSize, serializedRid);
+		offset += ridSize;
 
-		final ORID rightRid = OLinkSerializer.INSTANCE.deserialize(content, offset);
-		offset += OLinkSerializer.INSTANCE.getObjectSize(rightRid);
+		OLinkSerializer.INSTANCE.serialize(entry.parentRid, serializedRid, 0);
+		memory.set(pointer, offset,ridSize, serializedRid);
+		offset += ridSize;
 
-		final ORID parentRid = OLinkSerializer.INSTANCE.deserialize(content, offset);
-		offset += OLinkSerializer.INSTANCE.getObjectSize(parentRid);
+		byte[] serializedKey = new byte[lastKeySize];
+		keySerializer.serialize(entry.lastKey, serializedKey, 0);
+		memory.set(lastKeyPointer, 0, lastKeySize, serializedKey);
+
+    return pointer;
+  }
+
+	private void freeEntry(int pointer) {
+		final int lastKeyPointer = memory.getInt(pointer, 0);
+		memory.free(lastKeyPointer);
+		memory.free(pointer);
+	}
+
+	private CacheEntry<K> loadEntry(K firstKey, int pointer) {
+		final int lastKeyPointer = memory.getInt(pointer, 0);
+		final byte[] serializedKey = memory.get(lastKeyPointer, 0, -1);
+		final K lastKey = keySerializer.deserialize(serializedKey, 0);
+
+		int offset = OIntegerSerializer.INT_SIZE;
+
+		byte[] serializedRid;
+
+	  serializedRid = memory.get(pointer, offset, OLinkSerializer.RID_SIZE);
+		offset += OLinkSerializer.RID_SIZE;
+
+		final  ORID rid = OLinkSerializer.INSTANCE.deserialize(serializedRid, 0);
+
+		serializedRid = memory.get(pointer, offset, OLinkSerializer.RID_SIZE);
+		offset += OLinkSerializer.RID_SIZE;
+
+		final  ORID leftRid = OLinkSerializer.INSTANCE.deserialize(serializedRid, 0);
+
+		serializedRid = memory.get(pointer, offset, OLinkSerializer.RID_SIZE);
+		offset += OLinkSerializer.RID_SIZE;
+
+		final  ORID rightRid = OLinkSerializer.INSTANCE.deserialize(serializedRid, 0);
+
+		serializedRid = memory.get(pointer, offset, OLinkSerializer.RID_SIZE);
+
+		final  ORID parentRid = OLinkSerializer.INSTANCE.deserialize(serializedRid, 0);
 
 		return new CacheEntry<K>(firstKey, lastKey, rid, parentRid, leftRid, rightRid);
-  }
+	}
 
-  private byte[] fromEntryToStream(CacheEntry<K> entry) {
-    int size = keySerializer.getObjectSize(entry.lastKey);
-    size += OLinkSerializer.INSTANCE.getObjectSize(entry.rid);
-    size += OLinkSerializer.INSTANCE.getObjectSize(entry.leftRid);
-    size += OLinkSerializer.INSTANCE.getObjectSize(entry.rightRid);
-    size += OLinkSerializer.INSTANCE.getObjectSize(entry.parentRid);
+	private int storeItem(int[] pointers, K firstKey, int dataPointer) {
+		final int size = 5 * OIntegerSerializer.INT_SIZE;
+		final int pointersSize = OIntegerSerializer.INT_SIZE * (pointers.length + 1);
+		final int firstKeySize = keySerializer.getObjectSize(firstKey);
 
-    final byte[] content = new byte[size];
+		final int pointer = memory.allocate(size);
 
-    int offset = 0;
+		if(pointer == OOffHeapMemory.NULL_POINTER)
+			return OOffHeapMemory.NULL_POINTER;
 
-    keySerializer.serialize(entry.lastKey, content, offset);
-    offset += keySerializer.getObjectSize(entry.lastKey);
+		final int pointersPointer = memory.allocate(pointersSize);
+		if(pointersPointer == OOffHeapMemory.NULL_POINTER) {
+			memory.free(pointer);
+			return OOffHeapMemory.NULL_POINTER;
+		}
 
-    OLinkSerializer.INSTANCE.serialize(entry.rid, content, offset);
-		offset += OLinkSerializer.INSTANCE.getObjectSize(entry.rid);
+		final int firstKeyPointer = memory.allocate(firstKeySize);
+		if(firstKeyPointer == OOffHeapMemory.NULL_POINTER) {
+			memory.free(pointer);
+			memory.free(pointersPointer);
+			return OOffHeapMemory.NULL_POINTER;
+		}
 
-		OLinkSerializer.INSTANCE.serialize(entry.leftRid, content, offset);
-		offset += OLinkSerializer.INSTANCE.getObjectSize(entry.leftRid);
-
-		OLinkSerializer.INSTANCE.serialize(entry.rightRid, content, offset);
-		offset += OLinkSerializer.INSTANCE.getObjectSize(entry.rightRid);
-
-		OLinkSerializer.INSTANCE.serialize(entry.parentRid, content, offset);
-		offset += OLinkSerializer.INSTANCE.getObjectSize(entry.parentRid);
-
-		return content;
-  }
-
-  private byte[] fromItemToStream(int[] pointers, K firstKey, int dataPointer, int nextLRUPointer, int prevLRUPointer) {
-    int size = 4 * OIntegerSerializer.INT_SIZE + OIntegerSerializer.INT_SIZE * pointers.length;
-    size += keySerializer.getObjectSize(firstKey);
-
-    byte[] stream = new byte[size];
-
-    int offset = 0;
-
-    OIntegerSerializer.INSTANCE.serialize(pointers.length, stream, offset);
-    offset += OIntegerSerializer.INT_SIZE;
-
-    for (int pointer : pointers) {
-      OIntegerSerializer.INSTANCE.serialize(pointer, stream, offset);
-      offset += OIntegerSerializer.INT_SIZE;
-    }
-
-		OIntegerSerializer.INSTANCE.serialize(dataPointer, stream, offset);
+		int offset = 0;
+		memory.setInt(pointer, 0, pointersPointer);
 		offset += OIntegerSerializer.INT_SIZE;
 
-		OIntegerSerializer.INSTANCE.serialize(nextLRUPointer, stream, offset);
+		memory.setInt(pointer, offset, dataPointer);
 		offset += OIntegerSerializer.INT_SIZE;
 
-		OIntegerSerializer.INSTANCE.serialize(prevLRUPointer, stream, offset);
+		memory.setInt(pointer, offset, firstKeyPointer);
 		offset += OIntegerSerializer.INT_SIZE;
 
-		keySerializer.serialize(firstKey, stream, offset);
-    keySerializer.getObjectSize(firstKey);
+		memory.setInt(pointer, offset, OOffHeapMemory.NULL_POINTER);
+		offset += OIntegerSerializer.INT_SIZE;
 
-    return stream;
-  }
+		memory.setInt(pointer, offset, OOffHeapMemory.NULL_POINTER);
+
+		offset = 0;
+		memory.setInt(pointersPointer, offset, pointers.length);
+		offset += OIntegerSerializer.INT_SIZE;
+
+		for (int pointersItem : pointers) {
+			memory.setInt(pointersPointer, offset, pointersItem);
+			offset += OIntegerSerializer.INT_SIZE;
+		}
+
+		byte[] firstKeySerialized = new byte[firstKeySize];
+		keySerializer.serialize(firstKey, firstKeySerialized, 0);
+
+		memory.set(firstKeyPointer, 0, firstKeySize, firstKeySerialized);
+
+		return pointer;
+	}
+
+	private void freeItem(int pointer) {
+		int offset = 0;
+
+		final int pointersPointer = memory.getInt(pointer, 0);
+		offset += OIntegerSerializer.INT_SIZE;
+
+		final int dataPointer = memory.getInt(pointer, offset);
+		offset += OIntegerSerializer.INT_SIZE;
+
+		final int  firstKeyPointer = memory.getInt(pointer, offset);
+
+		freeEntry(dataPointer);
+
+		memory.free(pointersPointer);
+		memory.free(firstKeyPointer);
+		memory.free(pointer);
+	}
 
   private K getKey(int pointer) {
-    int pointersLen = memory.getInt(pointer, 0);
+    final int offset = 2 * OIntegerSerializer.INT_SIZE;
+		final int keyPointer = memory.getInt(pointer, offset);
+		final byte[] serializedKey = memory.get(keyPointer, 0, -1);
 
-    return keySerializer.deserialize(memory.get(pointer, 4 * OIntegerSerializer.INT_SIZE +
-						pointersLen * OIntegerSerializer.INT_SIZE, -1), 0);
+    return keySerializer.deserialize(serializedKey, 0);
   }
 
   private int getNPointer(int pointer, int level) {
-    final int offset = OIntegerSerializer.INT_SIZE + level * OIntegerSerializer.INT_SIZE;
+		final int pointersPointer = memory.getInt(pointer, 0);
+    final int offset = (level + 1) * OIntegerSerializer.INT_SIZE;
 
-    return memory.getInt(pointer, offset);
+    return memory.getInt(pointersPointer, offset);
   }
 
   private int getPointersSize(int pointer) {
-    return memory.getInt(pointer, 0);
+		final int pointersPointer = memory.getInt(pointer, 0);
+
+    return memory.getInt(pointersPointer, 0);
   }
 
   private int getDataPointer(int pointer) {
-    final int pointersLen = memory.getInt(pointer, 0);
-    final int offset =  OIntegerSerializer.INT_SIZE + pointersLen * OIntegerSerializer.INT_SIZE;
+    final int offset =  OIntegerSerializer.INT_SIZE;
 
     return memory.getInt(pointer, offset);
   }
 
   private void setDataPointer(int pointer, int dataPointer) {
-    final int offset =  OIntegerSerializer.INT_SIZE +  memory.getInt(pointer, 0) * OIntegerSerializer.INT_SIZE;
+		final int offset =  OIntegerSerializer.INT_SIZE;
 
 		memory.setInt(pointer, offset, dataPointer);
   }
 
   private void setNPointer(int pointer, int level, int dataPointer) {
-    final int offset = OIntegerSerializer.INT_SIZE + level * OIntegerSerializer.INT_SIZE;
-		memory.setInt(pointer, offset, dataPointer);
+		final int pointersPointer = memory.getInt(pointer, 0);
+		final int offset = (level + 1) * OIntegerSerializer.INT_SIZE;
+
+		memory.setInt(pointersPointer, offset, dataPointer);
   }
 
   private int getNextLRUPointer(int pointer) {
-    final int pointersLen = memory.getInt(pointer, 0);
-
-    final int offset = 2 * OIntegerSerializer.INT_SIZE + pointersLen * OIntegerSerializer.INT_SIZE;
+    final int offset = 3 * OIntegerSerializer.INT_SIZE;
 
     return memory.getInt(pointer, offset);
   }
 
   private void setNextLRUPointer(int pointer, int lruPointer) {
-		final int pointersLen = memory.getInt(pointer, 0);
-
-		final int offset = 2 * OIntegerSerializer.INT_SIZE + pointersLen * OIntegerSerializer.INT_SIZE;
+		final int offset = 3 * OIntegerSerializer.INT_SIZE;
 
 		memory.setInt(pointer, offset, lruPointer);
   }
 
   private int getPrevLRUPointer(int pointer) {
-		final int pointersLen = memory.getInt(pointer, 0);
-    final int offset = 3 * OIntegerSerializer.INT_SIZE + pointersLen * OIntegerSerializer.INT_SIZE;
+		final int offset = 4 * OIntegerSerializer.INT_SIZE;
 
-    return memory.getInt(pointer, offset);
+		return memory.getInt(pointer, offset);
   }
 
   private void setPrevLRUPointer(int pointer, int lruPointer) {
-		final int pointersLen = memory.getInt(pointer, 0);
-		final int offset = 3 * OIntegerSerializer.INT_SIZE + pointersLen * OIntegerSerializer.INT_SIZE;
+		final int offset = 4 * OIntegerSerializer.INT_SIZE;
 
 		memory.setInt(pointer, offset, lruPointer);
 	}

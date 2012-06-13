@@ -16,15 +16,15 @@
 
 package com.orientechnologies.orient.core.serialization.serializer.binary.impl;
 
-import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.bytes2long;
-import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.bytes2short;
-import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.long2bytes;
-import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.short2bytes;
-
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
+
+import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.bytes2long;
+import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.bytes2short;
+import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.long2bytes;
+import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.short2bytes;
 
 /**
  * Serializer for {@link com.orientechnologies.orient.core.metadata.schema.OType#LINK}
@@ -36,6 +36,7 @@ public class OLinkSerializer implements OBinarySerializer<OIdentifiable> {
 
 	public static OLinkSerializer	INSTANCE	= new OLinkSerializer();
 	public static final byte			ID				= 9;
+	public static final int       RID_SIZE = OShortSerializer.SHORT_SIZE + OLongSerializer.LONG_SIZE;
 
 	public int getObjectSize(final OIdentifiable rid) {
 		return OShortSerializer.SHORT_SIZE + OLongSerializer.LONG_SIZE;

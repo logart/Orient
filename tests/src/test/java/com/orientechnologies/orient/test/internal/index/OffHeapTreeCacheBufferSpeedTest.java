@@ -30,8 +30,17 @@ public class OffHeapTreeCacheBufferSpeedTest  extends SpeedTestMonoThread {
 		key++;
 	}
 
+	@Override
+	public void deinit() throws Exception {
+		System.out.println();
+		System.out.println("Cache size : " + treeCacheBuffer.size());
+		System.out.println("Bytes per item : " +
+						((offheapMemory.capacity() - offheapMemory.freeSpace()) / treeCacheBuffer.size()));
+	}
+
 	private OOffHeapTreeCacheBuffer.CacheEntry<Integer> createCacheEntry(int key) {
 		return new OOffHeapTreeCacheBuffer.CacheEntry<Integer>(key,1, new ORecordId(1, 1),
 						new ORecordId(1, 2), new ORecordId(1, 3), new ORecordId(1, 4) );
 	}
+
 }
