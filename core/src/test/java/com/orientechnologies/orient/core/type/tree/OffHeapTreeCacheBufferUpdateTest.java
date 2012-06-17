@@ -1,25 +1,25 @@
 package com.orientechnologies.orient.core.type.tree;
 
-import com.orientechnologies.orient.core.id.ORecordId;
-import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
+import java.util.HashSet;
+import java.util.Random;
+import java.util.Set;
+
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import java.util.HashSet;
-import java.util.Random;
-import java.util.Set;
+import com.orientechnologies.orient.core.id.ORecordId;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
 
 @Test
 public class OffHeapTreeCacheBufferUpdateTest {
-  private OMemory memory = new OOffHeapMemory(2000000, 20);
+  private OMemory                          memory = new OOffHeapMemory(4000000, 20);
   private OOffHeapTreeCacheBuffer<Integer> treeCacheBuffer;
 
   @BeforeMethod
   public void setUp() {
-    treeCacheBuffer =
-            new OOffHeapTreeCacheBuffer<Integer>(memory, OIntegerSerializer.INSTANCE);
+    treeCacheBuffer = new OOffHeapTreeCacheBuffer<Integer>(memory, OIntegerSerializer.INSTANCE);
   }
 
   @AfterMethod
@@ -41,7 +41,6 @@ public class OffHeapTreeCacheBufferUpdateTest {
 
     Assert.assertEquals(memory.freeSpace(), memory.capacity());
   }
-
 
   @Test
   public void testUpdateTwoOrderedItems() {
@@ -120,7 +119,6 @@ public class OffHeapTreeCacheBufferUpdateTest {
     Assert.assertNotNull(cacheEntryThree);
     Assert.assertEquals(cacheEntryThree, createUpdateCacheEntry(3));
 
-
     treeCacheBuffer.remove(1);
     treeCacheBuffer.remove(2);
     treeCacheBuffer.remove(3);
@@ -154,7 +152,6 @@ public class OffHeapTreeCacheBufferUpdateTest {
     final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryThree = treeCacheBuffer.get(3);
     Assert.assertNotNull(cacheEntryThree);
     Assert.assertEquals(cacheEntryThree, createUpdateCacheEntry(3));
-
 
     treeCacheBuffer.remove(1);
     treeCacheBuffer.remove(2);
@@ -190,7 +187,6 @@ public class OffHeapTreeCacheBufferUpdateTest {
     Assert.assertNotNull(cacheEntryThree);
     Assert.assertEquals(cacheEntryThree, createUpdateCacheEntry(3));
 
-
     treeCacheBuffer.remove(1);
     treeCacheBuffer.remove(2);
     treeCacheBuffer.remove(3);
@@ -202,7 +198,7 @@ public class OffHeapTreeCacheBufferUpdateTest {
   public void testUpdate10000NonOrderedItems() {
     Set<Integer> addedKeys = new HashSet<Integer>();
     Random random = new Random();
-    for(int i  = 0; i < 10000; i++) {
+    for (int i = 0; i < 10000; i++) {
       int key = random.nextInt();
       while (addedKeys.contains(key))
         key = random.nextInt();
@@ -212,29 +208,29 @@ public class OffHeapTreeCacheBufferUpdateTest {
       addedKeys.add(key);
     }
 
-    for(int key : addedKeys) {
+    for (int key : addedKeys) {
       boolean result = treeCacheBuffer.update(createUpdateCacheEntry(key));
       Assert.assertTrue(result);
     }
 
-    for(int key : addedKeys) {
+    for (int key : addedKeys) {
       OOffHeapTreeCacheBuffer.CacheEntry<Integer> cacheEntry = treeCacheBuffer.get(key);
       Assert.assertEquals(cacheEntry, createUpdateCacheEntry(key));
     }
 
-    for(int key : addedKeys) {
+    for (int key : addedKeys) {
       treeCacheBuffer.remove(key);
     }
     Assert.assertEquals(memory.freeSpace(), memory.capacity());
   }
 
   private OOffHeapTreeCacheBuffer.CacheEntry<Integer> createCacheEntry(int key) {
-    return new OOffHeapTreeCacheBuffer.CacheEntry<Integer>(key, 1, new ORecordId(1, 1),
-            new ORecordId(1, 2), new ORecordId(1, 3), new ORecordId(1, 4));
+    return new OOffHeapTreeCacheBuffer.CacheEntry<Integer>(key, 1, new ORecordId(1, 1), new ORecordId(1, 2), new ORecordId(1, 3),
+        new ORecordId(1, 4));
   }
 
   private OOffHeapTreeCacheBuffer.CacheEntry<Integer> createUpdateCacheEntry(int key) {
-    return new OOffHeapTreeCacheBuffer.CacheEntry<Integer>(key, 2, new ORecordId(2, 1),
-            new ORecordId(2, 2), new ORecordId(2, 3), new ORecordId(2, 4));
+    return new OOffHeapTreeCacheBuffer.CacheEntry<Integer>(key, 2, new ORecordId(2, 1), new ORecordId(2, 2), new ORecordId(2, 3),
+        new ORecordId(2, 4));
   }
 }

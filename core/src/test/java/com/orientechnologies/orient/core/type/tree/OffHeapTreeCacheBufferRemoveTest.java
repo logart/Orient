@@ -1,24 +1,24 @@
 package com.orientechnologies.orient.core.type.tree;
 
-import com.orientechnologies.orient.core.id.ORecordId;
-import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
-import org.testng.Assert;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
 import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
 
+import org.testng.Assert;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+
+import com.orientechnologies.orient.core.id.ORecordId;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
+
 @Test
 public class OffHeapTreeCacheBufferRemoveTest {
-  private OMemory memory = new OOffHeapMemory(2000000, 20);
+  private OMemory                          memory = new OOffHeapMemory(4000000, 20);
   private OOffHeapTreeCacheBuffer<Integer> treeCacheBuffer;
 
   @BeforeMethod
   public void setUp() {
-    treeCacheBuffer =
-            new OOffHeapTreeCacheBuffer<Integer>(memory, OIntegerSerializer.INSTANCE);
+    treeCacheBuffer = new OOffHeapTreeCacheBuffer<Integer>(memory, OIntegerSerializer.INSTANCE);
   }
 
   @Test
@@ -111,7 +111,7 @@ public class OffHeapTreeCacheBufferRemoveTest {
   public void testRemove10000NonOrderedItems() {
     Set<Integer> addedKeys = new HashSet<Integer>();
     Random random = new Random();
-    for(int i  = 0; i < 10000; i++) {
+    for (int i = 0; i < 10000; i++) {
       int key = random.nextInt();
       while (addedKeys.contains(key))
         key = random.nextInt();
@@ -120,7 +120,7 @@ public class OffHeapTreeCacheBufferRemoveTest {
       addedKeys.add(key);
     }
 
-    for(int key : addedKeys) {
+    for (int key : addedKeys) {
       OOffHeapTreeCacheBuffer.CacheEntry<Integer> cacheEntry = treeCacheBuffer.remove(key);
       Assert.assertEquals(cacheEntry, createCacheEntry(key));
     }
@@ -130,7 +130,7 @@ public class OffHeapTreeCacheBufferRemoveTest {
   }
 
   private OOffHeapTreeCacheBuffer.CacheEntry<Integer> createCacheEntry(int key) {
-    return new OOffHeapTreeCacheBuffer.CacheEntry<Integer>(key,1, new ORecordId(1, 1),
-            new ORecordId(1, 2), new ORecordId(1, 3), new ORecordId(1, 4) );
+    return new OOffHeapTreeCacheBuffer.CacheEntry<Integer>(key, 1, new ORecordId(1, 1), new ORecordId(1, 2), new ORecordId(1, 3),
+        new ORecordId(1, 4));
   }
 }
