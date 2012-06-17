@@ -3,6 +3,8 @@ package com.orientechnologies.orient.test.internal.index;
 import com.orientechnologies.common.test.SpeedTestMonoThread;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
+import com.orientechnologies.orient.core.type.tree.OBuddyMemory;
+import com.orientechnologies.orient.core.type.tree.OMemory;
 import com.orientechnologies.orient.core.type.tree.OOffHeapMemory;
 import com.orientechnologies.orient.core.type.tree.OOffHeapTreeCacheBuffer;
 import org.testng.annotations.Test;
@@ -13,14 +15,15 @@ import org.testng.annotations.Test;
  */
 public class OffHeapTreeCacheBufferSpeedTest  extends SpeedTestMonoThread {
 
-	private OOffHeapMemory offheapMemory= new OOffHeapMemory(32000400, 64);
+//	private OMemory offheapMemory= new OBuddyMemory(12900000, 64);
+	private OMemory offheapMemory= new OOffHeapMemory(12900000, 64);
 	private OOffHeapTreeCacheBuffer<Integer> treeCacheBuffer =
 					new OOffHeapTreeCacheBuffer<Integer>(offheapMemory, OIntegerSerializer.INSTANCE);
 
 	private int	key;
 
 	public OffHeapTreeCacheBufferSpeedTest() {
-		super(5000000);
+		super(50000000);
 	}
 
 	@Override

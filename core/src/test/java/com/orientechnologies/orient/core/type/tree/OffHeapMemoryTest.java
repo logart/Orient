@@ -31,7 +31,7 @@ import java.util.Random;
 public class OffHeapMemoryTest {
   @Test
   public void testAdd5Remove3rdGetSameChunk() {
-    final OOffHeapMemory memory = new OOffHeapMemory(40 * 15, 20);
+    final OMemory memory = new OOffHeapMemory(40 * 15, 20);
 
     final List<Integer> pointers = new ArrayList<Integer>();
     final List<byte[]> data = new ArrayList<byte[]>();
@@ -47,7 +47,7 @@ public class OffHeapMemoryTest {
       }
 
       int pointer = memory.allocate(bytes);
-      Assert.assertFalse(pointer == OOffHeapMemory.NULL_POINTER);
+      Assert.assertFalse(pointer == OMemory.NULL_POINTER);
       byte[] loadedData = memory.get(pointer, 0, -1);
       Assert.assertEquals(loadedData, bytes);
 
@@ -74,16 +74,16 @@ public class OffHeapMemoryTest {
     byte[] stub = new byte[32];
     for (int i = 0; i < 5; i++) {
       int pointer = memory.allocate(stub);
-      Assert.assertFalse(pointer == OOffHeapMemory.NULL_POINTER);
+      Assert.assertFalse(pointer == OMemory.NULL_POINTER);
     }
 
     int nullPointer = memory.allocate(stub);
-    Assert.assertEquals(nullPointer, OOffHeapMemory.NULL_POINTER);
+    Assert.assertEquals(nullPointer, OMemory.NULL_POINTER);
   }
 
   @Test
   public void testAdd5Remove1stGetSameChunk() {
-    final OOffHeapMemory memory = new OOffHeapMemory(40 * 15, 20);
+    final OMemory memory = new OOffHeapMemory(40 * 15, 20);
 
     final List<Integer> pointers = new ArrayList<Integer>();
     final List<byte[]> data = new ArrayList<byte[]>();
@@ -95,7 +95,7 @@ public class OffHeapMemoryTest {
       }
 
       int pointer = memory.allocate(bytes);
-      Assert.assertFalse(pointer == OOffHeapMemory.NULL_POINTER);
+      Assert.assertFalse(pointer == OMemory.NULL_POINTER);
       byte[] loadedData = memory.get(pointer, 0, -1);
       Assert.assertEquals(loadedData, bytes);
 
@@ -123,7 +123,7 @@ public class OffHeapMemoryTest {
     do {
       pointer = memory.allocate(stub);
 
-    } while (pointer != OOffHeapMemory.NULL_POINTER);
+    } while (pointer != OMemory.NULL_POINTER);
 
     Assert.assertTrue(stub.length + OOffHeapMemory.SYSTEM_INFO_SIZE > memory.freeSpace());
   }
@@ -259,7 +259,7 @@ public class OffHeapMemoryTest {
     }
   }
 
-  private void removeData(OOffHeapMemory memory, int interval, List<Integer> pointers, List<byte[]> data) {
+  private void removeData(OMemory memory, int interval, List<Integer> pointers, List<byte[]> data) {
     int removed = 0;
     for (int i = 0; i < pointers.size(); i++) {
       if (i % interval == 0) {
@@ -271,7 +271,7 @@ public class OffHeapMemoryTest {
     }
   }
 
-  private void checkData(OOffHeapMemory memory, List<Integer> pointers, List<byte[]> data) {
+  private void checkData(OMemory memory, List<Integer> pointers, List<byte[]> data) {
     for (int i = 0; i < pointers.size(); i++) {
       final byte[] loadedData = memory.get(pointers.get(i), 0, -1);
       Assert.assertEquals(loadedData, data.get(i), i + "-th dat element is broken");
@@ -289,7 +289,7 @@ public class OffHeapMemoryTest {
       pointer = memory.allocate(dataToStore);
       lastSize = dataToStore.length;
 
-      if (pointer != OOffHeapMemory.NULL_POINTER) {
+      if (pointer != OMemory.NULL_POINTER) {
         final byte[] loadedData = memory.get(pointer, 0, -1);
         Assert.assertEquals(loadedData, dataToStore);
 
@@ -300,7 +300,7 @@ public class OffHeapMemoryTest {
       sizeIndex++;
       if (sizeIndex >= sizes.length)
         sizeIndex = 0;
-    } while (pointer != OOffHeapMemory.NULL_POINTER);
+    } while (pointer != OMemory.NULL_POINTER);
 
     int neededSize = lastSize + memory.freeChunkCount() * OOffHeapMemory.SYSTEM_INFO_SIZE;
     int freeSpace = memory.freeSpace();

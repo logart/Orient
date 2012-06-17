@@ -29,7 +29,7 @@ import java.util.List;
  * @author Andrey Lomakin
  * @since 07.04.12
  */
-public class OOffHeapMemory {
+public class OOffHeapMemory implements OMemory {
   private static Class<?>	sunClass = null;
 
   static {
@@ -41,8 +41,6 @@ public class OOffHeapMemory {
   }
 
   public static final int  SYSTEM_INFO_SIZE = OIntegerSerializer.INT_SIZE + 2 * OShortSerializer.SHORT_SIZE;
-
-  public static final int  NULL_POINTER     = -1;
 
   private int              freeListHead;
   private int              freeListHeadSize;
@@ -361,7 +359,7 @@ public class OOffHeapMemory {
 			if (i < dataChunksSize - 1)
 				byteBuffer.putInt(dataChunks.get(i + 1).pointer);
 			else
-				byteBuffer.putInt(OOffHeapMemory.NULL_POINTER);
+				byteBuffer.putInt(OMemory.NULL_POINTER);
 
 
 

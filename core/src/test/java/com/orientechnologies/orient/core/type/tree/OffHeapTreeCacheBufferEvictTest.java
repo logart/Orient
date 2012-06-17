@@ -9,7 +9,7 @@ import org.testng.annotations.Test;
 
 @Test
 public class OffHeapTreeCacheBufferEvictTest {
-  private OOffHeapMemory memory = new OOffHeapMemory(2000000, 20);
+  private OMemory memory = new OOffHeapMemory(2000000, 20);
   private OOffHeapTreeCacheBuffer<Integer> treeCacheBuffer;
 
   @BeforeMethod
