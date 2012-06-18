@@ -16,6 +16,8 @@
 
 package com.orientechnologies.orient.core.serialization.serializer.binary.impl;
 
+import com.orientechnologies.common.types.OBinaryConverter;
+import com.orientechnologies.common.types.OBinaryConverterFactory;
 import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
 
 /**
@@ -24,6 +26,8 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.OBinary
  * @since 18.01.12
  */
 public class OCharSerializer implements OBinarySerializer<Character> {
+	private static final OBinaryConverter BINARY_CONVERTER = OBinaryConverterFactory.getConverter();
+
 	/**
 	 * size of char value in bytes
 	 */
@@ -56,4 +60,15 @@ public class OCharSerializer implements OBinarySerializer<Character> {
 		return ID;
 	}
 
+	public int getObjectSizeNative(byte[] stream, int startPosition) {
+		return CHAR_SIZE;
+	}
+
+	public void serializeNative(Character object, byte[] stream, int startPosition) {
+		BINARY_CONVERTER.putChar(stream, startPosition, object);
+	}
+
+	public Character deserializeNative(byte[] stream, int startPosition) {
+		return BINARY_CONVERTER.getChar(stream, startPosition);
+	}
 }

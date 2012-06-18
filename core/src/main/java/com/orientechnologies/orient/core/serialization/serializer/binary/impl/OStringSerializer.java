@@ -62,6 +62,29 @@ public class OStringSerializer implements OBinarySerializer<String> {
 	public byte getId() {
 		return ID;
 	}
+
+	public int getObjectSizeNative(byte[] stream, int startPosition) {
+		return OIntegerSerializer.INSTANCE.deserializeNative(stream, startPosition)* 2 + OIntegerSerializer.INT_SIZE;
+	}
+
+	public void serializeNative(String object, byte[] stream, int startPosition) {
+		OCharSerializer charSerializer = new OCharSerializer();
+		int length = object.length();
+		OIntegerSerializer.INSTANCE.serializeNative(length, stream, startPosition);
+		for(int i = 0; i < length; i++) {
+			charSerializer.serializeNative(object.charAt(i), stream, startPosition + OIntegerSerializer.INT_SIZE + i * 2);
+		}
+	}
+
+	public String deserializeNative(byte[] stream, int startPosition) {
+		OCharSerializer charSerializer = new OCharSerializer();
+		int len = OIntegerSerializer.INSTANCE.deserializeNative(stream, startPosition);
+		StringBuilder stringBuilder = new StringBuilder();
+		for(int i = 0; i < len; i++) {
+			stringBuilder.append(charSerializer.deserializeNative(stream, startPosition + OIntegerSerializer.INT_SIZE + i * 2));
+		}
+		return stringBuilder.toString();
+	}
 }
 
 

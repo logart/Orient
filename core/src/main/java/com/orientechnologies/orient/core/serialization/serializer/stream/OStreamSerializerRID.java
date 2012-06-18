@@ -15,13 +15,13 @@
  */
 package com.orientechnologies.orient.core.serialization.serializer.stream;
 
-import java.io.IOException;
-
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLinkSerializer;
+
+import java.io.IOException;
 
 public class OStreamSerializerRID implements OStreamSerializer, OBinarySerializer<OIdentifiable> {
 	public static final String								NAME			= "p";
@@ -64,5 +64,17 @@ public class OStreamSerializerRID implements OStreamSerializer, OBinarySerialize
 
 	public byte getId() {
 		return ID;
+	}
+
+	public int getObjectSizeNative(byte[] stream, int startPosition) {
+		return OLinkSerializer.INSTANCE.getObjectSizeNative(stream, startPosition);
+	}
+
+	public void serializeNative(OIdentifiable object, byte[] stream, int startPosition) {
+		OLinkSerializer.INSTANCE.serializeNative(object.getIdentity(), stream, startPosition);
+	}
+
+	public OIdentifiable deserializeNative(byte[] stream, int startPosition) {
+		return OLinkSerializer.INSTANCE.deserializeNative(stream, startPosition);
 	}
 }

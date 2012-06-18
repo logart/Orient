@@ -16,10 +16,10 @@
 
 package com.orientechnologies.orient.core.serialization.serializer.binary.impl;
 
+import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
+
 import java.util.Calendar;
 import java.util.Date;
-
-import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
 
 /**
  * Serializer for  {@link com.orientechnologies.orient.core.metadata.schema.OType#DATE} .
@@ -60,4 +60,23 @@ public class ODateSerializer implements OBinarySerializer<Date> {
 		return ID;
 	}
 
+	public int getObjectSizeNative(byte[] stream, int startPosition) {
+		return OLongSerializer.LONG_SIZE;
+	}
+
+	public void serializeNative(Date object, byte[] stream, int startPosition) {
+		Calendar calendar = Calendar.getInstance();
+		calendar.setTime(object);
+		calendar.set(Calendar.HOUR_OF_DAY, 0);
+		calendar.set(Calendar.MINUTE, 0);
+		calendar.set(Calendar.SECOND, 0);
+		calendar.set(Calendar.MILLISECOND, 0);
+		ODateTimeSerializer dateTimeSerializer = ODateTimeSerializer.INSTANCE;
+		dateTimeSerializer.serializeNative(calendar.getTime(), stream, startPosition);
+	}
+
+	public Date deserializeNative(byte[] stream, int startPosition) {
+		ODateTimeSerializer dateTimeSerializer = ODateTimeSerializer.INSTANCE;
+		return dateTimeSerializer.deserializeNative(stream, startPosition);
+	}
 }

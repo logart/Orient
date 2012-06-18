@@ -1,10 +1,10 @@
 package com.orientechnologies.orient.core.type.tree;
 
-import java.util.Arrays;
-import java.util.Random;
-
 import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
+
+import java.util.Arrays;
+import java.util.Random;
 
 /**
  * @author LomakiA <a href="mailto:Andrey.Lomakin@exigenservices.com">Andrey Lomakin</a>
@@ -445,10 +445,7 @@ public class OManagedMemorySkipList<K extends Comparable<K>> {
       offset += OIntegerSerializer.INT_SIZE;
     }
 
-    byte[] keySerialized = new byte[keySize];
-    keySerializer.serialize(key, keySerialized, 0);
-
-    memory.set(keyPointer, 0, keySize, keySerialized);
+    memory.set(keyPointer, 0, key, keySerializer);
 
     return pointer;
   }
@@ -469,9 +466,8 @@ public class OManagedMemorySkipList<K extends Comparable<K>> {
   private K getKey(int pointer) {
     final int offset = OIntegerSerializer.INT_SIZE;
     final int keyPointer = memory.getInt(pointer, offset);
-    final byte[] serializedKey = memory.get(keyPointer, 0, -1);
 
-    return keySerializer.deserialize(serializedKey, 0);
+    return memory.get(keyPointer, 0, keySerializer);
   }
 
   private int getNPointer(int pointer, int level) {

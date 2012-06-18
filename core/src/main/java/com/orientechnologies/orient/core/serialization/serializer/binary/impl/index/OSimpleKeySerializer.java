@@ -71,7 +71,30 @@ public class OSimpleKeySerializer<T extends Comparable<?>> implements OBinarySer
         + binarySerializer.getObjectSize(stream, startPosition + OBinarySerializerFactory.TYPE_IDENTIFIER_SIZE);
   }
 
-  public byte getId() {
+	public int getObjectSizeNative(byte[] stream, int startPosition) {
+		final byte serializerId = stream[startPosition];
+		init(serializerId);
+		return OBinarySerializerFactory.TYPE_IDENTIFIER_SIZE
+						+ binarySerializer.getObjectSizeNative(stream, startPosition + OBinarySerializerFactory.TYPE_IDENTIFIER_SIZE);
+	}
+
+	public void serializeNative(T key, byte[] stream, int startPosition) {
+		init(key);
+		stream[startPosition] = binarySerializer.getId();
+		startPosition += OBinarySerializerFactory.TYPE_IDENTIFIER_SIZE;
+		binarySerializer.serializeNative(key, stream, startPosition);
+		startPosition += binarySerializer.getObjectSize(key);
+	}
+
+	public T deserializeNative(byte[] stream, int startPosition) {
+		final byte typeId = stream[startPosition];
+		startPosition += OBinarySerializerFactory.TYPE_IDENTIFIER_SIZE;
+
+		init(typeId);
+		return (T) binarySerializer.deserializeNative(stream, startPosition);
+	}
+
+	public byte getId() {
     return ID;
   }
 
@@ -86,4 +109,5 @@ public class OSimpleKeySerializer<T extends Comparable<?>> implements OBinarySer
     if (binarySerializer == null)
       binarySerializer = OBinarySerializerFactory.INSTANCE.getObjectSerializer(serializerId);
   }
+
 }

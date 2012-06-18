@@ -16,6 +16,8 @@
 
 package com.orientechnologies.orient.core.serialization.serializer.binary.impl;
 
+import com.orientechnologies.common.types.OBinaryConverter;
+import com.orientechnologies.common.types.OBinaryConverterFactory;
 import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
 
 import java.util.Arrays;
@@ -30,6 +32,7 @@ import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.in
  * @since 20.01.12
  */
 public class OBinaryTypeSerializer implements OBinarySerializer<byte[]> {
+	private static final OBinaryConverter BINARY_CONVERTER = OBinaryConverterFactory.getConverter();
 
 	public static final OBinaryTypeSerializer INSTANCE = new OBinaryTypeSerializer();
 	public static final byte ID = 17;
@@ -55,6 +58,22 @@ public class OBinaryTypeSerializer implements OBinarySerializer<byte[]> {
 
 	public int getObjectSize(byte[] stream, int startPosition) {
 		return  bytes2int(stream, startPosition);
+	}
+
+	public int getObjectSizeNative(byte[] stream, int startPosition) {
+		return BINARY_CONVERTER.getInt(stream, startPosition, 0);
+	}
+
+	public void serializeNative(byte[] object, byte[] stream, int startPosition) {
+		int len = object.length;
+		BINARY_CONVERTER.putInt(stream, startPosition, 0, len);
+		System.arraycopy(object, 0, stream, startPosition + OIntegerSerializer.INT_SIZE, len);
+	}
+
+	public byte[] deserializeNative(byte[] stream, int startPosition) {
+		int len = BINARY_CONVERTER.getInt(stream, startPosition, 0);
+		return Arrays.copyOfRange(stream, startPosition + OIntegerSerializer.INT_SIZE,
+						startPosition + OIntegerSerializer.INT_SIZE + len);
 	}
 
 	public byte getId() {

@@ -44,6 +44,8 @@ public interface OBinarySerializer<T> {
 	 */
 	int getObjectSize(byte[] stream, int startPosition);
 
+	int getObjectSizeNative(byte[] stream, int startPosition);
+
 	/**
 	 * Writes object to the stream starting from the startPosition
 	 *
@@ -53,6 +55,8 @@ public interface OBinarySerializer<T> {
 	 */
 	void serialize(T object, byte[] stream, int startPosition);
 
+	void serializeNative(T object, byte[] stream, int startPosition);
+
 	/**
 	 * Reads object from the stream starting from the startPosition
 	 *
@@ -61,6 +65,8 @@ public interface OBinarySerializer<T> {
 	 * @return instance of the deserialized object
 	 */
 	T deserialize(byte[] stream, int startPosition);
+
+	T deserializeNative(byte[] stream, int startPosition);
 
 	/**
 	 * @return Identifier of given serializer.

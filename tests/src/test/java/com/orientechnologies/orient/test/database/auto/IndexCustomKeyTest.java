@@ -15,14 +15,6 @@
  */
 package com.orientechnologies.orient.test.database.auto;
 
-import java.util.Arrays;
-
-import org.testng.Assert;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Parameters;
-import org.testng.annotations.Test;
-
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.index.OIndex;
 import com.orientechnologies.orient.core.index.ORuntimeKeyIndexDefinition;
@@ -30,6 +22,13 @@ import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializerFactory;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OBinaryTypeSerializer;
+import org.testng.Assert;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Parameters;
+import org.testng.annotations.Test;
+
+import java.util.Arrays;
 
 @Test(groups = { "index" })
 public class IndexCustomKeyTest {
@@ -90,6 +89,18 @@ public class IndexCustomKeyTest {
 
 		public byte getId() {
 			return ID;
+		}
+
+		public int getObjectSizeNative(byte[] stream, int startPosition) {
+			return LENGTH;
+		}
+
+		public void serializeNative(ComparableBinary object, byte[] stream, int startPosition) {
+			serialize(object, stream, startPosition);
+		}
+
+		public ComparableBinary deserializeNative(byte[] stream, int startPosition) {
+			return deserialize(stream, startPosition);
 		}
 	}
 

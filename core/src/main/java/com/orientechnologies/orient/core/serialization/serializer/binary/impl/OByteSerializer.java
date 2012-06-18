@@ -52,5 +52,17 @@ public class OByteSerializer implements OBinarySerializer<Byte> {
 	public byte getId() {
 		return ID;
 	}
+
+	public int getObjectSizeNative(byte[] stream, int startPosition) {
+		return getObjectSize(stream, startPosition);
+	}
+
+	public void serializeNative(Byte object, byte[] stream, int startPosition) {
+		serialize(object, stream, startPosition);
+	}
+
+	public Byte deserializeNative(byte[] stream, int startPosition) {
+		return deserialize(stream, startPosition);
+	}
 }
 

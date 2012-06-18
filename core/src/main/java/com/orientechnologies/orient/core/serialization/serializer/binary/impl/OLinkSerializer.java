@@ -59,4 +59,20 @@ public class OLinkSerializer implements OBinarySerializer<OIdentifiable> {
 	public byte getId() {
 		return ID;
 	}
+
+	public int getObjectSizeNative(byte[] stream, int startPosition) {
+		return OShortSerializer.SHORT_SIZE + OLongSerializer.LONG_SIZE;
+	}
+
+	public void serializeNative(OIdentifiable rid, byte[] stream, int startPosition) {
+		ORID r = rid.getIdentity();
+		OShortSerializer.INSTANCE.serializeNative((short) r.getClusterId(), stream, startPosition);
+		OLongSerializer.INSTANCE.serializeNative(r.getClusterPosition(), stream, startPosition + OShortSerializer.SHORT_SIZE);
+	}
+
+	public OIdentifiable deserializeNative(byte[] stream, int startPosition) {
+		int clusterId = OShortSerializer.INSTANCE.deserializeNative(stream, startPosition);
+		long clusterPosition = OLongSerializer.INSTANCE.deserializeNative(stream, startPosition + OShortSerializer.SHORT_SIZE);
+		return new ORecordId(clusterId, clusterPosition);
+	}
 }

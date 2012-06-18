@@ -56,6 +56,18 @@ public class OBooleanSerializer implements OBinarySerializer<Boolean> {
 	public byte getId() {
 		return ID;
 	}
+
+	public int getObjectSizeNative(byte[] stream, int startPosition) {
+		return BOOLEAN_SIZE;
+	}
+
+	public void serializeNative(Boolean object, byte[] stream, int startPosition) {
+		serialize(object, stream, startPosition);
+	}
+
+	public Boolean deserializeNative(byte[] stream, int startPosition) {
+		return deserialize(stream, startPosition);
+	}
 }
 
 

@@ -61,4 +61,25 @@ public class ODecimalSerializer implements OBinarySerializer<BigDecimal> {
 	public byte getId() {
 		return ID;
 	}
+
+	public int getObjectSizeNative(byte[] stream, int startPosition) {
+		final int size = OIntegerSerializer.INT_SIZE +
+						OBinaryTypeSerializer.INSTANCE.getObjectSizeNative(stream, startPosition + OIntegerSerializer.INT_SIZE);
+		return size;
+	}
+
+	public void serializeNative(BigDecimal object, byte[] stream, int startPosition) {
+		OIntegerSerializer.INSTANCE.serializeNative(object.scale(), stream, startPosition);
+		startPosition += OIntegerSerializer.INT_SIZE;
+		OBinaryTypeSerializer.INSTANCE.serializeNative(object.unscaledValue().toByteArray(), stream, startPosition);
+	}
+
+	public BigDecimal deserializeNative(byte[] stream, int startPosition) {
+		final int scale  = OIntegerSerializer.INSTANCE.deserializeNative(stream, startPosition);
+		startPosition += OIntegerSerializer.INT_SIZE;
+
+		final byte[] unscaledValue = OBinaryTypeSerializer.INSTANCE.deserializeNative(stream, startPosition);
+
+		return new BigDecimal(new BigInteger(unscaledValue), scale);
+	}
 }

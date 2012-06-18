@@ -48,5 +48,16 @@ public class ONullSerializer implements OBinarySerializer<Object> {
 	public byte getId() {
 		return ID;
 	}
+
+	public int getObjectSizeNative(byte[] stream, int startPosition) {
+		return 0;
+	}
+
+	public void serializeNative(Object object, byte[] stream, int startPosition) {
+	}
+
+	public Object deserializeNative(byte[] stream, int startPosition) {
+		return null;
+	}
 }
 

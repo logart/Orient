@@ -1,7 +1,10 @@
 package com.orientechnologies.orient.core.type.tree;
 
-import java.util.Arrays;
+import com.orientechnologies.common.types.OBinaryConverter;
+import com.orientechnologies.common.types.OBinaryConverterFactory;
+import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
 
+import java.util.Arrays;
 
 /**
  * Buddy memory allocation algorithm.
@@ -12,22 +15,24 @@ import java.util.Arrays;
  * @since 10.06.12
  */
 public class OBuddyMemory implements OMemory {
-  public static final int  SYSTEM_INFO_SIZE = 2;
+  private static final OBinaryConverter CONVERTER = OBinaryConverterFactory.getConverter();
 
-  private static final int TAG_OFFSET       = 0;
-  public static final int  SIZE_OFFSET      = 1;
-  public static final int  NEXT_OFFSET      = 2;
-  public static final int  PREVIOUS_OFFSET  = 6;
+  public static final int        SYSTEM_INFO_SIZE = 2;
 
-  public static final byte TAG_FREE         = 0;
-  public static final byte TAG_ALLOCATED    = 1;
+  private static final int       TAG_OFFSET       = 0;
+  public static final int        SIZE_OFFSET      = 1;
+  public static final int        NEXT_OFFSET      = 2;
+  public static final int        PREVIOUS_OFFSET  = 6;
 
-  private final byte[]     buffer;
+  public static final byte       TAG_FREE         = 0;
+  public static final byte       TAG_ALLOCATED    = 1;
 
-  private final int        minChunkSize;
-  private final int[]      freeListHeader;
-  private final int[]      freeListTail;
-  private final int        maxLevel;
+  private final byte[]           buffer;
+
+  private final int              minChunkSize;
+  private final int[]            freeListHeader;
+  private final int[]            freeListTail;
+  private final int              maxLevel;
 
   /**
    * @param capacity
@@ -130,6 +135,14 @@ public class OBuddyMemory implements OMemory {
     System.arraycopy(content, 0, buffer, pointer + SYSTEM_INFO_SIZE + offset, length);
   }
 
+  public <T> T get(int pointer, int offset, OBinarySerializer<T> serializer) {
+    return serializer.deserializeNative(buffer, pointer + SYSTEM_INFO_SIZE + offset);
+  }
+
+  public <T> void set(int pointer, int offset, T data, OBinarySerializer<T> serializer) {
+    serializer.serializeNative(data, buffer, pointer + SYSTEM_INFO_SIZE + offset);
+  }
+
   public int capacity() {
     return buffer.length - 1;
   }
@@ -163,41 +176,41 @@ public class OBuddyMemory implements OMemory {
     return readInt(pointer, offset + SYSTEM_INFO_SIZE);
   }
 
-	private void initMemory() {
-		Arrays.fill(freeListHeader, 0, maxLevel + 1, NULL_POINTER);
-		Arrays.fill(freeListTail, 0, maxLevel + 1, NULL_POINTER);
+  private void initMemory() {
+    Arrays.fill(freeListHeader, 0, maxLevel + 1, NULL_POINTER);
+    Arrays.fill(freeListTail, 0, maxLevel + 1, NULL_POINTER);
 
-		int pointer = 0;
-		byte level = (byte) maxLevel;
-		int availSpace = buffer.length;
+    int pointer = 0;
+    byte level = (byte) maxLevel;
+    int availSpace = buffer.length;
 
-		while (level >= 0) {
-			int chunkSize = (1 << level) * minChunkSize;
-			if (availSpace > chunkSize) {
-				buffer[pointer + TAG_OFFSET] = TAG_FREE;
-				buffer[pointer + SIZE_OFFSET] = level;
-				addNodeToTail(level, pointer);
-				availSpace -= chunkSize;
+    while (level >= 0) {
+      int chunkSize = (1 << level) * minChunkSize;
+      if (availSpace > chunkSize) {
+        buffer[pointer + TAG_OFFSET] = TAG_FREE;
+        buffer[pointer + SIZE_OFFSET] = level;
+        addNodeToTail(level, pointer);
+        availSpace -= chunkSize;
 
-				pointer = buddy(pointer, level);
-			}
-			level--;
-		}
-		assert availSpace == 1;
+        pointer = buddy(pointer, level);
+      }
+      level--;
+    }
+    assert availSpace == 1;
 
-		buffer[pointer + TAG_OFFSET] = TAG_ALLOCATED;
-	}
+    buffer[pointer + TAG_OFFSET] = TAG_ALLOCATED;
+  }
 
-	private int split(int pointer) {
-		int level = --buffer[pointer + SIZE_OFFSET];
-		addNodeToTail(level, pointer);
+  private int split(int pointer) {
+    int level = --buffer[pointer + SIZE_OFFSET];
+    addNodeToTail(level, pointer);
 
-		return buddy(pointer, level);
-	}
+    return buddy(pointer, level);
+  }
 
-	private int size(int pointer) {
-		return (1 << buffer[pointer + SIZE_OFFSET]) * minChunkSize - SYSTEM_INFO_SIZE;
-	}
+  private int size(int pointer) {
+    return (1 << buffer[pointer + SIZE_OFFSET]) * minChunkSize - SYSTEM_INFO_SIZE;
+  }
 
   private int buddy(int pointer, int level) {
     // TODO optimize
@@ -227,22 +240,22 @@ public class OBuddyMemory implements OMemory {
     freeListTail[level] = pointer;
   }
 
-	private void removeFromFreeList(int level, int pointer) {
-		final int next = next(pointer);
-		final int previous = previous(pointer);
+  private void removeFromFreeList(int level, int pointer) {
+    final int next = next(pointer);
+    final int previous = previous(pointer);
 
-		if (freeListHeader[level] == pointer) {
-			freeListHeader[level] = next;
-		} else {
-			next(previous, next);
-		}
+    if (freeListHeader[level] == pointer) {
+      freeListHeader[level] = next;
+    } else {
+      next(previous, next);
+    }
 
-		if (freeListTail[level] == pointer) {
-			freeListTail[level] = previous;
-		} else {
-			previous(next, previous);
-		}
-	}
+    if (freeListTail[level] == pointer) {
+      freeListTail[level] = previous;
+    } else {
+      previous(next, previous);
+    }
+  }
 
   private int next(int pointer) {
     return readInt(pointer, NEXT_OFFSET);
@@ -261,22 +274,11 @@ public class OBuddyMemory implements OMemory {
   }
 
   private void writeInt(int pointer, int offset, int value) {
-    final int position = pointer + offset;
-
-    buffer[position] = (byte) ((value >>> 24) & 0xFF);
-    buffer[position + 1] = (byte) ((value >>> 16) & 0xFF);
-    buffer[position + 2] = (byte) ((value >>> 8) & 0xFF);
-    buffer[position + 3] = (byte) (value & 0xFF);
+    CONVERTER.putInt(buffer, pointer, offset, value);
   }
 
   private int readInt(int pointer, int offset) {
-    final int position = pointer + offset;
-
-    final int v1 = buffer[position] & 0xFF;
-    final int v2 = buffer[position + 1] & 0xFF;
-    final int v3 = buffer[position + 2] & 0xFF;
-    final int v4 = buffer[position + 3] & 0xFF;
-
-    return (v1 << 24) + (v2 << 16) + (v3 << 8) + v4;
+    return CONVERTER.getInt(buffer, pointer, offset);
   }
+
 }

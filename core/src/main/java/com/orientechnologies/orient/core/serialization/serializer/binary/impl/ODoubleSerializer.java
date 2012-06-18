@@ -16,6 +16,8 @@
 
 package com.orientechnologies.orient.core.serialization.serializer.binary.impl;
 
+import com.orientechnologies.common.types.OBinaryConverter;
+import com.orientechnologies.common.types.OBinaryConverterFactory;
 import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
 
 import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.bytes2long;
@@ -28,6 +30,8 @@ import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.lo
  * @since 17.01.12
  */
 public class ODoubleSerializer implements OBinarySerializer<Double> {
+	private static final OBinaryConverter CONVERTER = OBinaryConverterFactory.getConverter();
+
 	public static ODoubleSerializer INSTANCE = new ODoubleSerializer();
 	public static final byte ID = 6;
 
@@ -56,4 +60,15 @@ public class ODoubleSerializer implements OBinarySerializer<Double> {
 		return ID;
 	}
 
+	public int getObjectSizeNative(byte[] stream, int startPosition) {
+		return DOUBLE_SIZE;
+	}
+
+	public void serializeNative(Double object, byte[] stream, int startPosition) {
+		CONVERTER.putLong(stream, startPosition, Double.doubleToLongBits(object));
+	}
+
+	public Double deserializeNative(byte[] stream, int startPosition) {
+		return Double.longBitsToDouble(CONVERTER.getLong(stream, startPosition));
+	}
 }

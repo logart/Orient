@@ -281,40 +281,27 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     memory.setInt(pointer, offset, lastKeyPointer);
     offset += OIntegerSerializer.INT_SIZE;
 
-    final byte[] serializedRid = new byte[ridSize];
-    OLinkSerializer.INSTANCE.serialize(entry.rid, serializedRid, 0);
-    memory.set(pointer, offset, ridSize, serializedRid);
+    memory.set(pointer, offset, entry.rid, OLinkSerializer.INSTANCE);
     offset += ridSize;
 
-    OLinkSerializer.INSTANCE.serialize(entry.leftRid, serializedRid, 0);
-    memory.set(pointer, offset, ridSize, serializedRid);
-    offset += ridSize;
+		memory.set(pointer, offset, entry.leftRid, OLinkSerializer.INSTANCE);
+		offset += ridSize;
 
-    OLinkSerializer.INSTANCE.serialize(entry.rightRid, serializedRid, 0);
-    memory.set(pointer, offset, ridSize, serializedRid);
-    offset += ridSize;
+		memory.set(pointer, offset, entry.rightRid, OLinkSerializer.INSTANCE);
+		offset += ridSize;
 
-    OLinkSerializer.INSTANCE.serialize(entry.parentRid, serializedRid, 0);
-    memory.set(pointer, offset, ridSize, serializedRid);
-    offset += ridSize;
+ 		memory.set(pointer, offset, entry.parentRid, OLinkSerializer.INSTANCE);
+		offset += ridSize;
 
-    byte[] serializedFirstKey = new byte[firstKeySize];
-    keySerializer.serialize(entry.firstKey, serializedFirstKey, 0);
-    memory.set(firstKeyPointer, 0, firstKeySize, serializedFirstKey);
-
-    byte[] serializedLastKey = new byte[lastKeySize];
-    keySerializer.serialize(entry.lastKey, serializedLastKey, 0);
-    memory.set(lastKeyPointer, 0, lastKeySize, serializedLastKey);
+    memory.set(firstKeyPointer, 0, entry.firstKey, keySerializer);
+    memory.set(lastKeyPointer, 0, entry.lastKey, keySerializer);
 
     return pointer;
   }
 
   private K getFirstKey(int pointer) {
     final int firstKeyPointer = memory.getInt(pointer, 0);
-    final byte[] serializedFirstKey = memory.get(firstKeyPointer, 0, -1);
-    final K firstKey = keySerializer.deserialize(serializedFirstKey, 0);
-
-    return firstKey;
+    return memory.get(firstKeyPointer, 0, keySerializer);
   }
 
   private void freeEntry(int pointer) {
@@ -329,34 +316,22 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     final int firstKeyPointer = memory.getInt(pointer, 0);
     final int lastKeyPointer = memory.getInt(pointer, OIntegerSerializer.INT_SIZE);
 
-    final byte[] serializedFirstKey = memory.get(firstKeyPointer, 0, -1);
-    final K firstKey = keySerializer.deserialize(serializedFirstKey, 0);
-
-    final byte[] serializedLastKey = memory.get(lastKeyPointer, 0, -1);
-    final K lastKey = keySerializer.deserialize(serializedLastKey, 0);
+    final K firstKey = memory.get(firstKeyPointer, 0, keySerializer);
+    final K lastKey = memory.get(lastKeyPointer, 0, keySerializer);
 
     int offset = 2 * OIntegerSerializer.INT_SIZE;
 
-    byte[] serializedRid;
+    final ORID rid = memory.get(pointer, offset, OLinkSerializer.INSTANCE).getIdentity();
+		offset += OLinkSerializer.RID_SIZE;
 
-    serializedRid = memory.get(pointer, offset, OLinkSerializer.RID_SIZE);
-    offset += OLinkSerializer.RID_SIZE;
 
-    final ORID rid = OLinkSerializer.INSTANCE.deserialize(serializedRid, 0);
+    final ORID leftRid = memory.get(pointer, offset, OLinkSerializer.INSTANCE).getIdentity();
+		offset += OLinkSerializer.RID_SIZE;
 
-    serializedRid = memory.get(pointer, offset, OLinkSerializer.RID_SIZE);
-    offset += OLinkSerializer.RID_SIZE;
+    final ORID rightRid = memory.get(pointer, offset, OLinkSerializer.INSTANCE).getIdentity();
+		offset += OLinkSerializer.RID_SIZE;
 
-    final ORID leftRid = OLinkSerializer.INSTANCE.deserialize(serializedRid, 0);
-
-    serializedRid = memory.get(pointer, offset, OLinkSerializer.RID_SIZE);
-    offset += OLinkSerializer.RID_SIZE;
-
-    final ORID rightRid = OLinkSerializer.INSTANCE.deserialize(serializedRid, 0);
-
-    serializedRid = memory.get(pointer, offset, OLinkSerializer.RID_SIZE);
-
-    final ORID parentRid = OLinkSerializer.INSTANCE.deserialize(serializedRid, 0);
+    final ORID parentRid = memory.get(pointer, offset, OLinkSerializer.INSTANCE).getIdentity();
 
     return new CacheEntry<K>(firstKey, lastKey, rid, parentRid, leftRid, rightRid);
   }

@@ -16,6 +16,8 @@
 
 package com.orientechnologies.orient.core.serialization.serializer.binary.impl;
 
+import com.orientechnologies.common.types.OBinaryConverter;
+import com.orientechnologies.common.types.OBinaryConverterFactory;
 import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
 
 import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.bytes2short;
@@ -28,6 +30,7 @@ import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.sh
  * @since 18.01.12
  */
 public class OShortSerializer implements OBinarySerializer<Short> {
+	private static final OBinaryConverter CONVERTER = OBinaryConverterFactory.getConverter();
 
 	public static OShortSerializer INSTANCE = new  OShortSerializer();
 	public static final byte ID = 12;
@@ -55,6 +58,18 @@ public class OShortSerializer implements OBinarySerializer<Short> {
 
 	public byte getId() {
 		return ID;
+	}
+
+	public int getObjectSizeNative(byte[] stream, int startPosition) {
+		return SHORT_SIZE;
+	}
+
+	public void serializeNative(Short object, byte[] stream, int startPosition) {
+		CONVERTER.putShort(stream, startPosition, object);
+	}
+
+	public Short deserializeNative(byte[] stream, int startPosition) {
+		return CONVERTER.getShort(stream, startPosition);
 	}
 }
 
