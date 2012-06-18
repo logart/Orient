@@ -13,7 +13,7 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OI
 
 @Test
 public class OffHeapTreeCacheBufferRemoveTest {
-  private OMemory                          memory = new OOffHeapMemory(4000000, 20);
+  private OMemory                          memory = new OBuddyMemory(4000000, 20);
   private OOffHeapTreeCacheBuffer<Integer> treeCacheBuffer;
 
   @BeforeMethod

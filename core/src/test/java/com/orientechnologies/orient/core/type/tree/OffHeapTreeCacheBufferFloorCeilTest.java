@@ -10,7 +10,7 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OD
 
 @Test
 public class OffHeapTreeCacheBufferFloorCeilTest {
-  private OMemory                         memory = new OOffHeapMemory(4000000, 20);
+  private OMemory                         memory = new OBuddyMemory(4000000, 20);
   private OOffHeapTreeCacheBuffer<Double> treeCacheBuffer;
 
   @BeforeMethod
