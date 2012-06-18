@@ -256,8 +256,8 @@ public class OBuddyMemory implements OMemory {
     return readInt(pointer, PREVIOUS_OFFSET);
   }
 
-  private void previous(int pointer, int next) {
-    writeInt(pointer, PREVIOUS_OFFSET, next);
+  private void previous(int pointer, int previous) {
+    writeInt(pointer, PREVIOUS_OFFSET, previous);
   }
 
   private void writeInt(int pointer, int offset, int value) {
