@@ -14,7 +14,7 @@ import java.util.List;
 public class BuddyMemoryTest {
 	@Test
   public void testCapacityUpperBoundary() throws Exception {
-    OBuddyMemory memory = new OBuddyMemory(255, 64);
+    OBuddyMemory memory = new OBuddyMemory(191, 64);
 
     Assert.assertEquals(memory.capacity(), 128);
   }
@@ -75,5 +75,55 @@ public class BuddyMemoryTest {
 		memory.free(pointer1);
 		int freeSpaceAfterFree2 = memory.freeSpace();
 		Assert.assertEquals(freeSpaceAfterFree2, 128);
+	}
+
+	@Test
+	public void test960BytesMapping() throws Exception {
+		final int expectedSize = 960;
+		final OBuddyMemory memory = new OBuddyMemory(expectedSize, 64);
+		Assert.assertEquals(memory.freeSpace(), expectedSize);
+
+		final int chunkCount = expectedSize / 64;
+		final List<Integer> pointers = new ArrayList<Integer>(chunkCount);
+
+		for (int i = 0; i < chunkCount; i++) {
+			int pointer = memory.allocate(64 - OBuddyMemory.SYSTEM_INFO_SIZE);
+			Assert.assertTrue(pointer != OMemory.NULL_POINTER);
+			pointers.add(pointer);
+		}
+
+		int nullPointer = memory.allocate(64 - OBuddyMemory.SYSTEM_INFO_SIZE);
+		Assert.assertTrue(nullPointer == OMemory.NULL_POINTER);
+
+		for (Integer pointer : pointers) {
+			memory.free(pointer);
+		}
+
+		Assert.assertEquals(memory.freeSpace(), expectedSize);
+	}
+
+	@Test
+	public void test704BytesMapping() throws Exception {
+		final int expectedSize = 704;
+		final OBuddyMemory memory = new OBuddyMemory(expectedSize, 64);
+		Assert.assertEquals(memory.freeSpace(), expectedSize);
+
+		final int chunkCount = expectedSize / 64;
+		final List<Integer> pointers = new ArrayList<Integer>(chunkCount);
+
+		for (int i = 0; i < chunkCount; i++) {
+			int pointer = memory.allocate(64 - OBuddyMemory.SYSTEM_INFO_SIZE);
+			Assert.assertTrue(pointer != OMemory.NULL_POINTER);
+			pointers.add(pointer);
+		}
+
+		int nullPointer = memory.allocate(64 - OBuddyMemory.SYSTEM_INFO_SIZE);
+		Assert.assertTrue(nullPointer == OMemory.NULL_POINTER);
+
+		for (Integer pointer : pointers) {
+			memory.free(pointer);
+		}
+
+		Assert.assertEquals(memory.freeSpace(), expectedSize);
 	}
 }

@@ -11,7 +11,7 @@ import java.util.Arrays;
  * @since 10.06.12
  */
 public class OBuddyMemory implements OMemory {
-	public static final int SYSTEM_INFO_SIZE = 6;
+	public static final int SYSTEM_INFO_SIZE = 2;
 
 	private static final int TAG_OFFSET = 0;
 	public static final int SIZE_OFFSET = 1;
@@ -29,14 +29,17 @@ public class OBuddyMemory implements OMemory {
 	private final int maxLevel;
 
 	/**
-	 *
 	 * @param capacity
 	 * @param minChunkSize - size of chunks on level 0. Should be power of 2.
 	 */
 	public OBuddyMemory(int capacity, int minChunkSize) {
+		final int logChunkSize = (int) Math.ceil(Math.log(minChunkSize) / Math.log(2));
+		minChunkSize = (int) Math.pow(2, logChunkSize);
 		this.minChunkSize = minChunkSize;
 
-		capacity = (int) Math.pow(2, Math.floor(Math.log(capacity) / Math.log(2)));
+//		capacity = (int) Math.pow(2, Math.floor(Math.log(capacity) / Math.log(2)));
+		capacity = (int) Math.floor(capacity / minChunkSize) * minChunkSize + 1;
+//		capacity = capacity & (0xFFFFFFFF << logChunkSize) + 1;
 		maxLevel = (int) (Math.log((double) capacity / minChunkSize) / Math.log(2));
 
 		freeListHeader = new int[maxLevel + 1];
@@ -50,9 +53,25 @@ public class OBuddyMemory implements OMemory {
 		Arrays.fill(freeListHeader, 0, maxLevel + 1, NULL_POINTER);
 		Arrays.fill(freeListTail, 0, maxLevel + 1, NULL_POINTER);
 
-		buffer[0] = TAG_FREE;
-		buffer[1] = (byte) maxLevel;
-		addNodeToTail(maxLevel, 0);
+		int pointer = 0;
+		byte level = (byte) maxLevel;
+		int availSpace = buffer.length;
+
+		while (level >= 0) {
+			int chunkSize = (1 << level) * minChunkSize;
+			if (availSpace > chunkSize) {
+				buffer[pointer + TAG_OFFSET] = TAG_FREE;
+				buffer[pointer + SIZE_OFFSET] = level;
+				addNodeToTail(level, pointer);
+				availSpace -= chunkSize;
+
+				pointer = buddy(pointer, level);
+			}
+			level--;
+		}
+		assert availSpace == 1;
+
+		buffer[pointer + TAG_OFFSET] = TAG_ALLOCATED;
 	}
 
 	public int allocate(byte[] bytes) {
@@ -64,7 +83,7 @@ public class OBuddyMemory implements OMemory {
 	public int allocate(final int size) {
 		final int level;
 		if (size + SYSTEM_INFO_SIZE > minChunkSize) {
-			level = (int) Math.ceil(Math.log((double)(size + SYSTEM_INFO_SIZE) / minChunkSize) / Math.log(2));
+			level = (int) Math.ceil(Math.log((double) (size + SYSTEM_INFO_SIZE) / minChunkSize) / Math.log(2));
 		} else {
 			level = 0;
 		}
@@ -152,14 +171,9 @@ public class OBuddyMemory implements OMemory {
 			newLength = size(pointer) - offset;
 		}
 
-		try {
-			byte[] dest = new byte[newLength];
-			System.arraycopy(buffer, pointer + SYSTEM_INFO_SIZE + offset, dest, 0, newLength);
-			return dest;
-		} catch (RuntimeException e) {
-			System.out.println("pointer=" + pointer + ", offset=" + offset + ", length=" + length + ", " + (buffer.length < pointer + SYSTEM_INFO_SIZE + offset + length));
-			throw e;
-		}
+		byte[] dest = new byte[newLength];
+		System.arraycopy(buffer, pointer + SYSTEM_INFO_SIZE + offset, dest, 0, newLength);
+		return dest;
 	}
 
 	private int size(int pointer) {
@@ -173,7 +187,7 @@ public class OBuddyMemory implements OMemory {
 	}
 
 	public int capacity() {
-		return buffer.length;
+		return buffer.length - 1;
 	}
 
 	public int freeSpace() {
