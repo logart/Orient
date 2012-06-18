@@ -15,7 +15,7 @@ import com.orientechnologies.orient.core.type.tree.OOffHeapTreeCacheBuffer;
  */
 public class OffHeapTreeCacheBufferSpeedTest extends SpeedTestMonoThread {
 
-  private OMemory                          offheapMemory   = new OBuddyMemory(12900000, 64);
+  private OMemory                          offheapMemory   = new OBuddyMemory(60000000, 32);
   private OOffHeapTreeCacheBuffer<Integer> treeCacheBuffer = new OOffHeapTreeCacheBuffer<Integer>(offheapMemory,
                                                                OIntegerSerializer.INSTANCE);
 
@@ -23,6 +23,7 @@ public class OffHeapTreeCacheBufferSpeedTest extends SpeedTestMonoThread {
 
   public OffHeapTreeCacheBufferSpeedTest() {
     super(50000000);
+    treeCacheBuffer.setEvictionSize(100001);
   }
 
   @Override
