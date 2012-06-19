@@ -404,11 +404,12 @@ public class OManagedMemorySkipList<K extends Comparable<K>> {
   }
 
   private int storeItem(int[] pointers, K key, int dataPointer) {
-    final int size = 5 * OIntegerSerializer.INT_SIZE;
     final int pointersSize = OIntegerSerializer.INT_SIZE * (pointers.length + 1);
     final int keySize = keySerializer.getObjectSize(key);
+		final int size = 5 * OIntegerSerializer.INT_SIZE + keySize;
 
-    final int pointer = memory.allocate(size);
+
+		final int pointer = memory.allocate(size);
 
     if (pointer == OMemory.NULL_POINTER)
       return OMemory.NULL_POINTER;
@@ -419,22 +420,14 @@ public class OManagedMemorySkipList<K extends Comparable<K>> {
       return OMemory.NULL_POINTER;
     }
 
-    final int keyPointer = memory.allocate(keySize);
-    if (keyPointer == OMemory.NULL_POINTER) {
-      memory.free(pointer);
-      memory.free(pointersPointer);
-      return OMemory.NULL_POINTER;
-    }
-
     int offset = 0;
     memory.setInt(pointer, 0, pointersPointer);
     offset += OIntegerSerializer.INT_SIZE;
 
-    memory.setInt(pointer, offset, keyPointer);
-    offset += OIntegerSerializer.INT_SIZE;
-
     memory.setInt(pointer, offset, dataPointer);
     offset += OIntegerSerializer.INT_SIZE;
+
+		memory.set(pointer, offset, key, keySerializer);
 
     offset = 0;
     memory.setInt(pointersPointer, offset, pointers.length);
@@ -445,29 +438,20 @@ public class OManagedMemorySkipList<K extends Comparable<K>> {
       offset += OIntegerSerializer.INT_SIZE;
     }
 
-    memory.set(keyPointer, 0, key, keySerializer);
-
     return pointer;
   }
 
   private void freeItem(int pointer) {
-    int offset = 0;
-
     final int pointersPointer = memory.getInt(pointer, 0);
-    offset += OIntegerSerializer.INT_SIZE;
-
-    final int keyPointer = memory.getInt(pointer, offset);
 
     memory.free(pointersPointer);
-    memory.free(keyPointer);
     memory.free(pointer);
   }
 
   private K getKey(int pointer) {
-    final int offset = OIntegerSerializer.INT_SIZE;
-    final int keyPointer = memory.getInt(pointer, offset);
+    final int offset = 2 * OIntegerSerializer.INT_SIZE;
 
-    return memory.get(keyPointer, 0, keySerializer);
+    return memory.get(pointer, offset, keySerializer);
   }
 
   private int getNPointer(int pointer, int level) {
@@ -484,13 +468,13 @@ public class OManagedMemorySkipList<K extends Comparable<K>> {
   }
 
   private int getDataPointer(int pointer) {
-    final int offset = 2 * OIntegerSerializer.INT_SIZE;
+    final int offset = OIntegerSerializer.INT_SIZE;
 
     return memory.getInt(pointer, offset);
   }
 
   private void setDataPointer(int pointer, int dataPointer) {
-    final int offset = 2 * OIntegerSerializer.INT_SIZE;
+    final int offset = OIntegerSerializer.INT_SIZE;
 
     memory.setInt(pointer, offset, dataPointer);
   }
