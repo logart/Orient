@@ -60,12 +60,7 @@ public class OBuddyMemory implements OMemory {
   }
 
   public int allocate(final int size) {
-    final int level;
-    if (size + SYSTEM_INFO_SIZE > minChunkSize) {
-      level = (int) Math.ceil(Math.log((double) (size + SYSTEM_INFO_SIZE) / minChunkSize) / Math.log(2));
-    } else {
-      level = 0;
-    }
+		int level = Integer.SIZE - Integer.numberOfLeadingZeros((size + SYSTEM_INFO_SIZE - 1) / minChunkSize);
 
     if (level > maxLevel) {
       // We have no free space
