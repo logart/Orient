@@ -1,10 +1,10 @@
 package com.orientechnologies.orient.core.type.tree;
 
+import java.util.Arrays;
+
 import com.orientechnologies.common.types.OBinaryConverter;
 import com.orientechnologies.common.types.OBinaryConverterFactory;
 import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
-
-import java.util.Arrays;
 
 /**
  * Buddy memory allocation algorithm.
@@ -15,24 +15,24 @@ import java.util.Arrays;
  * @since 10.06.12
  */
 public class OBuddyMemory implements OMemory {
-  private static final OBinaryConverter CONVERTER = OBinaryConverterFactory.getConverter();
+  private static final OBinaryConverter CONVERTER        = OBinaryConverterFactory.getConverter();
 
-  public static final int        SYSTEM_INFO_SIZE = 2;
+  public static final int               SYSTEM_INFO_SIZE = 2;
 
-  private static final int       TAG_OFFSET       = 0;
-  public static final int        SIZE_OFFSET      = 1;
-  public static final int        NEXT_OFFSET      = 2;
-  public static final int        PREVIOUS_OFFSET  = 6;
+  private static final int              TAG_OFFSET       = 0;
+  public static final int               SIZE_OFFSET      = 1;
+  public static final int               NEXT_OFFSET      = 2;
+  public static final int               PREVIOUS_OFFSET  = 6;
 
-  public static final byte       TAG_FREE         = 0;
-  public static final byte       TAG_ALLOCATED    = 1;
+  public static final byte              TAG_FREE         = 0;
+  public static final byte              TAG_ALLOCATED    = 1;
 
-  private final byte[]           buffer;
+  private final byte[]                  buffer;
 
-  private final int              minChunkSize;
-  private final int[]            freeListHeader;
-  private final int[]            freeListTail;
-  private final int              maxLevel;
+  private final int                     minChunkSize;
+  private final int[]                   freeListHeader;
+  private final int[]                   freeListTail;
+  private final int                     maxLevel;
 
   /**
    * @param capacity
@@ -60,7 +60,7 @@ public class OBuddyMemory implements OMemory {
   }
 
   public int allocate(final int size) {
-		int level = Integer.SIZE - Integer.numberOfLeadingZeros((size + SYSTEM_INFO_SIZE - 1) / minChunkSize);
+    int level = Integer.SIZE - Integer.numberOfLeadingZeros((size + SYSTEM_INFO_SIZE - 1) / minChunkSize);
 
     if (level > maxLevel) {
       // We have no free space
@@ -111,6 +111,10 @@ public class OBuddyMemory implements OMemory {
     buffer[pointer + TAG_OFFSET] = TAG_FREE;
     buffer[pointer + SIZE_OFFSET] = (byte) (level & 0xFF);
     addNodeToTail(level, pointer);
+  }
+
+  public int getActualSpace(int pointer) {
+    return (1 << buffer[pointer + SIZE_OFFSET]) * minChunkSize;
   }
 
   public byte[] get(int pointer, int offset, final int length) {

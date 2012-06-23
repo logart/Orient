@@ -15,15 +15,24 @@ public interface OMemory {
 
   void free(int pointer);
 
+  /**
+   * Calculates actual size that has been allocated for this entry.
+   * 
+   * @param pointer
+   *          to allocated entry
+   * @return actual size of this entry in memory
+   */
+  int getActualSpace(int pointer);
+
   byte[] get(int pointer, int offset, int length);
 
   void set(int pointer, int offset, int length, byte[] content);
 
-	<T> T get(int pointer, int offset, OBinarySerializer<T> serializer);
+  <T> T get(int pointer, int offset, OBinarySerializer<T> serializer);
 
-	<T> void set(int pointer, int offset, T data, OBinarySerializer<T> serializer);
+  <T> void set(int pointer, int offset, T data, OBinarySerializer<T> serializer);
 
-	int getInt(int pointer, int offset);
+  int getInt(int pointer, int offset);
 
   void setInt(int pointer, int offset, int value);
 
