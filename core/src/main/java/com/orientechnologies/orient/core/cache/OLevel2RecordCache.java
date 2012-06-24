@@ -15,12 +15,13 @@
  */
 package com.orientechnologies.orient.core.cache;
 
-import static com.orientechnologies.orient.core.config.OGlobalConfiguration.CACHE_LEVEL2_STRATEGY;
-
+import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.storage.OStorage;
+
+import static com.orientechnologies.orient.core.config.OGlobalConfiguration.CACHE_LEVEL2_STRATEGY;
 
 /**
  * Second level cache. It's shared among database instances with the same URL.
@@ -37,9 +38,15 @@ public class OLevel2RecordCache extends OAbstractRecordCache {
 	}
 
 	public OLevel2RecordCache(final OStorage iStorage) {
-		super(new OCacheLocator().secondaryCache());
+		super(new OCacheLocator().secondaryCache(iStorage.getName()));
 		profilerPrefix = "storage." + iStorage.getName();
 		strategy = STRATEGY.values()[(CACHE_LEVEL2_STRATEGY.getValueAsInteger())];
+	}
+
+	@Override
+	public void startup() {
+		super.startup();
+		setEnable(OGlobalConfiguration.CACHE_LEVEL2_ENABLED.getValueAsBoolean());
 	}
 
 	/**

@@ -15,6 +15,8 @@
  */
 package com.orientechnologies.orient.test.database.auto;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -26,18 +28,21 @@ import org.testng.Assert;
 import org.testng.annotations.Parameters;
 import org.testng.annotations.Test;
 
+import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.db.object.OLazyObjectSetInterface;
 import com.orientechnologies.orient.core.exception.OQueryParsingException;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.metadata.security.OUser;
 import com.orientechnologies.orient.core.record.impl.ODocument;
+import com.orientechnologies.orient.core.record.impl.ORecordBytes;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 import com.orientechnologies.orient.object.db.ODatabaseObjectTx;
 import com.orientechnologies.orient.object.db.OObjectDatabasePool;
 import com.orientechnologies.orient.object.db.OObjectDatabaseTx;
 import com.orientechnologies.orient.object.iterator.OObjectIteratorClass;
 import com.orientechnologies.orient.object.iterator.OObjectIteratorCluster;
+import com.orientechnologies.orient.test.domain.base.EmbeddedChild;
 import com.orientechnologies.orient.test.domain.base.EnumTest;
 import com.orientechnologies.orient.test.domain.base.IdObject;
 import com.orientechnologies.orient.test.domain.base.Instrument;
@@ -45,6 +50,7 @@ import com.orientechnologies.orient.test.domain.base.JavaComplexTestClass;
 import com.orientechnologies.orient.test.domain.base.JavaSimpleTestClass;
 import com.orientechnologies.orient.test.domain.base.JavaTestInterface;
 import com.orientechnologies.orient.test.domain.base.Musician;
+import com.orientechnologies.orient.test.domain.base.Parent;
 import com.orientechnologies.orient.test.domain.business.Account;
 import com.orientechnologies.orient.test.domain.business.Address;
 import com.orientechnologies.orient.test.domain.business.Child;
@@ -68,7 +74,9 @@ public class CRUDObjectPhysicalTest {
 	@Test
 	public void create() {
 		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
-		database.getEntityManager().registerEntityClasses("com.orientechnologies.orient.test.domain");
+		database.getEntityManager().registerEntityClasses("com.orientechnologies.orient.test.domain.business");
+		database.getEntityManager().registerEntityClasses("com.orientechnologies.orient.test.domain.whiz");
+		database.getEntityManager().registerEntityClasses("com.orientechnologies.orient.test.domain.base");
 
 		startRecordNumber = database.countClusterElements("Account");
 
@@ -284,7 +292,7 @@ public class CRUDObjectPhysicalTest {
 
 		Assert.assertTrue(cresult.size() > 0);
 
-		ORID rid = database.getRecordByUserObject(p, false).getIdentity();
+		ORID rid = new ORecordId(p.getId());
 
 		database.close();
 
@@ -303,6 +311,66 @@ public class CRUDObjectPhysicalTest {
 		Assert.assertEquals(loaded.getEnumMap().size(), 2);
 		Assert.assertEquals(loaded.getEnumMap().get("1"), EnumTest.ENUM2);
 		Assert.assertEquals(loaded.getEnumMap().get("2"), EnumTest.ENUM3);
+
+		database.close();
+	}
+
+	@Test(dependsOnMethods = "mapObjectsTest")
+	public void oidentifableFieldsTest() {
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
+		JavaComplexTestClass p = database.newInstance(JavaComplexTestClass.class);
+		p.setName("Dean Winchester");
+
+		ODocument testEmbeddedDocument = new ODocument();
+		testEmbeddedDocument.field("testEmbeddedField", "testEmbeddedValue");
+
+		p.setEmbeddedDocument(testEmbeddedDocument);
+
+		ODocument testDocument = new ODocument();
+		testDocument.field("testField", "testValue");
+
+		p.setDocument(testDocument);
+
+		ORecordBytes testRecordBytes = new ORecordBytes(
+				"this is a bytearray test. if you read this Object database has stored it correctly".getBytes());
+
+		p.setByteArray(testRecordBytes);
+
+		database.save(p);
+
+		ORID rid = database.getRecordByUserObject(p, false).getIdentity();
+
+		database.close();
+
+		database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+		JavaComplexTestClass loaded = database.load(rid);
+
+		Assert.assertTrue(loaded.getByteArray() instanceof ORecordBytes);
+		try {
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			try {
+				loaded.getByteArray().toOutputStream(out);
+				Assert.assertEquals("this is a bytearray test. if you read this Object database has stored it correctly".getBytes(),
+						out.toByteArray());
+				Assert.assertEquals("this is a bytearray test. if you read this Object database has stored it correctly",
+						new String(out.toByteArray()));
+			} finally {
+				out.close();
+			}
+		} catch (IOException ioe) {
+			Assert.assertTrue(false);
+			OLogManager.instance().error(this, "Error reading byte[]", ioe);
+		}
+		Assert.assertTrue(loaded.getDocument() instanceof ODocument);
+		Assert.assertEquals("testValue", loaded.getDocument().field("testField"));
+		Assert.assertTrue(loaded.getDocument().getIdentity().isPersistent());
+
+		Assert.assertTrue(loaded.getEmbeddedDocument() instanceof ODocument);
+		Assert.assertEquals("testEmbeddedValue", loaded.getEmbeddedDocument().field("testEmbeddedField"));
+		Assert.assertTrue(!loaded.getEmbeddedDocument().getIdentity().isValid());
+
+		database.close();
 	}
 
 	@Test(dependsOnMethods = "mapEnumAndInternalObjects")
@@ -688,7 +756,9 @@ public class CRUDObjectPhysicalTest {
 	@SuppressWarnings("deprecation")
 	public void testOldObjectImplementation() {
 		ODatabaseObjectTx db = new ODatabaseObjectTx(url).open("admin", "admin");
-		db.getEntityManager().registerEntityClasses("com.e_soa.dbobjects");
+		db.getEntityManager().registerEntityClasses("com.orientechnologies.orient.test.domain.business");
+		db.getEntityManager().registerEntityClasses("com.orientechnologies.orient.test.domain.whiz");
+		db.getEntityManager().registerEntityClasses("com.orientechnologies.orient.test.domain.base");
 		// insert some instruments
 		Instrument instr = new Instrument("Fender Stratocaster");
 		db.save(instr);
@@ -726,6 +796,55 @@ public class CRUDObjectPhysicalTest {
 		man = (Musician) list3.get(0);
 		man.setName("Big Jack");
 		db.save(man); // here is the exception
+		db.close();
+	}
+
+	@Test(dependsOnMethods = "oidentifableFieldsTest")
+	public void testEmbeddedDeletion() throws Exception {
+		OObjectDatabaseTx db = OObjectDatabasePool.global().acquire(url, "admin", "admin");
+
+		Parent parent = db.newInstance(Parent.class);
+		parent.setName("Big Parent");
+
+		EmbeddedChild embedded = db.newInstance(EmbeddedChild.class);
+		embedded.setName("Little Child");
+
+		parent.setEmbeddedChild(embedded);
+
+		parent = db.save(parent);
+
+		List<Parent> presult = db.query(new OSQLSynchQuery<Parent>("select from Parent"));
+		List<EmbeddedChild> cresult = db.query(new OSQLSynchQuery<EmbeddedChild>("select from EmbeddedChild"));
+		Assert.assertEquals(presult.size(), 1);
+		Assert.assertEquals(cresult.size(), 0);
+
+		EmbeddedChild child = db.newInstance(EmbeddedChild.class);
+		child.setName("Little Child");
+		parent.setChild(child);
+
+		parent = db.save(parent);
+
+		presult = db.query(new OSQLSynchQuery<Parent>("select from Parent"));
+		cresult = db.query(new OSQLSynchQuery<EmbeddedChild>("select from EmbeddedChild"));
+		Assert.assertEquals(presult.size(), 1);
+		Assert.assertEquals(cresult.size(), 1);
+
+		db.delete(parent);
+
+		presult = db.query(new OSQLSynchQuery<Parent>("select * from Parent"));
+		cresult = db.query(new OSQLSynchQuery<EmbeddedChild>("select * from EmbeddedChild"));
+
+		Assert.assertEquals(presult.size(), 0);
+		Assert.assertEquals(cresult.size(), 1);
+
+		db.delete(child);
+
+		presult = db.query(new OSQLSynchQuery<Parent>("select * from Parent"));
+		cresult = db.query(new OSQLSynchQuery<EmbeddedChild>("select * from EmbeddedChild"));
+
+		Assert.assertEquals(presult.size(), 0);
+		Assert.assertEquals(cresult.size(), 0);
+
 		db.close();
 	}
 

@@ -170,7 +170,7 @@ public class OStorageLocal extends OStorageEmbedded {
               // CLOSE AND REOPEN TO BE SURE ALL THE FILE SEGMENTS ARE
               // OPENED
               clusters[i].close();
-              clusters[i] = new OClusterLocal();
+              clusters[i] = Orient.instance().getClusterFactory().createCluster(OClusterLocal.TYPE);
               clusters[i].configure(this, (OStoragePhysicalClusterConfiguration) clusterConfig);
               clusterMap.put(clusters[i].getName(), clusters[i]);
               clusters[i].open();
@@ -286,7 +286,8 @@ public class OStorageLocal extends OStorageEmbedded {
       clusterMap.clear();
 
       for (ODataLocal data : dataSegments)
-        data.close();
+        if (data != null)
+          data.close();
       dataSegments = new ODataLocal[0];
 
       txManager.close();
@@ -494,6 +495,9 @@ public class OStorageLocal extends OStorageEmbedded {
           "\n\n(2) Checking data chunks integrity. In this phase data segments are scanned to check the back reference into the clusters.");
 
       for (ODataLocal d : dataSegments) {
+        if (d == null)
+          continue;
+
         formatMessage(iVerbose, iListener, "\n- data-segment %s (id=%d) size=%d/%d...", d.getName(), d.getId(), d.getFilledUpTo(),
             d.getSize(), d.getHoles());
 
@@ -669,7 +673,7 @@ public class OStorageLocal extends OStorageEmbedded {
     try {
 
       for (ODataLocal d : dataSegments) {
-        if (d.getName().equalsIgnoreCase(iDataSegmentName))
+        if (d != null && d.getName().equalsIgnoreCase(iDataSegmentName))
           return d.getId();
       }
       throw new IllegalArgumentException("Data segment '" + iDataSegmentName + "' does not exist in storage '" + name + "'");
@@ -810,12 +814,12 @@ public class OStorageLocal extends OStorageEmbedded {
       if (data == null)
         return false;
 
-      data.delete();
+      data.drop();
 
       dataSegments[id] = null;
 
       // UPDATE CONFIGURATION
-      configuration.dropCluster(id);
+      configuration.dropDataSegment(id);
 
       return true;
     } catch (Exception e) {
@@ -1179,6 +1183,10 @@ public class OStorageLocal extends OStorageEmbedded {
     }
   }
 
+  public void setDefaultClusterId(final int defaultClusterId) {
+    this.defaultClusterId = defaultClusterId;
+  }
+
   public String getPhysicalClusterNameById(final int iClusterId) {
     checkOpeness();
 
@@ -1313,21 +1321,33 @@ public class OStorageLocal extends OStorageEmbedded {
   protected int registerDataSegment(final OStorageDataConfiguration iConfig) throws IOException {
     checkOpeness();
 
-    int pos = 0;
-
     // CHECK FOR DUPLICATION OF NAMES
     for (ODataLocal data : dataSegments)
-      if (data.getName().equals(iConfig.name)) {
+      if (data != null && data.getName().equals(iConfig.name)) {
         // OVERWRITE CONFIG
         data.config = iConfig;
         return -1;
       }
-    pos = dataSegments.length;
+
+    int pos = -1;
+
+    for (int i = 0; i < dataSegments.length; ++i)
+      if (dataSegments[i] == null) {
+        // RECYCLE POSITION
+        pos = i;
+        break;
+      }
+
+    if (pos == -1)
+      // ASSIGN LATEST
+      pos = dataSegments.length;
 
     // CREATE AND ADD THE NEW REF SEGMENT
     final ODataLocal segment = new ODataLocal(this, iConfig, pos);
 
-    dataSegments = OArrays.copyOf(dataSegments, dataSegments.length + 1);
+    if (pos == dataSegments.length)
+      dataSegments = OArrays.copyOf(dataSegments, dataSegments.length + 1);
+
     dataSegments[pos] = segment;
 
     return pos;
@@ -1400,7 +1420,7 @@ public class OStorageLocal extends OStorageEmbedded {
 
     final long timer = OProfiler.getInstance().startChrono();
 
-    lock.acquireSharedLock();
+    lock.acquireExclusiveLock();
     try {
       final OPhysicalPosition ppos = new OPhysicalPosition(-1, -1, iRecordType);
 
@@ -1431,7 +1451,7 @@ public class OStorageLocal extends OStorageEmbedded {
       return null;
 
     } finally {
-      lock.releaseSharedLock();
+      lock.releaseExclusiveLock();
 
       OProfiler.getInstance().stopChrono(PROFILER_CREATE_RECORD, timer);
     }

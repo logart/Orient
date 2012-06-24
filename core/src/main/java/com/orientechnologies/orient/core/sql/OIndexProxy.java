@@ -1,15 +1,5 @@
 package com.orientechnologies.orient.core.sql;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
-
 import com.orientechnologies.common.listener.OProgressListener;
 import com.orientechnologies.common.profiler.OProfiler;
 import com.orientechnologies.orient.core.db.ODatabaseComplex;
@@ -26,6 +16,17 @@ import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.sql.filter.OSQLFilterItemField;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * <p>
@@ -290,7 +291,13 @@ public class OIndexProxy<T> implements OIndex<T> {
       oClass = oClass.getProperty(fieldChain.getItemName(i)).getLinkedClass();
     }
 
-    final Set<OIndex<?>> involvedIndexes = oClass.getInvolvedIndexes(fieldChain.getItemName(fieldChain.getItemCount() - 1));
+    final Set<OIndex<?>> involvedIndexes = new TreeSet<OIndex<?>>(new Comparator<OIndex<?>>() {
+      public int compare(OIndex<?> o1, OIndex<?> o2) {
+        return o1.getDefinition().getParamCount() - o2.getDefinition().getParamCount();
+      }
+    });
+
+    involvedIndexes.addAll(oClass.getInvolvedIndexes(fieldChain.getItemName(fieldChain.getItemCount() - 1)));
     final Collection<Class<? extends OIndex>> indexTypes = new HashSet<Class<? extends OIndex>>(3);
     final Collection<OIndex<?>> result = new ArrayList<OIndex<?>>();
 
@@ -306,7 +313,7 @@ public class OIndexProxy<T> implements OIndex<T> {
 
   private static List<OIndex<?>> prepareBaseIndexes(OIndex<?> index, OSQLFilterItemField.FieldChain fieldChain,
       ODatabaseComplex<?> database) {
-    List<OIndex<?>> result = new ArrayList<OIndex<?>>(fieldChain.getItemCount() - 2);
+    List<OIndex<?>> result = new ArrayList<OIndex<?>>(fieldChain.getItemCount() - 1);
 
     result.add(index);
 
@@ -441,6 +448,10 @@ public class OIndexProxy<T> implements OIndex<T> {
   }
 
   public long getSize() {
+    throw new UnsupportedOperationException("Not allowed operation");
+  }
+
+  public long getKeySize() {
     throw new UnsupportedOperationException("Not allowed operation");
   }
 

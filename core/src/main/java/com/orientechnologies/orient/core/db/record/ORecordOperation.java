@@ -37,9 +37,9 @@ public class ORecordOperation implements OSerializableStream {
   public static final byte  DELETED          = 2;
   public static final byte  CREATED          = 3;
 
-  public long               serial;
   public byte               type;
   public OIdentifiable      record;
+  public int                version;
   public long               date;
 
   public int                dataSegmentId    = 0; // DEFAULT ONE
@@ -79,7 +79,6 @@ public class ORecordOperation implements OSerializableStream {
   public byte[] toStream() throws OSerializationException {
     try {
       final OMemoryStream stream = new OMemoryStream();
-      stream.set(serial);
       stream.set(type);
       ((ORecordId) record.getIdentity()).toStream(stream);
 
@@ -101,7 +100,6 @@ public class ORecordOperation implements OSerializableStream {
   public OSerializableStream fromStream(final byte[] iStream) throws OSerializationException {
     try {
       final OMemoryStream stream = new OMemoryStream(iStream);
-      serial = stream.getAsLong();
       type = stream.getAsByte();
       final ORecordId rid = new ORecordId().fromStream(stream);
 

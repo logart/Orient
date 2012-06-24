@@ -52,7 +52,7 @@ import com.orientechnologies.orient.core.record.ORecordSchemaAware;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.serialization.serializer.OStringSerializerHelper;
 import com.orientechnologies.orient.core.serialization.serializer.object.OObjectSerializerHelperManager;
-import com.orientechnologies.orient.core.serialization.serializer.string.OStringSerializerAnyStreamable;
+import com.orientechnologies.orient.core.serialization.serializer.string.OStringSerializerEmbedded;
 import com.orientechnologies.orient.core.type.tree.OMVRBTreeRIDSet;
 
 @SuppressWarnings({ "unchecked", "serial" })
@@ -136,10 +136,7 @@ public abstract class ORecordSerializerCSVAbstract extends ORecordSerializerStri
 				final String value = iValue.substring(1, iValue.length() - 1);
 
 				// RECORD
-				final Object result = OStringSerializerAnyStreamable.INSTANCE.fromStream(value);
-				if (result instanceof ODocument)
-					((ODocument) result).addOwner(iSourceRecord);
-				return result;
+				return ((ODocument) OStringSerializerEmbedded.INSTANCE.fromStream(value)).addOwner(iSourceRecord);
 			} else
 				return null;
 
@@ -453,6 +450,9 @@ public abstract class ORecordSerializerCSVAbstract extends ORecordSerializerStri
 
 										public void registerUserObject(Object iObject, ORecordInternal<?> iRecord) {
 										}
+
+										public void registerUserObjectAfterLinkSave(ORecordInternal<?> iRecord) {
+										}
 									}, null, iSaveOnlyDirty);
 						}
 						iOutput.append(OStringSerializerHelper.EMBEDDED_BEGIN);
@@ -654,6 +654,9 @@ public abstract class ORecordSerializerCSVAbstract extends ORecordSerializerStri
 
 								public void registerUserObject(Object iObject, ORecordInternal<?> iRecord) {
 								}
+
+								public void registerUserObjectAfterLinkSave(ORecordInternal<?> iRecord) {
+								}
 							}, null, iSaveOnlyDirty);
 				}
 				toString(doc, iOutput, null, iObjHandler, iMarshalledRecords, false);
@@ -742,8 +745,7 @@ public abstract class ORecordSerializerCSVAbstract extends ORecordSerializerStri
 					database.save(iLinkedRecord);
 
 				final ODatabaseComplex<?> dbOwner = database.getDatabaseOwner();
-
-				dbOwner.registerUserObject(dbOwner.getUserObjectByRecord(iLinkedRecord, null), iLinkedRecord);
+				dbOwner.registerUserObjectAfterLinkSave(iLinkedRecord);
 
 				resultRid = iLinkedRecord;
 			}

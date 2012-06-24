@@ -32,7 +32,6 @@ import com.orientechnologies.orient.core.storage.OClusterPositionIterator;
 import com.orientechnologies.orient.core.storage.OPhysicalPosition;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.fs.OFile;
-import com.orientechnologies.orient.core.storage.fs.OMMapManager;
 
 /**
  * Handles the table to resolve logical address to physical address. Deleted records have negative versions. <br/>
@@ -133,10 +132,9 @@ public class OClusterLocal extends OSharedResourceAdaptive implements OCluster {
     try {
 
       truncate();
-      for (OFile f : fileSegment.files) {
-        OMMapManager.removeFile(f);
+      for (OFile f : fileSegment.files)
         f.delete();
-      }
+
       fileSegment.files = null;
       holeSegment.delete();
 
@@ -346,7 +344,7 @@ public class OClusterLocal extends OSharedResourceAdaptive implements OCluster {
         recycled = true;
       } else {
         // NO HOLES FOUND: ALLOCATE MORE SPACE
-        pos = fileSegment.allocateSpace(RECORD_SIZE);
+        pos = allocateRecord();
         offset = fileSegment.getAbsolutePosition(pos);
         recycled = false;
       }
@@ -373,6 +371,13 @@ public class OClusterLocal extends OSharedResourceAdaptive implements OCluster {
     } finally {
       releaseExclusiveLock();
     }
+  }
+
+  /**
+   * Allocates space to store a new record.
+   */
+  protected long[] allocateRecord() throws IOException {
+    return fileSegment.allocateSpace(RECORD_SIZE);
   }
 
   public long getFirstEntryPosition() {

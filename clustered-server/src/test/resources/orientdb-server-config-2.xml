@@ -1,19 +1,50 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <orient-server>
 	<handlers>
-		<handler class="com.nuvolabase.orientdb.server.cluster.hazelcast.OHazelcastPlugin">
+		<handler class="com.orientechnologies.orient.server.hazelcast.OHazelcastPlugin">
 			<parameters>
+				<parameter name="alias" value="europe2" />
 				<parameter value="true" name="enabled" />
-				<parameter value="src/test/resources/hazelcast-1.xml" name="configuration" />
+				<parameter value="src/test/resources/hazelcast-2.xml" name="configuration" />
 				<parameter name="db.*"
 					value="{
-						'replication' : true,
-						'clusters' : {
-							'*' : { 'replication' : true, 'offlineMaxBuffer' : 1000000 },
-							'internal' : { 'replication' : false }
-						},
-						'classes':{}
-					}" />
+					    'servers' : {
+					      '*' : {
+							'synchronization' : true,
+							'autoDeploy' : true,
+							'defaultCluster' : 2,
+							'clusters' : {
+							  '*' : {
+								'operations' : {
+						            'record_create' : { 'direction' : 'in-out', 'mode' : 'synchronous' },
+						            'record_read'   : { 'direction' : 'in' },
+						            'record_update' : { 'direction' : 'in-out', 'mode' : 'synchronous' },
+						            'record_delete' : { 'direction' : 'in-out', 'mode' : 'synchronous' },
+						            'command'       : { 'direction' : 'in-out', 'mode' : 'synchronous' }
+						        },
+						        'synchronization' : true, 
+                                'offlineMaxBuffer' : 1000000
+                                },
+								'internal' : { 'synchronization' : false },
+								'index' : { 'synchronization' : false }
+							},
+							'classes':{
+							}
+                          },
+					      'europe1' : {
+							'defaultCluster' : 'default',
+							'classes':{
+							  'account' : { 'defaultCluster' : 'account' }
+							}
+					      },
+					      'europe2' : {
+							'defaultCluster' : 'default-2',
+							'classes':{
+							  'account' : { 'defaultCluster' : 'account2' }
+							}
+					      }
+					    }
+					  }" />
 			</parameters>
 		</handler>
 		<handler class="com.orientechnologies.orient.server.handler.OAutomaticBackup">
@@ -63,6 +94,7 @@
 		<user resources="connect,server.listDatabases" password="guest" name="guest" />
 	</users>
 	<properties>
+		<!-- <entry value="com.orientechnologies.orient.server.hazelcast.OHazelcastCache" name="cache.level2.impl" /> -->
 		<entry value="info" name="log.console.level" />
 		<entry value="fine" name="log.file.level" />
 	</properties>

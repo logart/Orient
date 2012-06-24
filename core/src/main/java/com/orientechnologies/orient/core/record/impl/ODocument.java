@@ -79,7 +79,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
   protected boolean                                                      _ordered         = true;
   protected boolean                                                      _lazyLoad        = true;
 
-  protected List<WeakReference<ORecordElement>>                          _owners          = null;
+  protected transient List<WeakReference<ORecordElement>>                _owners          = null;
 
   protected static final String[]                                        EMPTY_STRINGS    = new String[] {};
 
@@ -369,6 +369,13 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 
   public boolean hasSameContentOf(final ODocument iOther) {
     return ODocumentHelper.hasSameContentOf(this, getDatabase(), iOther, getDatabase());
+  }
+
+  @Override
+  public byte[] toStream() {
+    if (_recordFormat == null)
+      setup();
+    return super.toStream();
   }
 
   /**
@@ -1231,6 +1238,16 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
     convertAllMultiValuesToTrackedVersions();
     validate();
     return (ODocument) super.save(iClusterName);
+  }
+
+  /*
+   * Initializes the object if has been unserialized
+   */
+  @Override
+  public void deserializeFields() {
+    if (_recordFormat == null)
+      setup();
+    super.deserializeFields();
   }
 
   protected String checkFieldName(final String iFieldName) {

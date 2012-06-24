@@ -84,6 +84,8 @@ public class ODatabaseRaw implements ODatabase {
         storage = Orient.instance().loadStorage(url);
       storage.open(iUserName, iUserPassword, properties);
 
+      status = STATUS.OPEN;
+
       // WAKE UP DB LIFECYCLE LISTENER
       for (Iterator<ODatabaseLifecycleListener> it = Orient.instance().getDbLifecycleListeners(); it.hasNext();)
         it.next().onOpen(getDatabaseOwner());
@@ -95,7 +97,6 @@ public class ODatabaseRaw implements ODatabase {
         } catch (Throwable t) {
         }
 
-      status = STATUS.OPEN;
     } catch (OException e) {
       // PASS THROUGH
       throw e;
@@ -184,6 +185,11 @@ public class ODatabaseRaw implements ODatabase {
     return (DB) this;
   }
 
+  public <DB extends ODatabase> DB setDefaultClusterId(final int iDefClusterId) {
+    storage.setDefaultClusterId(iDefClusterId);
+    return (DB) this;
+  }
+
   public boolean exists() {
     if (status == STATUS.OPEN)
       return true;
@@ -267,12 +273,16 @@ public class ODatabaseRaw implements ODatabase {
     return storage;
   }
 
+  public void replaceStorage(final OStorage iNewStorage) {
+    storage = iNewStorage;
+  }
+
   public boolean isClosed() {
     return status == STATUS.CLOSED || storage.isClosed();
   }
 
   public String getName() {
-    return storage != null ? storage.getName() : "<no-name>";
+    return storage != null ? storage.getName() : url;
   }
 
   public String getURL() {
@@ -283,12 +293,16 @@ public class ODatabaseRaw implements ODatabase {
     return storage.getDataSegmentIdByName(iDataSegmentName);
   }
 
-  public String getDataSegmentNameById(int dataSegmentId) {
+  public String getDataSegmentNameById(final int dataSegmentId) {
     return storage.getDataSegmentById(dataSegmentId).getName();
   }
 
   public int getClusters() {
     return storage.getClusters();
+  }
+
+  public boolean existsCluster(final String iClusterName) {
+    return storage.getClusterNames().contains(iClusterName);
   }
 
   public String getClusterType(final String iClusterName) {
@@ -490,6 +504,14 @@ public class ODatabaseRaw implements ODatabase {
     switch (iAttribute) {
     case STATUS:
       setStatus(STATUS.valueOf(stringValue.toUpperCase(Locale.ENGLISH)));
+      break;
+    case DEFAULTCLUSTERID:
+      if (iValue != null) {
+        if (iValue instanceof Number)
+          storage.setDefaultClusterId(((Number) iValue).intValue());
+        else
+          storage.setDefaultClusterId(storage.getClusterIdByName(iValue.toString()));
+      }
       break;
     }
 

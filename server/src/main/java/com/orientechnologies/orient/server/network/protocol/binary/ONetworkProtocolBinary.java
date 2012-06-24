@@ -15,6 +15,14 @@
  */
 package com.orientechnologies.orient.server.network.protocol.binary;
 
+import java.io.IOException;
+import java.net.Socket;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.command.OCommandRequestInternal;
 import com.orientechnologies.orient.core.command.OCommandRequestText;
@@ -56,18 +64,10 @@ import com.orientechnologies.orient.server.OClientConnectionManager;
 import com.orientechnologies.orient.server.OServer;
 import com.orientechnologies.orient.server.OServerMain;
 import com.orientechnologies.orient.server.config.OServerUserConfiguration;
-import com.orientechnologies.orient.server.distributed.OServerCluster;
+import com.orientechnologies.orient.server.distributed.ODistributedServerManager;
 import com.orientechnologies.orient.server.handler.OServerHandler;
 import com.orientechnologies.orient.server.handler.OServerHandlerHelper;
 import com.orientechnologies.orient.server.tx.OTransactionOptimisticProxy;
-
-import java.io.IOException;
-import java.net.Socket;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
 
 public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
   protected OClientConnection connection;
@@ -320,7 +320,8 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
     final String clusterName = connection.database.getClusterNameById(id);
     if (clusterName == null)
-      throw new IllegalArgumentException("Cluster " + id + " doesn't exist anymore. Refresh the db structure or just reconnect to the database");
+      throw new IllegalArgumentException("Cluster " + id
+          + " doesn't exist anymore. Refresh the db structure or just reconnect to the database");
 
     boolean result = connection.database.dropCluster(clusterName);
 
@@ -452,8 +453,8 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
         final OServerHandler plugin = OServerMain.server().getPlugin("cluster");
         ODocument distributedCfg = null;
-        if (plugin != null && plugin instanceof OServerCluster)
-          distributedCfg = ((OServerCluster) plugin).getDatabaseConfiguration(getName());
+        if (plugin != null && plugin instanceof ODistributedServerManager)
+          distributedCfg = ((ODistributedServerManager) plugin).getClusterConfiguration();
 
         channel.writeBytes(distributedCfg != null ? distributedCfg.toStream() : null);
 
@@ -580,8 +581,8 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
     if (operation.equals("status")) {
       final OServerHandler plugin = OServerMain.server().getPlugin("cluster");
-      if (plugin != null && plugin instanceof OServerCluster)
-        response = ((OServerCluster) plugin).getClusterConfiguration();
+      if (plugin != null && plugin instanceof ODistributedServerManager)
+        response = ((ODistributedServerManager) plugin).getClusterConfiguration();
 
     } else
       throw new IllegalArgumentException("Cluster operation '" + operation + "' is not supported");
@@ -798,10 +799,10 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
     } catch (OTransactionAbortedException e) {
       // TX ABORTED BY THE CLIENT
     } catch (Exception e) {
-			//Error during TX initialization, possibly index constraints violation.
-			tx.close();
-			sendError(clientTxId, e);
-		}
+      // Error during TX initialization, possibly index constraints violation.
+      tx.close();
+      sendError(clientTxId, e);
+    }
   }
 
   @SuppressWarnings("unchecked")
@@ -817,6 +818,8 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
     connection.data.commandDetail = command.getText();
 
+    // ENABLES THE CACHE TO IMPROVE PERFORMANCE OF COMPLEX COMMANDS LIKE TRAVERSE
+    // connection.database.getLevel1Cache().setEnable(true);
     beginResponse();
     try {
       if (asynch) {
@@ -902,6 +905,7 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
       }
     } finally {
       endResponse();
+      // connection.database.getLevel1Cache().setEnable(false);
     }
   }
 

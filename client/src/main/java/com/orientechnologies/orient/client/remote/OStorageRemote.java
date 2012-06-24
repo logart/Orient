@@ -84,15 +84,15 @@ import com.orientechnologies.orient.enterprise.channel.binary.ORemoteServerEvent
  * This object is bound to each remote ODatabase instances.
  */
 public class OStorageRemote extends OStorageAbstract {
-  private static final String               DEFAULT_HOST      = "localhost";
-  private static final int                  DEFAULT_PORT      = 2424;
-  private static final String               ADDRESS_SEPARATOR = ";";
+  private static final String               DEFAULT_HOST         = "localhost";
+  private static final int                  DEFAULT_PORT         = 2424;
+  private static final String               ADDRESS_SEPARATOR    = ";";
 
-  public static final String                PARAM_MIN_POOL    = "minpool";
-  public static final String                PARAM_MAX_POOL    = "maxpool";
-  public static final String                PARAM_DB_TYPE     = "dbtype";
+  public static final String                PARAM_MIN_POOL       = "minpool";
+  public static final String                PARAM_MAX_POOL       = "maxpool";
+  public static final String                PARAM_DB_TYPE        = "dbtype";
 
-  private static final String               DRIVER_NAME       = "OrientDB Java";
+  private static final String               DRIVER_NAME          = "OrientDB Java";
 
   private final ExecutorService             asynchExecutor;
   private OAsynchChannelServiceThread       serviceThread;
@@ -100,16 +100,16 @@ public class OStorageRemote extends OStorageAbstract {
   private int                               connectionRetry;
   private int                               connectionRetryDelay;
 
-  private static List<OChannelBinaryClient> networkPool       = new ArrayList<OChannelBinaryClient>();
-  protected List<String>                    serverURLs        = new ArrayList<String>();
-  private OCluster[]                        clusters          = new OCluster[0];
-  protected final Map<String, OCluster>     clusterMap        = new HashMap<String, OCluster>();
+  private static List<OChannelBinaryClient> networkPool          = new ArrayList<OChannelBinaryClient>();
+  protected final List<String>              serverURLs           = new ArrayList<String>();
+  private OCluster[]                        clusters             = new OCluster[0];
+  protected final Map<String, OCluster>     clusterMap           = new HashMap<String, OCluster>();
   private int                               defaultClusterId;
-  private int                               networkPoolCursor = 0;
+  private int                               networkPoolCursor    = 0;
   private int                               minPool;
   private int                               maxPool;
-  private final boolean                     debug             = false;
-  private ODocument                         clusterConfiguration;
+  private final boolean                     debug                = false;
+  private ODocument                         clusterConfiguration = new ODocument();
   private ORemoteServerEventListener        asynchEventListener;
   private String                            connectionDbType;
   private String                            connectionUserName;
@@ -1136,13 +1136,15 @@ public class OStorageRemote extends OStorageAbstract {
 
     final int currentMaxRetry;
     final int currentRetryDelay;
-    if (clusterConfiguration != null && !clusterConfiguration.isEmpty()) {
-      // IN CLUSTER: NO RETRY AND 0 SLEEP TIME BETWEEN NODES
-      currentMaxRetry = 1;
-      currentRetryDelay = 0;
-    } else {
-      currentMaxRetry = connectionRetry;
-      currentRetryDelay = connectionRetryDelay;
+    synchronized (clusterConfiguration) {
+      if (!clusterConfiguration.isEmpty()) {
+        // IN CLUSTER: NO RETRY AND 0 SLEEP TIME BETWEEN NODES
+        currentMaxRetry = 1;
+        currentRetryDelay = 0;
+      } else {
+        currentMaxRetry = connectionRetry;
+        currentRetryDelay = connectionRetryDelay;
+      }
     }
 
     for (int retry = 0; retry < currentMaxRetry; ++retry) {
@@ -1158,11 +1160,11 @@ public class OStorageRemote extends OStorageAbstract {
 
       try {
         if (OLogManager.instance().isDebugEnabled())
-          OLogManager.instance().debug(this, "Retrying to connect to remote server #" + retry + "/" + currentMaxRetry + "...");
+          OLogManager.instance().debug(this, "Retrying to connect to remote server #" + (retry + 1) + "/" + currentMaxRetry + "...");
 
         openRemoteDatabase();
 
-        OLogManager.instance().info(this,
+        OLogManager.instance().warn(this,
             "Connection re-acquired transparently after %dms and %d retries: no errors will be thrown at application level",
             System.currentTimeMillis() - lostConnectionTime, retry + 1);
 
@@ -1171,10 +1173,6 @@ public class OStorageRemote extends OStorageAbstract {
 
       } catch (Throwable t) {
         // DO NOTHING BUT CONTINUE IN THE LOOP
-      }
-
-      if (clusterConfiguration != null) {
-
       }
     }
 
@@ -1233,7 +1231,7 @@ public class OStorageRemote extends OStorageAbstract {
           readDatabaseInformation(network);
 
           // READ CLUSTER CONFIGURATION
-          clusterConfiguration = new ODocument(network.readBytes());
+          updateClusterConfiguration(network.readBytes());
 
           defaultClusterId = clusterMap.get(OStorage.CLUSTER_DEFAULT_NAME).getId();
           status = STATUS.OPEN;
@@ -1310,6 +1308,9 @@ public class OStorageRemote extends OStorageAbstract {
    * Registers the remote server with port.
    */
   protected String addHost(String host) {
+    if (host.startsWith("localhost"))
+      host = "127.0.0.1" + host.substring("localhost".length());
+
     // REGISTER THE REMOTE SERVER+PORT
     if (host.indexOf(":") == -1)
       host += ":" + getDefaultPort();
@@ -1336,7 +1337,12 @@ public class OStorageRemote extends OStorageAbstract {
       final String remoteHost = server.substring(0, sepPos);
       final int remotePort = Integer.parseInt(server.substring(sepPos + 1));
 
-      return new OChannelBinaryClient(remoteHost, remotePort, clientConfiguration, OChannelBinaryProtocol.CURRENT_PROTOCOL_VERSION);
+      try {
+        return new OChannelBinaryClient(remoteHost, remotePort, clientConfiguration,
+            OChannelBinaryProtocol.CURRENT_PROTOCOL_VERSION);
+      } catch (Exception e) {
+        // GET THE NEXT ONE IF ANY
+      }
     }
 
     final StringBuilder buffer = new StringBuilder();
@@ -1517,15 +1523,31 @@ public class OStorageRemote extends OStorageAbstract {
     }
   }
 
-  public void updateClusterConfiguration(final ODocument obj) {
+  @SuppressWarnings("unchecked")
+  public void updateClusterConfiguration(final byte[] obj) {
     if (obj == null)
       return;
 
     // UPDATE IT
-    clusterConfiguration = obj;
+    synchronized (clusterConfiguration) {
+      clusterConfiguration.fromStream(obj);
 
-    if (OLogManager.instance().isDebugEnabled())
-      OLogManager.instance().debug(this, "Received new cluster configuration: %s", clusterConfiguration.toJSON(""));
+      final List<ODocument> members = clusterConfiguration.field("members");
+      if (members != null) {
+        // serverURLs.clear();
+
+        for (ODocument m : members)
+          if (m != null && !serverURLs.contains((String) m.field("id"))) {
+            for (Map<String, Object> listener : ((Collection<Map<String, Object>>) m.field("listeners"))) {
+              if (((String) listener.get("protocol")).equals("ONetworkProtocolBinary")) {
+                String url = (String) listener.get("listen");
+                if (!serverURLs.contains(url))
+                  addHost(url);
+              }
+            }
+          }
+      }
+    }
   }
 
   private void commitEntry(final OChannelBinaryClient iNetwork, final ORecordOperation txEntry) throws IOException {
@@ -1590,7 +1612,6 @@ public class OStorageRemote extends OStorageAbstract {
         networkPool.add(firstChannel);
         serviceThread = new OAsynchChannelServiceThread(asynchEventListener, firstChannel, "OrientDB <- Asynch Client ("
             + firstChannel.socket.getRemoteSocketAddress() + ")");
-
       }
 
       // CREATE THE MINIMUM POOL
@@ -1652,5 +1673,9 @@ public class OStorageRemote extends OStorageAbstract {
    */
   public int getClusters() {
     return clusterMap.size();
+  }
+
+  public void setDefaultClusterId(int defaultClusterId) {
+    this.defaultClusterId = defaultClusterId;
   }
 }
