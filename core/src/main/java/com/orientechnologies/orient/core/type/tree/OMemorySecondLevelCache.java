@@ -1,7 +1,7 @@
 package com.orientechnologies.orient.core.type.tree;
 
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
-import com.orientechnologies.orient.core.id.ORID;
+import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OBooleanSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLinkSerializer;
@@ -30,7 +30,7 @@ public class OMemorySecondLevelCache {
     this.clusterId = clusterId;
   }
 
-  public boolean put(ORID rid, byte[] content, boolean isDirty) {
+  public boolean put(ORecordId rid, byte[] content, boolean isDirty) {
     final int dataPointer = memory.allocate(content.length);
     if (dataPointer == OMemory.NULL_POINTER)
       return evict() && put(rid, content, isDirty);
@@ -38,10 +38,15 @@ public class OMemorySecondLevelCache {
     return false;
   }
 
-  private int storeEntry(ORID rid, int dataPointer, boolean isDirty) {
-    int entryPointer = memory.allocate(OLinkSerializer.RID_SIZE + OIntegerSerializer.INT_SIZE + OBooleanSerializer.BOOLEAN_SIZE);
+  private int storeEntry(ORecordId rid, int dataPointer, boolean isDirty) {
+    final int entryPointer = memory.allocate(OLinkSerializer.RID_SIZE + 3 * OIntegerSerializer.INT_SIZE
+        + OBooleanSerializer.BOOLEAN_SIZE);
+
     if (entryPointer == OMemory.NULL_POINTER)
       return OMemory.NULL_POINTER;
+
+    if (rid.isNew())
+      rid.clusterId = -3;
 
     int offset = 0;
     memory.set(entryPointer, offset, rid, OLinkSerializer.INSTANCE);
