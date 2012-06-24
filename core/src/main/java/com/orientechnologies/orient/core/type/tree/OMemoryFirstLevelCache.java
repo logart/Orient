@@ -25,22 +25,22 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OL
  * @author Andrey Lomakin
  * @since 07.04.12
  */
-public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
-  private final OMemory                   memory;
-  private final OManagedMemorySkipList<K> skipList;
-  private final OBinarySerializer<K>      keySerializer;
+public class OMemoryFirstLevelCache<K extends Comparable<K>> {
+  private final OMemory              memory;
+  private final OMemorySkipList<K>   skipList;
+  private final OBinarySerializer<K> keySerializer;
 
-  private int                             lruHeader              = OMemory.NULL_POINTER;
-  private int                             lruTail                = OMemory.NULL_POINTER;
+  private int                        lruHeader              = OMemory.NULL_POINTER;
+  private int                        lruTail                = OMemory.NULL_POINTER;
 
-  private int                             evictionSize           = -1;
-  private int                             defaultEvictionPercent = 20;
+  private int                        evictionSize           = -1;
+  private int                        defaultEvictionPercent = 20;
 
-  private long                            size                   = 0;
+  private long                       size                   = 0;
 
-  public OOffHeapTreeCacheBuffer(final OMemory memory, final OBinarySerializer<K> keySerializer) {
+  public OMemoryFirstLevelCache(final OMemory memory, final OBinarySerializer<K> keySerializer) {
     this.memory = memory;
-    this.skipList = new OManagedMemorySkipList<K>(memory, keySerializer);
+    this.skipList = new OMemorySkipList<K>(memory, keySerializer);
     this.keySerializer = keySerializer;
   }
 
@@ -284,14 +284,14 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     memory.set(pointer, offset, entry.rid, OLinkSerializer.INSTANCE);
     offset += ridSize;
 
-		memory.set(pointer, offset, entry.leftRid, OLinkSerializer.INSTANCE);
-		offset += ridSize;
+    memory.set(pointer, offset, entry.leftRid, OLinkSerializer.INSTANCE);
+    offset += ridSize;
 
-		memory.set(pointer, offset, entry.rightRid, OLinkSerializer.INSTANCE);
-		offset += ridSize;
+    memory.set(pointer, offset, entry.rightRid, OLinkSerializer.INSTANCE);
+    offset += ridSize;
 
- 		memory.set(pointer, offset, entry.parentRid, OLinkSerializer.INSTANCE);
-		offset += ridSize;
+    memory.set(pointer, offset, entry.parentRid, OLinkSerializer.INSTANCE);
+    offset += ridSize;
 
     memory.set(firstKeyPointer, 0, entry.firstKey, keySerializer);
     memory.set(lastKeyPointer, 0, entry.lastKey, keySerializer);
@@ -322,14 +322,13 @@ public class OOffHeapTreeCacheBuffer<K extends Comparable<K>> {
     int offset = 2 * OIntegerSerializer.INT_SIZE;
 
     final ORID rid = memory.get(pointer, offset, OLinkSerializer.INSTANCE).getIdentity();
-		offset += OLinkSerializer.RID_SIZE;
-
+    offset += OLinkSerializer.RID_SIZE;
 
     final ORID leftRid = memory.get(pointer, offset, OLinkSerializer.INSTANCE).getIdentity();
-		offset += OLinkSerializer.RID_SIZE;
+    offset += OLinkSerializer.RID_SIZE;
 
     final ORID rightRid = memory.get(pointer, offset, OLinkSerializer.INSTANCE).getIdentity();
-		offset += OLinkSerializer.RID_SIZE;
+    offset += OLinkSerializer.RID_SIZE;
 
     final ORID parentRid = memory.get(pointer, offset, OLinkSerializer.INSTANCE).getIdentity();
 

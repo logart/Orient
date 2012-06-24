@@ -32,13 +32,13 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OI
  * @since 09.05.12
  */
 @Test
-public class OffHeapTreeCacheBufferAddTest {
-  private OMemory                          memory = new OBuddyMemory(4000000, 20);
-  private OOffHeapTreeCacheBuffer<Integer> treeCacheBuffer;
+public class FirstLevelCacheAddTest {
+  private OMemory                         memory = new OBuddyMemory(4000000, 20);
+  private OMemoryFirstLevelCache<Integer> firstLevelCache;
 
   @BeforeMethod
   public void setUp() {
-    treeCacheBuffer = new OOffHeapTreeCacheBuffer<Integer>(memory, OIntegerSerializer.INSTANCE);
+    firstLevelCache = new OMemoryFirstLevelCache<Integer>(memory, OIntegerSerializer.INSTANCE);
   }
 
   @AfterMethod
@@ -48,116 +48,116 @@ public class OffHeapTreeCacheBufferAddTest {
 
   @Test
   public void testAddOneItem() {
-    boolean result = treeCacheBuffer.add(createCacheEntry(1));
+    boolean result = firstLevelCache.add(createCacheEntry(1));
     Assert.assertTrue(result);
 
-    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntry = treeCacheBuffer.get(1);
+    final OMemoryFirstLevelCache.CacheEntry<java.lang.Integer> cacheEntry = firstLevelCache.get(1);
     Assert.assertNotNull(cacheEntry);
     Assert.assertEquals(cacheEntry, createCacheEntry(1));
   }
 
   @Test
   public void testAddTwoOrderedItems() {
-    boolean resultOne = treeCacheBuffer.add(createCacheEntry(1));
+    boolean resultOne = firstLevelCache.add(createCacheEntry(1));
     Assert.assertTrue(resultOne);
 
-    boolean resultTwo = treeCacheBuffer.add(createCacheEntry(2));
+    boolean resultTwo = firstLevelCache.add(createCacheEntry(2));
     Assert.assertTrue(resultTwo);
 
-    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryOne = treeCacheBuffer.get(1);
+    final OMemoryFirstLevelCache.CacheEntry<java.lang.Integer> cacheEntryOne = firstLevelCache.get(1);
     Assert.assertNotNull(cacheEntryOne);
     Assert.assertEquals(cacheEntryOne, createCacheEntry(1));
 
-    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryTwo = treeCacheBuffer.get(2);
+    final OMemoryFirstLevelCache.CacheEntry<java.lang.Integer> cacheEntryTwo = firstLevelCache.get(2);
     Assert.assertNotNull(cacheEntryTwo);
     Assert.assertEquals(cacheEntryTwo, createCacheEntry(2));
   }
 
   @Test
   public void testAddTwoReverseOrderedItems() {
-    boolean resultOne = treeCacheBuffer.add(createCacheEntry(2));
+    boolean resultOne = firstLevelCache.add(createCacheEntry(2));
     Assert.assertTrue(resultOne);
 
-    boolean resultTwo = treeCacheBuffer.add(createCacheEntry(1));
+    boolean resultTwo = firstLevelCache.add(createCacheEntry(1));
     Assert.assertTrue(resultTwo);
 
-    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryOne = treeCacheBuffer.get(1);
+    final OMemoryFirstLevelCache.CacheEntry<java.lang.Integer> cacheEntryOne = firstLevelCache.get(1);
     Assert.assertNotNull(cacheEntryOne);
     Assert.assertEquals(cacheEntryOne, createCacheEntry(1));
 
-    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryTwo = treeCacheBuffer.get(2);
+    final OMemoryFirstLevelCache.CacheEntry<java.lang.Integer> cacheEntryTwo = firstLevelCache.get(2);
     Assert.assertNotNull(cacheEntryTwo);
     Assert.assertEquals(cacheEntryTwo, createCacheEntry(2));
   }
 
   @Test
   public void testAddThreeOrderedItems() {
-    boolean resultOne = treeCacheBuffer.add(createCacheEntry(1));
+    boolean resultOne = firstLevelCache.add(createCacheEntry(1));
     Assert.assertTrue(resultOne);
 
-    boolean resultTwo = treeCacheBuffer.add(createCacheEntry(2));
+    boolean resultTwo = firstLevelCache.add(createCacheEntry(2));
     Assert.assertTrue(resultTwo);
 
-    boolean resultThree = treeCacheBuffer.add(createCacheEntry(3));
+    boolean resultThree = firstLevelCache.add(createCacheEntry(3));
     Assert.assertTrue(resultThree);
 
-    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryOne = treeCacheBuffer.get(1);
+    final OMemoryFirstLevelCache.CacheEntry<java.lang.Integer> cacheEntryOne = firstLevelCache.get(1);
     Assert.assertNotNull(cacheEntryOne);
     Assert.assertEquals(cacheEntryOne, createCacheEntry(1));
 
-    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryTwo = treeCacheBuffer.get(2);
+    final OMemoryFirstLevelCache.CacheEntry<java.lang.Integer> cacheEntryTwo = firstLevelCache.get(2);
     Assert.assertNotNull(cacheEntryTwo);
     Assert.assertEquals(cacheEntryTwo, createCacheEntry(2));
 
-    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryThree = treeCacheBuffer.get(3);
+    final OMemoryFirstLevelCache.CacheEntry<java.lang.Integer> cacheEntryThree = firstLevelCache.get(3);
     Assert.assertNotNull(cacheEntryThree);
     Assert.assertEquals(cacheEntryThree, createCacheEntry(3));
   }
 
   @Test
   public void testAddThreeReversOrderedItems() {
-    boolean resultOne = treeCacheBuffer.add(createCacheEntry(3));
+    boolean resultOne = firstLevelCache.add(createCacheEntry(3));
     Assert.assertTrue(resultOne);
 
-    boolean resultTwo = treeCacheBuffer.add(createCacheEntry(2));
+    boolean resultTwo = firstLevelCache.add(createCacheEntry(2));
     Assert.assertTrue(resultTwo);
 
-    boolean resultThree = treeCacheBuffer.add(createCacheEntry(1));
+    boolean resultThree = firstLevelCache.add(createCacheEntry(1));
     Assert.assertTrue(resultThree);
 
-    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryOne = treeCacheBuffer.get(1);
+    final OMemoryFirstLevelCache.CacheEntry<java.lang.Integer> cacheEntryOne = firstLevelCache.get(1);
     Assert.assertNotNull(cacheEntryOne);
     Assert.assertEquals(cacheEntryOne, createCacheEntry(1));
 
-    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryTwo = treeCacheBuffer.get(2);
+    final OMemoryFirstLevelCache.CacheEntry<java.lang.Integer> cacheEntryTwo = firstLevelCache.get(2);
     Assert.assertNotNull(cacheEntryTwo);
     Assert.assertEquals(cacheEntryTwo, createCacheEntry(2));
 
-    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryThree = treeCacheBuffer.get(3);
+    final OMemoryFirstLevelCache.CacheEntry<java.lang.Integer> cacheEntryThree = firstLevelCache.get(3);
     Assert.assertNotNull(cacheEntryThree);
     Assert.assertEquals(cacheEntryThree, createCacheEntry(3));
   }
 
   @Test
   public void testAddThreeNonOrderedItems() {
-    boolean resultOne = treeCacheBuffer.add(createCacheEntry(2));
+    boolean resultOne = firstLevelCache.add(createCacheEntry(2));
     Assert.assertTrue(resultOne);
 
-    boolean resultTwo = treeCacheBuffer.add(createCacheEntry(3));
+    boolean resultTwo = firstLevelCache.add(createCacheEntry(3));
     Assert.assertTrue(resultTwo);
 
-    boolean resultThree = treeCacheBuffer.add(createCacheEntry(1));
+    boolean resultThree = firstLevelCache.add(createCacheEntry(1));
     Assert.assertTrue(resultThree);
 
-    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryOne = treeCacheBuffer.get(1);
+    final OMemoryFirstLevelCache.CacheEntry<java.lang.Integer> cacheEntryOne = firstLevelCache.get(1);
     Assert.assertNotNull(cacheEntryOne);
     Assert.assertEquals(cacheEntryOne, createCacheEntry(1));
 
-    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryTwo = treeCacheBuffer.get(2);
+    final OMemoryFirstLevelCache.CacheEntry<java.lang.Integer> cacheEntryTwo = firstLevelCache.get(2);
     Assert.assertNotNull(cacheEntryTwo);
     Assert.assertEquals(cacheEntryTwo, createCacheEntry(2));
 
-    final OOffHeapTreeCacheBuffer.CacheEntry<java.lang.Integer> cacheEntryThree = treeCacheBuffer.get(3);
+    final OMemoryFirstLevelCache.CacheEntry<java.lang.Integer> cacheEntryThree = firstLevelCache.get(3);
     Assert.assertNotNull(cacheEntryThree);
     Assert.assertEquals(cacheEntryThree, createCacheEntry(3));
   }
@@ -171,22 +171,22 @@ public class OffHeapTreeCacheBufferAddTest {
       while (addedKeys.contains(key))
         key = random.nextInt();
 
-      boolean result = treeCacheBuffer.add(createCacheEntry(key));
+      boolean result = firstLevelCache.add(createCacheEntry(key));
       Assert.assertTrue(result);
 
       addedKeys.add(key);
-      OOffHeapTreeCacheBuffer.CacheEntry<Integer> cacheEntry = treeCacheBuffer.get(key);
+      OMemoryFirstLevelCache.CacheEntry<Integer> cacheEntry = firstLevelCache.get(key);
       Assert.assertEquals(cacheEntry, createCacheEntry(key));
     }
 
     for (int key : addedKeys) {
-      OOffHeapTreeCacheBuffer.CacheEntry<Integer> cacheEntry = treeCacheBuffer.get(key);
+      OMemoryFirstLevelCache.CacheEntry<Integer> cacheEntry = firstLevelCache.get(key);
       Assert.assertEquals(cacheEntry, createCacheEntry(key));
     }
   }
 
-  private OOffHeapTreeCacheBuffer.CacheEntry<Integer> createCacheEntry(int key) {
-    return new OOffHeapTreeCacheBuffer.CacheEntry<Integer>(key, 1, new ORecordId(1, 1), new ORecordId(1, 2), new ORecordId(1, 3),
+  private OMemoryFirstLevelCache.CacheEntry<Integer> createCacheEntry(int key) {
+    return new OMemoryFirstLevelCache.CacheEntry<Integer>(key, 1, new ORecordId(1, 1), new ORecordId(1, 2), new ORecordId(1, 3),
         new ORecordId(1, 4));
   }
 }

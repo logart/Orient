@@ -1,16 +1,16 @@
 package com.orientechnologies.orient.core.type.tree;
 
-import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
-import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
-
 import java.util.Arrays;
 import java.util.Random;
+
+import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
 
 /**
  * @author LomakiA <a href="mailto:Andrey.Lomakin@exigenservices.com">Andrey Lomakin</a>
  * @since 17.06.12
  */
-public class OManagedMemorySkipList<K extends Comparable<K>> {
+public class OMemorySkipList<K extends Comparable<K>> {
   private static final int           MAX_LEVEL = 31;
 
   private final OBinarySerializer<K> keySerializer;
@@ -24,7 +24,7 @@ public class OManagedMemorySkipList<K extends Comparable<K>> {
 
   private long                       size      = 0;
 
-  public OManagedMemorySkipList(final OMemory memory, final OBinarySerializer<K> keySerializer) {
+  public OMemorySkipList(final OMemory memory, final OBinarySerializer<K> keySerializer) {
     this.memory = memory;
 
     this.keySerializer = keySerializer;
@@ -331,40 +331,6 @@ public class OManagedMemorySkipList<K extends Comparable<K>> {
     return dataPointer;
   }
 
-  public boolean update(K key, int dataPointer) {
-    int level = getStartLevel();
-    int forwardPointer;
-    int pointer = OMemory.NULL_POINTER;
-    while (level >= 0) {
-      if (pointer == OMemory.NULL_POINTER)
-        forwardPointer = header[level];
-      else
-        forwardPointer = getNPointer(pointer, level);
-
-      if (forwardPointer == OMemory.NULL_POINTER) {
-        level--;
-        continue;
-      }
-
-      K currentKey = getKey(forwardPointer);
-      int compareResult = key.compareTo(currentKey);
-
-      if (compareResult == 0) {
-        setDataPointer(forwardPointer, dataPointer);
-        return true;
-      }
-
-      if (compareResult < 0) {
-        level--;
-        continue;
-      }
-
-      pointer = forwardPointer;
-    }
-
-    return false;
-  }
-
   private int getStartLevel() {
     int level = MAX_LEVEL;
     int forwardPointer = header[level];
@@ -406,10 +372,9 @@ public class OManagedMemorySkipList<K extends Comparable<K>> {
   private int storeItem(int[] pointers, K key, int dataPointer) {
     final int pointersSize = OIntegerSerializer.INT_SIZE * (pointers.length + 1);
     final int keySize = keySerializer.getObjectSize(key);
-		final int size = 5 * OIntegerSerializer.INT_SIZE + keySize;
+    final int size = 5 * OIntegerSerializer.INT_SIZE + keySize;
 
-
-		final int pointer = memory.allocate(size);
+    final int pointer = memory.allocate(size);
 
     if (pointer == OMemory.NULL_POINTER)
       return OMemory.NULL_POINTER;
@@ -427,7 +392,7 @@ public class OManagedMemorySkipList<K extends Comparable<K>> {
     memory.setInt(pointer, offset, dataPointer);
     offset += OIntegerSerializer.INT_SIZE;
 
-		memory.set(pointer, offset, key, keySerializer);
+    memory.set(pointer, offset, key, keySerializer);
 
     offset = 0;
     memory.setInt(pointersPointer, offset, pointers.length);

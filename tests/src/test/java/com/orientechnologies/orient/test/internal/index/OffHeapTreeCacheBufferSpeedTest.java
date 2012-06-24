@@ -7,7 +7,7 @@ import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
 import com.orientechnologies.orient.core.type.tree.OBuddyMemory;
 import com.orientechnologies.orient.core.type.tree.OMemory;
-import com.orientechnologies.orient.core.type.tree.OOffHeapTreeCacheBuffer;
+import com.orientechnologies.orient.core.type.tree.OMemoryFirstLevelCache;
 
 /**
  * @author LomakiA <a href="mailto:Andrey.Lomakin@exigenservices.com">Andrey Lomakin</a>
@@ -15,22 +15,22 @@ import com.orientechnologies.orient.core.type.tree.OOffHeapTreeCacheBuffer;
  */
 public class OffHeapTreeCacheBufferSpeedTest extends SpeedTestMonoThread {
 
-  private OMemory                          offheapMemory   = new OBuddyMemory(60000000, 32);
-  private OOffHeapTreeCacheBuffer<Integer> treeCacheBuffer = new OOffHeapTreeCacheBuffer<Integer>(offheapMemory,
-                                                               OIntegerSerializer.INSTANCE);
+  private OMemory                         offheapMemory   = new OBuddyMemory(60000000, 32);
+  private OMemoryFirstLevelCache<Integer> firstLevelCache = new OMemoryFirstLevelCache<Integer>(offheapMemory,
+                                                              OIntegerSerializer.INSTANCE);
 
-  private int                              key;
+  private int                             key;
 
   public OffHeapTreeCacheBufferSpeedTest() {
     super(50000000);
-    treeCacheBuffer.setEvictionSize(100001);
+    firstLevelCache.setEvictionSize(100001);
   }
 
   @Override
   @Test(enabled = false)
   public void cycle() throws Exception {
-    treeCacheBuffer.add(createCacheEntry(key));
-    treeCacheBuffer.get(key);
+    firstLevelCache.add(createCacheEntry(key));
+    firstLevelCache.get(key);
 
     key++;
   }
@@ -39,12 +39,12 @@ public class OffHeapTreeCacheBufferSpeedTest extends SpeedTestMonoThread {
   @Test(enabled = false)
   public void deinit() throws Exception {
     System.out.println();
-    System.out.println("Cache size : " + treeCacheBuffer.size());
-    System.out.println("Bytes per item : " + ((offheapMemory.capacity() - offheapMemory.freeSpace()) / treeCacheBuffer.size()));
+    System.out.println("Cache size : " + firstLevelCache.size());
+    System.out.println("Bytes per item : " + ((offheapMemory.capacity() - offheapMemory.freeSpace()) / firstLevelCache.size()));
   }
 
-  private OOffHeapTreeCacheBuffer.CacheEntry<Integer> createCacheEntry(int key) {
-    return new OOffHeapTreeCacheBuffer.CacheEntry<Integer>(key, 1, new ORecordId(1, 1), new ORecordId(1, 2), new ORecordId(1, 3),
+  private OMemoryFirstLevelCache.CacheEntry<Integer> createCacheEntry(int key) {
+    return new OMemoryFirstLevelCache.CacheEntry<Integer>(key, 1, new ORecordId(1, 1), new ORecordId(1, 2), new ORecordId(1, 3),
         new ORecordId(1, 4));
   }
 
