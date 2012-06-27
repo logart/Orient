@@ -4,7 +4,11 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Random;
 
 /**
  * @author Artem Orobets
@@ -125,5 +129,62 @@ public class BuddyMemoryTest {
 		}
 
 		Assert.assertEquals(memory.freeSpace(), expectedSize);
+	}
+
+  @Test
+  public void testWrites() throws Exception {
+    final Random r = new Random();
+
+		final int initialSize = 8192;
+    final OBuddyMemory memory = new OBuddyMemory(initialSize, 64);
+
+		int expectedSize = initialSize;
+		Assert.assertEquals(memory.freeSpace(), expectedSize);
+
+    final Map<Integer, byte[]> pointers = new HashMap<Integer, byte[]>();
+
+    while (expectedSize > 256) {
+      int arrayLen = 50 + r.nextInt(250);
+
+      byte[] bytes = new byte[arrayLen];
+      r.nextBytes(bytes);
+
+			int pointer = memory.allocate(bytes);
+
+			if (pointer == OMemory.NULL_POINTER)
+				continue;
+
+      byte[] readBytes = memory.get(pointer, 0, arrayLen);
+      Assert.assertEquals(readBytes, bytes);
+
+      expectedSize -= memory.getActualSpace(pointer);
+      Assert.assertEquals(memory.freeSpace(), expectedSize);
+
+      if (r.nextDouble() < .8) {
+        int actualSpace = memory.getActualSpace(pointer);
+        memory.free(pointer);
+
+				expectedSize += actualSpace;
+        Assert.assertEquals(memory.freeSpace(), expectedSize);
+      } else {
+        pointers.put(pointer, bytes);
+      }
+    }
+
+		for (Map.Entry<Integer, byte[]> entry : pointers.entrySet()) {
+			final Integer pointer = entry.getKey();
+			final byte[] expected = entry.getValue();
+
+			final byte[] read = Arrays.copyOf(memory.get(pointer, 0, -1), expected.length);
+			Assert.assertEquals(read, expected);
+
+			final int actualSpace = memory.getActualSpace(pointer);
+			memory.free(pointer);
+
+			expectedSize += actualSpace;
+			Assert.assertEquals(memory.freeSpace(), expectedSize);
+		}
+
+		Assert.assertEquals(memory.freeSpace(), initialSize);
 	}
 }

@@ -55,7 +55,10 @@ public class OBuddyMemory implements OMemory {
 
   public int allocate(byte[] bytes) {
     int pointer = allocate(bytes.length);
-    set(pointer, 0, bytes.length, bytes);
+
+    if (pointer != OMemory.NULL_POINTER)
+      set(pointer, 0, bytes.length, bytes);
+
     return pointer;
   }
 
