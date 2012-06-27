@@ -36,6 +36,10 @@ public interface OMemory {
 
   void setInt(int pointer, int offset, int value);
 
+  byte getByte(int pointer, int offset);
+
+  void setByte(int pointer, int offset, byte value);
+
   int capacity();
 
   int freeSpace();

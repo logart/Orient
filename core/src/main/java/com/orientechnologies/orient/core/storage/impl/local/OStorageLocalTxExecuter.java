@@ -64,8 +64,8 @@ public class OStorageLocalTxExecuter {
     iRid.clusterPosition = -1;
 
     try {
-      final OPhysicalPosition ppos = storage.createRecord(iDataSegment, iClusterSegment, iContent, iRecordType, iRid,
-          iRecordVersion);
+      final OPhysicalPosition ppos = storage.createRecord(dataSegmentId, iDataSegment, iClusterSegment, iContent, iRecordType,
+          iRid, iRecordVersion);
 
       // SAVE INTO THE LOG THE POSITION OF THE RECORD JUST CREATED. IF TX FAILS AT THIS POINT A GHOST RECORD IS CREATED UNTIL DEFRAG
       txSegment.addLog(OTxSegment.OPERATION_CREATE, iTxId, iRid.clusterId, iRid.clusterPosition, iRecordType, 0, null,

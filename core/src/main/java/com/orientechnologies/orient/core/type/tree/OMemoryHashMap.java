@@ -1,8 +1,6 @@
 package com.orientechnologies.orient.core.type.tree;
 
-import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
-import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLinkSerializer;
 
 /**
  * @author LomakiA <a href="mailto:Andrey.Lomakin@exigenservices.com">Andrey Lomakin</a>
@@ -12,11 +10,11 @@ public class OMemoryHashMap {
   private static final int   DEFAULT_INITIAL_CAPACITY = 128;
   private static final float DEFAULT_LOAD_FACTOR      = 0.8f;
 
-  private static final int   RID_OFFSET               = OIntegerSerializer.INT_SIZE;
-  private static final int   NEXT_OFFSET              = OIntegerSerializer.INT_SIZE + OLinkSerializer.RID_SIZE;
-  private static final int   DATA_POINTER_OFFSET      = 2 * OIntegerSerializer.INT_SIZE + OLinkSerializer.RID_SIZE;
+  private static final int   CLUSTER_ID_OFFSET        = 0;
+  private static final int   NEXT_OFFSET              = OIntegerSerializer.INT_SIZE;
+  private static final int   DATA_POINTER_OFFSET      = 2 * OIntegerSerializer.INT_SIZE;
 
-  private static final int   ENTRY_SIZE               = OLinkSerializer.RID_SIZE + 3 * OIntegerSerializer.INT_SIZE;
+  private static final int   ENTRY_SIZE               = 3 * OIntegerSerializer.INT_SIZE;
 
   private float              loadFactor;
 
@@ -44,13 +42,17 @@ public class OMemoryHashMap {
     init(cp);
   }
 
-  public int put(ORID rid, int dataPointer) {
-    int[] res = doGet(rid);
+  public int put(int clusterId, int dataPointer) {
+    int[] res = doGet(clusterId);
 
     if (res[0] == 0) {
-      final int entryPointer = storeEntry(rid, dataPointer);
+      final int entryPointer = storeEntry(clusterId, dataPointer);
+
+      if (entryPointer == OMemory.NULL_POINTER)
+        return -1;
+
       if (res[1] == OMemory.NULL_POINTER) {
-        final int index = index(rid.hashCode());
+        final int index = index(clusterId);
         setEntryPointer(index, entryPointer);
       } else
         setNext(res[1], entryPointer);
@@ -65,23 +67,22 @@ public class OMemoryHashMap {
     return 1;
   }
 
-  public int get(ORID rid) {
-    int[] res = doGet(rid);
+  public int get(int clusterId) {
+    int[] res = doGet(clusterId);
     if (res[0] == 1)
       return getDataPointer(res[1]);
 
     return OMemory.NULL_POINTER;
   }
 
-  public int remove(ORID rid) {
-    final int ridHash = rid.hashCode();
-    final int index = index(ridHash);
+  public int remove(int clusterId) {
+    final int index = index(clusterId);
 
     int current = getEntryPointer(index);
     int prevCurrent = OMemory.NULL_POINTER;
 
     while (current != OMemory.NULL_POINTER) {
-      if (getHash(current) == ridHash && getRid(current).equals(rid)) {
+      if (getClusterId(current) == clusterId) {
         final int dataPointer = getDataPointer(current);
 
         doRemove(index, prevCurrent, current);
@@ -95,15 +96,11 @@ public class OMemoryHashMap {
       current = getNext(current);
     }
 
-    return -1;
+    return OMemory.NULL_POINTER;
   }
 
   public int size() {
     return size;
-  }
-
-  int entriesLength() {
-    return entriesLength;
   }
 
   private void doRemove(int index, int prevCurrent, int current) {
@@ -119,15 +116,14 @@ public class OMemoryHashMap {
     memory.free(current);
   }
 
-  private int[] doGet(ORID rid) {
-    final int ridHash = rid.hashCode();
-    final int index = index(ridHash);
+  private int[] doGet(int clusterId) {
+    final int index = index(clusterId);
 
     int current = getEntryPointer(index);
     int prevCurrent = OMemory.NULL_POINTER;
 
     while (current != OMemory.NULL_POINTER) {
-      if (getHash(current) == ridHash && getRid(current).equals(rid))
+      if (getClusterId(current) == clusterId)
         return new int[] { 1, current };
 
       prevCurrent = current;
@@ -137,10 +133,14 @@ public class OMemoryHashMap {
     return new int[] { 0, prevCurrent };
   }
 
-  private void init(int capacity) {
+  private boolean init(int capacity) {
     final int allocationSize = capacity * OIntegerSerializer.INT_SIZE;
 
-    entriesPointer = memory.allocate(allocationSize);
+    final int pointer = memory.allocate(allocationSize);
+    if (pointer == OMemory.NULL_POINTER)
+      return false;
+
+    entriesPointer = pointer;
     entriesLength = capacity;
 
     int offset = 0;
@@ -150,6 +150,8 @@ public class OMemoryHashMap {
     }
 
     nextThreshold = (int) (loadFactor * capacity);
+
+    return true;
   }
 
   private int index(int hashCode) {
@@ -160,7 +162,8 @@ public class OMemoryHashMap {
     final int oldLength = entriesLength;
     final int oldEntriesPointer = entriesPointer;
 
-    init(oldLength << 1);
+    if (!init(oldLength << 1))
+      return;
 
     move(oldEntriesPointer, oldLength);
     memory.free(oldEntriesPointer);
@@ -171,8 +174,8 @@ public class OMemoryHashMap {
       int oldCurrent = getOldEntryPointer(oldEntriesPointer, oldIndex);
 
       while (oldCurrent != OMemory.NULL_POINTER) {
-        final int hashCode = getHash(oldCurrent);
-        final int newIndex = index(hashCode);
+        final int oldClusterId = getClusterId(oldCurrent);
+        final int newIndex = index(oldClusterId);
 
         int current = getEntryPointer(newIndex);
 
@@ -193,12 +196,8 @@ public class OMemoryHashMap {
     }
   }
 
-  private int getHash(int pointer) {
-    return memory.getInt(pointer, 0);
-  }
-
-  private ORID getRid(int pointer) {
-    return memory.get(pointer, RID_OFFSET, OLinkSerializer.INSTANCE).getIdentity();
+  private int getClusterId(int pointer) {
+    return memory.getInt(pointer, CLUSTER_ID_OFFSET);
   }
 
   private int getNext(int pointer) {
@@ -217,12 +216,14 @@ public class OMemoryHashMap {
     memory.setInt(pointer, DATA_POINTER_OFFSET, dataPointer);
   }
 
-  private int storeEntry(ORID rid, int dataPointer) {
+  private int storeEntry(int clusterId, int dataPointer) {
     final int pointer = memory.allocate(ENTRY_SIZE);
 
-    memory.setInt(pointer, 0, rid.hashCode());
+    if (pointer == OMemory.NULL_POINTER)
+      return OMemory.NULL_POINTER;
+
     memory.setInt(pointer, NEXT_OFFSET, OMemory.NULL_POINTER);
-    memory.set(pointer, RID_OFFSET, rid, OLinkSerializer.INSTANCE);
+    memory.setInt(pointer, CLUSTER_ID_OFFSET, clusterId);
     memory.setInt(pointer, DATA_POINTER_OFFSET, dataPointer);
 
     return pointer;

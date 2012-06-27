@@ -15,6 +15,12 @@
  */
 package com.orientechnologies.orient.core.storage.impl.local;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import com.orientechnologies.common.concur.resource.OSharedResourceAdaptiveExternal;
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
@@ -22,12 +28,6 @@ import com.orientechnologies.orient.core.config.OStorageTxConfiguration;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.serialization.OBinaryProtocol;
 import com.orientechnologies.orient.core.tx.OTransaction;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 /**
  * Handles the records that wait to be committed. This class is not synchronized because the caller is responsible of it.<br/>
@@ -362,7 +362,7 @@ public class OTxSegment extends OSingleFileSegment {
 
     case OPERATION_DELETE:
       final ODataLocal dataSegment = storage.getDataSegmentById(dataSegmentId);
-      storage.createRecord(dataSegment, cluster, iRecordContent, iRecordType, iRid, iRecordVersion);
+      storage.createRecord(dataSegmentId, dataSegment, cluster, iRecordContent, iRecordType, iRid, iRecordVersion);
       break;
     }
   }

@@ -8,7 +8,7 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.OBinary
 
 /**
  * Buddy memory allocation algorithm.
- *
+ * 
  * @author Artem Orobets
  * @since 10.06.12
  */
@@ -176,6 +176,16 @@ public class OBuddyMemory implements OMemory {
 
   public int getInt(int pointer, int offset) {
     return readInt(pointer, offset + SYSTEM_INFO_SIZE);
+  }
+
+  public byte getByte(int pointer, int offset) {
+    int index = offset + SYSTEM_INFO_SIZE;
+    return buffer[index];
+  }
+
+  public void setByte(int pointer, int offset, byte value) {
+    int index = offset + SYSTEM_INFO_SIZE;
+    buffer[index] = value;
   }
 
   private void initMemory() {

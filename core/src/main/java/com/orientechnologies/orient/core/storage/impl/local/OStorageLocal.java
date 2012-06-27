@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.orientechnologies.common.concur.lock.OLockManager.LOCK;
 import com.orientechnologies.common.exception.OException;
@@ -57,26 +58,31 @@ import com.orientechnologies.orient.core.storage.ORecordCallback;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.OStorageEmbedded;
 import com.orientechnologies.orient.core.storage.fs.OMMapManager;
+import com.orientechnologies.orient.core.storage.impl.local.OClusterLocalMemoryCache.RecordState;
 import com.orientechnologies.orient.core.tx.OTransaction;
 
 public class OStorageLocal extends OStorageEmbedded {
-  private final int                     DELETE_MAX_RETRIES;
-  private final int                     DELETE_WAIT_TIME;
+  private final int                                                  DELETE_MAX_RETRIES;
+  private final int                                                  DELETE_WAIT_TIME;
 
-  private final Map<String, OCluster>   clusterMap          = new LinkedHashMap<String, OCluster>();
-  private OCluster[]                    clusters            = new OCluster[0];
-  private ODataLocal[]                  dataSegments        = new ODataLocal[0];
+  private final Map<String, OCluster>                                clusterMap            = new LinkedHashMap<String, OCluster>();
 
-  private final OStorageLocalTxExecuter txManager;
-  private String                        storagePath;
-  private final OStorageVariableParser  variableParser;
-  private int                           defaultClusterId    = -1;
+  private final ConcurrentHashMap<Integer, OClusterLocalMemoryCache> clusterMemoryCacheMap = new ConcurrentHashMap<Integer, OClusterLocalMemoryCache>();
 
-  private static String[]               ALL_FILE_EXTENSIONS = { "ocf", ".och", ".ocl", ".oda", ".odh", ".otx" };
-  private final String                  PROFILER_CREATE_RECORD;
-  private final String                  PROFILER_READ_RECORD;
-  private final String                  PROFILER_UPDATE_RECORD;
-  private final String                  PROFILER_DELETE_RECORD;
+  private OCluster[]                                                 clusters              = new OCluster[0];
+  private ODataLocal[]                                               dataSegments          = new ODataLocal[0];
+
+  private final OStorageLocalTxExecuter                              txManager;
+  private String                                                     storagePath;
+  private final OStorageVariableParser                               variableParser;
+  private int                                                        defaultClusterId      = -1;
+
+  private static String[]                                            ALL_FILE_EXTENSIONS   = { "ocf", ".och", ".ocl", ".oda",
+      ".odh", ".otx"                                                                      };
+  private final String                                               PROFILER_CREATE_RECORD;
+  private final String                                               PROFILER_READ_RECORD;
+  private final String                                               PROFILER_UPDATE_RECORD;
+  private final String                                               PROFILER_DELETE_RECORD;
 
   public OStorageLocal(final String iName, final String iFilePath, final String iMode) throws IOException {
     super(iName, iFilePath, iMode);
@@ -903,9 +909,11 @@ public class OStorageLocal extends OStorageEmbedded {
           iRecordVersion, iRecordType, iDataSegmentId);
       iRid.clusterPosition = ppos.clusterPosition;
     } else {
-      ppos = createRecord(dataSegment, cluster, iContent, iRecordType, iRid, iRecordVersion);
+      ppos = createRecord(iDataSegmentId, dataSegment, cluster, iContent, iRecordType, iRid, iRecordVersion);
+
       if (OGlobalConfiguration.NON_TX_RECORD_UPDATE_SYNCH.getValueAsBoolean())
         synchRecordUpdate(cluster, ppos);
+
       if (iCallback != null)
         iCallback.call(iRid, ppos.clusterPosition);
     }
@@ -1411,8 +1419,8 @@ public class OStorageLocal extends OStorageEmbedded {
       throw new IllegalArgumentException("Cluster segment #" + iClusterId + " does not exist in storage '" + name + "'");
   }
 
-  protected OPhysicalPosition createRecord(final ODataLocal iDataSegment, final OCluster iClusterSegment, final byte[] iContent,
-      final byte iRecordType, final ORecordId iRid, int recordVersion) {
+  protected OPhysicalPosition createRecord(int dataSegmentId, final ODataLocal iDataSegment, final OCluster iClusterSegment,
+      final byte[] iContent, final byte iRecordType, final ORecordId iRid, int recordVersion) {
     checkOpeness();
 
     if (iContent == null)
@@ -1429,6 +1437,14 @@ public class OStorageLocal extends OStorageEmbedded {
 
       lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
       try {
+        final OClusterLocalMemoryCache clusterLocalMemoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
+        if (clusterLocalMemoryCache != null) {
+          if (!clusterLocalMemoryCache.put(dataSegmentId, iRid.clusterId, iContent, OClusterLocalMemoryCache.RecordState.NEW)) {
+            clusterLocalMemoryCache.evict(this);
+            clusterLocalMemoryCache.put(dataSegmentId, iRid.clusterId, iContent, OClusterLocalMemoryCache.RecordState.NEW);
+          }
+          return ppos;
+        }
 
         ppos.dataSegmentId = iDataSegment.getId();
         ppos.dataSegmentPos = iDataSegment.addRecord(iRid, iContent);
@@ -1491,8 +1507,24 @@ public class OStorageLocal extends OStorageEmbedded {
           // DELETED
           return null;
 
+        final OClusterLocalMemoryCache clusterLocalMemoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
+        if (clusterLocalMemoryCache != null) {
+          final byte[] content = clusterLocalMemoryCache.get(iRid.clusterId);
+          if (content != null)
+            return new ORawBuffer(content, ppos.recordVersion, ppos.recordType);
+        }
+
         final ODataLocal data = getDataSegmentById(ppos.dataSegmentId);
-        return new ORawBuffer(data.getRecord(ppos.dataSegmentPos), ppos.recordVersion, ppos.recordType);
+
+        final byte[] content = data.getRecord(ppos.dataSegmentPos);
+
+        if (clusterLocalMemoryCache != null)
+          if (!clusterLocalMemoryCache.put(ppos.dataSegmentId, iRid.clusterId, content, RecordState.SHARED)) {
+            clusterLocalMemoryCache.evictSharedRecordsOnly(this);
+            clusterLocalMemoryCache.put(ppos.dataSegmentId, iRid.clusterId, content, RecordState.SHARED);
+          }
+
+        return new ORawBuffer(content, ppos.recordVersion, ppos.recordType);
 
       } finally {
         lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.SHARED);
@@ -1565,6 +1597,16 @@ public class OStorageLocal extends OStorageEmbedded {
 
         }
 
+        final OClusterLocalMemoryCache clusterLocalMemoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
+        if (clusterLocalMemoryCache != null) {
+          if (!clusterLocalMemoryCache.put(ppos.dataSegmentId, iRid.clusterId, iContent, RecordState.MODIFIED)) {
+            clusterLocalMemoryCache.evict(this);
+            clusterLocalMemoryCache.put(ppos.dataSegmentId, iRid.clusterId, iContent, RecordState.MODIFIED);
+          }
+
+          return ppos;
+        }
+
         if (ppos.recordType != iRecordType)
           iClusterSegment.updateRecordType(iRid.clusterPosition, iRecordType);
 
@@ -1625,6 +1667,10 @@ public class OStorageLocal extends OStorageEmbedded {
                   + name
                   + "' because the version is not the latest. Probably you are deleting an old record or it has been modified by another user (db=v"
                   + ppos.recordVersion + " your=v" + iVersion + ")", iRid, ppos.recordVersion, iVersion);
+
+        final OClusterLocalMemoryCache memoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
+        if (memoryCache != null)
+          memoryCache.remove(iRid.clusterId);
 
         if (ppos.dataSegmentPos > -1)
           getDataSegmentById(ppos.dataSegmentId).deleteRecord(ppos.dataSegmentPos);

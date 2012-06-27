@@ -9,9 +9,6 @@ import junit.framework.Assert;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import com.orientechnologies.orient.core.id.ORID;
-import com.orientechnologies.orient.core.id.ORecordId;
-
 /**
  * @author LomakiA <a href="mailto:Andrey.Lomakin@exigenservices.com">Andrey Lomakin</a>
  * @since 24.06.12
@@ -28,132 +25,138 @@ public class MemoryHashMapPutTest {
   }
 
   public void testAddOneItem() {
-    final ORID rid = new ORecordId(1, 1);
+    final int clusterId = 1;
 
-    memoryHashMap.put(rid, 10);
-    Assert.assertEquals(10, memoryHashMap.get(rid));
+    memoryHashMap.put(clusterId, 10);
+    Assert.assertEquals(10, memoryHashMap.get(clusterId));
     Assert.assertEquals(1, memoryHashMap.size());
   }
 
   public void testAddTwoItems() {
-    final ORID ridOne = new ORecordId(1, 0);
-    final ORID ridTwo = new ORecordId(1, 4);
+    final int clusterIdOne = 0;
+    final int clusterIdTwo = 4;
 
-    memoryHashMap.put(ridOne, 10);
-    memoryHashMap.put(ridTwo, 20);
+    memoryHashMap.put(clusterIdOne, 10);
+    memoryHashMap.put(clusterIdTwo, 20);
 
-    Assert.assertEquals(10, memoryHashMap.get(ridOne));
-    Assert.assertEquals(20, memoryHashMap.get(ridTwo));
+    Assert.assertEquals(10, memoryHashMap.get(clusterIdOne));
+    Assert.assertEquals(20, memoryHashMap.get(clusterIdTwo));
     Assert.assertEquals(2, memoryHashMap.size());
   }
 
   public void testAddThreeItems() {
-    final ORID ridOne = new ORecordId(1, 0);
-    final ORID ridTwo = new ORecordId(1, 1);
-    final ORID ridThree = new ORecordId(1, 4);
+    final int clusterIdOne = 0;
+    final int clusterIdTwo = 1;
+    final int clusterIdThree = 4;
 
-    memoryHashMap.put(ridOne, 10);
-    memoryHashMap.put(ridTwo, 20);
-    memoryHashMap.put(ridThree, 30);
+    memoryHashMap.put(clusterIdOne, 10);
+    memoryHashMap.put(clusterIdTwo, 20);
+    memoryHashMap.put(clusterIdThree, 30);
 
-    Assert.assertEquals(10, memoryHashMap.get(ridOne));
-    Assert.assertEquals(20, memoryHashMap.get(ridTwo));
-    Assert.assertEquals(30, memoryHashMap.get(ridThree));
+    Assert.assertEquals(10, memoryHashMap.get(clusterIdOne));
+    Assert.assertEquals(20, memoryHashMap.get(clusterIdTwo));
+    Assert.assertEquals(30, memoryHashMap.get(clusterIdThree));
     Assert.assertEquals(3, memoryHashMap.size());
   }
 
   public void testAddFourItems() {
-    final ORID ridOne = new ORecordId(1, 0);
-    final ORID ridTwo = new ORecordId(1, 1);
-    final ORID ridThree = new ORecordId(1, 4);
-    final ORID ridFour = new ORecordId(1, 2);
+    final int clusterIdOne = 0;
+    final int clusterIdTwo = 1;
+    final int clusterIdThree = 4;
+    final int clusterIdFour = 2;
 
-    memoryHashMap.put(ridOne, 10);
-    memoryHashMap.put(ridTwo, 20);
-    memoryHashMap.put(ridThree, 30);
-    memoryHashMap.put(ridFour, 40);
+    memoryHashMap.put(clusterIdOne, 10);
+    memoryHashMap.put(clusterIdTwo, 20);
+    memoryHashMap.put(clusterIdThree, 30);
+    memoryHashMap.put(clusterIdFour, 40);
 
-    Assert.assertEquals(10, memoryHashMap.get(ridOne));
-    Assert.assertEquals(20, memoryHashMap.get(ridTwo));
-    Assert.assertEquals(30, memoryHashMap.get(ridThree));
-    Assert.assertEquals(40, memoryHashMap.get(ridFour));
+    Assert.assertEquals(10, memoryHashMap.get(clusterIdOne));
+    Assert.assertEquals(20, memoryHashMap.get(clusterIdTwo));
+    Assert.assertEquals(30, memoryHashMap.get(clusterIdThree));
+    Assert.assertEquals(40, memoryHashMap.get(clusterIdFour));
     Assert.assertEquals(4, memoryHashMap.size());
   }
 
   public void testAddThreeItemsUpdateOne() {
-    final ORID ridOne = new ORecordId(1, 0);
-    final ORID ridTwo = new ORecordId(1, 1);
-    final ORID ridThree = new ORecordId(1, 4);
+    final int clusterIdOne = 0;
+    final int clusterIdTwo = 1;
+    final int clusterIdThree = 4;
 
-    memoryHashMap.put(ridOne, 10);
-    memoryHashMap.put(ridTwo, 20);
-    memoryHashMap.put(ridThree, 30);
+    memoryHashMap.put(clusterIdOne, 10);
+    memoryHashMap.put(clusterIdTwo, 20);
+    memoryHashMap.put(clusterIdThree, 30);
 
-    memoryHashMap.put(ridOne, 40);
+    memoryHashMap.put(clusterIdOne, 40);
 
-    Assert.assertEquals(40, memoryHashMap.get(ridOne));
-    Assert.assertEquals(20, memoryHashMap.get(ridTwo));
-    Assert.assertEquals(30, memoryHashMap.get(ridThree));
+    Assert.assertEquals(40, memoryHashMap.get(clusterIdOne));
+    Assert.assertEquals(20, memoryHashMap.get(clusterIdTwo));
+    Assert.assertEquals(30, memoryHashMap.get(clusterIdThree));
     Assert.assertEquals(3, memoryHashMap.size());
   }
 
   public void testAddFourItemsUpdateTwo() {
-    final ORID ridOne = new ORecordId(1, 0);
-    final ORID ridTwo = new ORecordId(1, 1);
-    final ORID ridThree = new ORecordId(1, 4);
-    final ORID ridFour = new ORecordId(1, 2);
+    final int clusterIdOne = 0;
+    final int clusterIdTwo = 1;
+    final int clusterIdThree = 4;
+    final int clusterIdFour = 2;
 
-    memoryHashMap.put(ridOne, 10);
-    memoryHashMap.put(ridTwo, 20);
-    memoryHashMap.put(ridThree, 30);
-    memoryHashMap.put(ridFour, 40);
+    memoryHashMap.put(clusterIdOne, 10);
+    memoryHashMap.put(clusterIdTwo, 20);
+    memoryHashMap.put(clusterIdThree, 30);
+    memoryHashMap.put(clusterIdFour, 40);
 
-    memoryHashMap.put(ridTwo, 50);
-    memoryHashMap.put(ridOne, 60);
+    memoryHashMap.put(clusterIdTwo, 50);
+    memoryHashMap.put(clusterIdOne, 60);
 
-    Assert.assertEquals(60, memoryHashMap.get(ridOne));
-    Assert.assertEquals(50, memoryHashMap.get(ridTwo));
-    Assert.assertEquals(30, memoryHashMap.get(ridThree));
-    Assert.assertEquals(40, memoryHashMap.get(ridFour));
+    Assert.assertEquals(60, memoryHashMap.get(clusterIdOne));
+    Assert.assertEquals(50, memoryHashMap.get(clusterIdTwo));
+    Assert.assertEquals(30, memoryHashMap.get(clusterIdThree));
+    Assert.assertEquals(40, memoryHashMap.get(clusterIdFour));
     Assert.assertEquals(4, memoryHashMap.size());
   }
 
   public void testAdd10000RandomItems() {
-    final Map<ORID, Integer> addedItems = new HashMap<ORID, Integer>();
+    final Map<Integer, Integer> addedItems = new HashMap<Integer, Integer>();
     final Random random = new Random();
 
     for (int i = 0; i < 10000; i++) {
-      final ORID rid = new ORecordId(random.nextInt(32767), random.nextLong());
+      int clusterId = random.nextInt(32767);
+      while (addedItems.containsKey(clusterId))
+        clusterId = random.nextInt(32767);
+
       final int pointer = random.nextInt();
 
-      memoryHashMap.put(rid, pointer);
-      addedItems.put(rid, pointer);
+      memoryHashMap.put(clusterId, pointer);
+      addedItems.put(clusterId, pointer);
     }
 
-    for (Map.Entry<ORID, Integer> addedItem : addedItems.entrySet())
+    for (Map.Entry<Integer, Integer> addedItem : addedItems.entrySet())
       Assert.assertEquals(addedItem.getValue().intValue(), memoryHashMap.get(addedItem.getKey()));
 
     Assert.assertEquals(10000, memoryHashMap.size());
   }
 
   public void testAdd10000RandomItemsUpdateHalf() {
-    final Map<ORID, Integer> addedItems = new HashMap<ORID, Integer>();
+    final Map<Integer, Integer> addedItems = new HashMap<Integer, Integer>();
     final Random random = new Random();
 
     for (int i = 0; i < 10000; i++) {
-      final ORID rid = new ORecordId(random.nextInt(32767), random.nextLong());
+      int clusterId = random.nextInt(32767);
+      while (addedItems.containsKey(clusterId))
+        clusterId = random.nextInt(32767);
+
       final int pointer = random.nextInt();
 
-      memoryHashMap.put(rid, pointer);
+      memoryHashMap.put(clusterId, pointer);
 
       if (random.nextInt(2) > 0) {
-        memoryHashMap.put(rid, pointer / 2);
-        addedItems.put(rid, pointer / 2);
+        memoryHashMap.put(clusterId, pointer / 2);
+        addedItems.put(clusterId, pointer / 2);
       } else
-        addedItems.put(rid, pointer);
+        addedItems.put(clusterId, pointer);
     }
 
-    for (Map.Entry<ORID, Integer> addedItem : addedItems.entrySet())
+    for (Map.Entry<Integer, Integer> addedItem : addedItems.entrySet())
       Assert.assertEquals(addedItem.getValue().intValue(), memoryHashMap.get(addedItem.getKey()));
 
     Assert.assertEquals(10000, memoryHashMap.size());
