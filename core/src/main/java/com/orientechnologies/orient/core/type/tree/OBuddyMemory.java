@@ -8,9 +8,7 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.OBinary
 
 /**
  * Buddy memory allocation algorithm.
- * <p/>
- * NOTE: Not multi-threaded implementation.
- * 
+ *
  * @author Artem Orobets
  * @since 10.06.12
  */
@@ -40,20 +38,22 @@ public class OBuddyMemory implements OMemory {
    *          - size of chunks on level 0. Should be power of 2.
    */
   public OBuddyMemory(int capacity, int minChunkSize) {
-    minChunkSize = (int) Math.pow(2, (int) Math.ceil(Math.log(minChunkSize) / Math.log(2)));
-    this.minChunkSize = minChunkSize;
+    synchronized (this) {
+      minChunkSize = (int) Math.pow(2, (int) Math.ceil(Math.log(minChunkSize) / Math.log(2)));
+      this.minChunkSize = minChunkSize;
 
-    capacity = (int) Math.floor(capacity / minChunkSize) * minChunkSize + 1;
-    maxLevel = (int) (Math.log((double) capacity / minChunkSize) / Math.log(2));
+      capacity = (int) Math.floor(capacity / minChunkSize) * minChunkSize + 1;
+      maxLevel = (int) (Math.log((double) capacity / minChunkSize) / Math.log(2));
 
-    freeListHeader = new int[maxLevel + 1];
-    freeListTail = new int[maxLevel + 1];
-    buffer = new byte[capacity];
+      freeListHeader = new int[maxLevel + 1];
+      freeListTail = new int[maxLevel + 1];
+      buffer = new byte[capacity];
 
-    initMemory();
+      initMemory();
+    }
   }
 
-  public int allocate(byte[] bytes) {
+  public synchronized int allocate(byte[] bytes) {
     int pointer = allocate(bytes.length);
 
     if (pointer != OMemory.NULL_POINTER)
@@ -62,7 +62,7 @@ public class OBuddyMemory implements OMemory {
     return pointer;
   }
 
-  public int allocate(final int size) {
+  public synchronized int allocate(final int size) {
     int level = Integer.SIZE - Integer.numberOfLeadingZeros((size + SYSTEM_INFO_SIZE - 1) / minChunkSize);
 
     if (level > maxLevel) {
@@ -98,7 +98,7 @@ public class OBuddyMemory implements OMemory {
     return pointer;
   }
 
-  public void free(int pointer) {
+  public synchronized void free(int pointer) {
     int level = buffer[pointer + SIZE_OFFSET];
     int buddy = buddy(pointer, level);
     while (level < maxLevel && buffer[buddy + TAG_OFFSET] == TAG_FREE && buffer[buddy + SIZE_OFFSET] == level) {
@@ -149,7 +149,7 @@ public class OBuddyMemory implements OMemory {
     return buffer.length - 1;
   }
 
-  public int freeSpace() {
+  public synchronized int freeSpace() {
     int freeSpace = 0;
     for (int level = 0; level <= maxLevel; level++) {
       int count = 0;
@@ -166,7 +166,7 @@ public class OBuddyMemory implements OMemory {
     return freeSpace;
   }
 
-  public void clear() {
+  public synchronized void clear() {
     initMemory();
   }
 
