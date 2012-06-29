@@ -6,7 +6,7 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OI
  * @author LomakiA <a href="mailto:Andrey.Lomakin@exigenservices.com">Andrey Lomakin</a>
  * @since 23.06.12
  */
-public class OMemoryHashMap {
+public class OMemoryIntHashMap {
   private static final int   DEFAULT_INITIAL_CAPACITY = 128;
   private static final float DEFAULT_LOAD_FACTOR      = 0.8f;
 
@@ -27,11 +27,11 @@ public class OMemoryHashMap {
 
   private final OMemory      memory;
 
-  public OMemoryHashMap(OMemory memory) {
+  public OMemoryIntHashMap(OMemory memory) {
     this(memory, DEFAULT_LOAD_FACTOR, DEFAULT_INITIAL_CAPACITY);
   }
 
-  public OMemoryHashMap(OMemory memory, float loadFactor, int initialCapacity) {
+  public OMemoryIntHashMap(OMemory memory, float loadFactor, int initialCapacity) {
     this.memory = memory;
     this.loadFactor = loadFactor;
 

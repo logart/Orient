@@ -58,31 +58,31 @@ import com.orientechnologies.orient.core.storage.ORecordCallback;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.OStorageEmbedded;
 import com.orientechnologies.orient.core.storage.fs.OMMapManager;
-import com.orientechnologies.orient.core.storage.impl.local.OClusterLocalMemoryCache.RecordState;
+import com.orientechnologies.orient.core.storage.impl.local.ORecordMemoryCache.RecordState;
 import com.orientechnologies.orient.core.tx.OTransaction;
 
-public class OStorageLocal extends OStorageEmbedded {
-  private final int                                                  DELETE_MAX_RETRIES;
-  private final int                                                  DELETE_WAIT_TIME;
+public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCacheFlusher {
+  private final int                                            DELETE_MAX_RETRIES;
+  private final int                                            DELETE_WAIT_TIME;
 
-  private final Map<String, OCluster>                                clusterMap            = new LinkedHashMap<String, OCluster>();
+  private final Map<String, OCluster>                          clusterMap            = new LinkedHashMap<String, OCluster>();
 
-  private final ConcurrentHashMap<Integer, OClusterLocalMemoryCache> clusterMemoryCacheMap = new ConcurrentHashMap<Integer, OClusterLocalMemoryCache>();
+  private final ConcurrentHashMap<Integer, ORecordMemoryCache> clusterMemoryCacheMap = new ConcurrentHashMap<Integer, ORecordMemoryCache>();
 
-  private OCluster[]                                                 clusters              = new OCluster[0];
-  private ODataLocal[]                                               dataSegments          = new ODataLocal[0];
+  private OCluster[]                                           clusters              = new OCluster[0];
+  private ODataLocal[]                                         dataSegments          = new ODataLocal[0];
 
-  private final OStorageLocalTxExecuter                              txManager;
-  private String                                                     storagePath;
-  private final OStorageVariableParser                               variableParser;
-  private int                                                        defaultClusterId      = -1;
+  private final OStorageLocalTxExecuter                        txManager;
+  private String                                               storagePath;
+  private final OStorageVariableParser                         variableParser;
+  private int                                                  defaultClusterId      = -1;
 
-  private static String[]                                            ALL_FILE_EXTENSIONS   = { "ocf", ".och", ".ocl", ".oda",
-      ".odh", ".otx"                                                                      };
-  private final String                                               PROFILER_CREATE_RECORD;
-  private final String                                               PROFILER_READ_RECORD;
-  private final String                                               PROFILER_UPDATE_RECORD;
-  private final String                                               PROFILER_DELETE_RECORD;
+  private static String[]                                      ALL_FILE_EXTENSIONS   = { "ocf", ".och", ".ocl", ".oda", ".odh",
+      ".otx"                                                                        };
+  private final String                                         PROFILER_CREATE_RECORD;
+  private final String                                         PROFILER_READ_RECORD;
+  private final String                                         PROFILER_UPDATE_RECORD;
+  private final String                                         PROFILER_DELETE_RECORD;
 
   public OStorageLocal(final String iName, final String iFilePath, final String iMode) throws IOException {
     super(iName, iFilePath, iMode);
@@ -1437,12 +1437,16 @@ public class OStorageLocal extends OStorageEmbedded {
 
       lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
       try {
-        final OClusterLocalMemoryCache clusterLocalMemoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
-        if (clusterLocalMemoryCache != null) {
-          if (!clusterLocalMemoryCache.put(dataSegmentId, iRid.clusterId, iContent, OClusterLocalMemoryCache.RecordState.NEW)) {
-            clusterLocalMemoryCache.evict(this);
-            clusterLocalMemoryCache.put(dataSegmentId, iRid.clusterId, iContent, OClusterLocalMemoryCache.RecordState.NEW);
+        final ORecordMemoryCache recordMemoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
+        if (recordMemoryCache != null) {
+          if (recordMemoryCache.isScheduleEviction())
+            recordMemoryCache.evict(this);
+
+          if (!recordMemoryCache.put(dataSegmentId, iRid.clusterId, iContent, ORecordMemoryCache.RecordState.NEW)) {
+            recordMemoryCache.evict(this);
+            recordMemoryCache.put(dataSegmentId, iRid.clusterId, iContent, ORecordMemoryCache.RecordState.NEW);
           }
+
           return ppos;
         }
 
@@ -1507,9 +1511,9 @@ public class OStorageLocal extends OStorageEmbedded {
           // DELETED
           return null;
 
-        final OClusterLocalMemoryCache clusterLocalMemoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
-        if (clusterLocalMemoryCache != null) {
-          final byte[] content = clusterLocalMemoryCache.get(iRid.clusterId);
+        final ORecordMemoryCache recordMemoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
+        if (recordMemoryCache != null) {
+          final byte[] content = recordMemoryCache.get(iRid.clusterId);
           if (content != null)
             return new ORawBuffer(content, ppos.recordVersion, ppos.recordType);
         }
@@ -1518,10 +1522,10 @@ public class OStorageLocal extends OStorageEmbedded {
 
         final byte[] content = data.getRecord(ppos.dataSegmentPos);
 
-        if (clusterLocalMemoryCache != null)
-          if (!clusterLocalMemoryCache.put(ppos.dataSegmentId, iRid.clusterId, content, RecordState.SHARED)) {
-            clusterLocalMemoryCache.evictSharedRecordsOnly(this);
-            clusterLocalMemoryCache.put(ppos.dataSegmentId, iRid.clusterId, content, RecordState.SHARED);
+        if (recordMemoryCache != null)
+          if (!recordMemoryCache.put(ppos.dataSegmentId, iRid.clusterId, content, RecordState.SHARED)) {
+            recordMemoryCache.evictSharedRecordsOnly();
+            recordMemoryCache.put(ppos.dataSegmentId, iRid.clusterId, content, RecordState.SHARED);
           }
 
         return new ORawBuffer(content, ppos.recordVersion, ppos.recordType);
@@ -1597,11 +1601,14 @@ public class OStorageLocal extends OStorageEmbedded {
 
         }
 
-        final OClusterLocalMemoryCache clusterLocalMemoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
-        if (clusterLocalMemoryCache != null) {
-          if (!clusterLocalMemoryCache.put(ppos.dataSegmentId, iRid.clusterId, iContent, RecordState.MODIFIED)) {
-            clusterLocalMemoryCache.evict(this);
-            clusterLocalMemoryCache.put(ppos.dataSegmentId, iRid.clusterId, iContent, RecordState.MODIFIED);
+        final ORecordMemoryCache recordMemoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
+        if (recordMemoryCache != null) {
+          if (recordMemoryCache.isScheduleEviction())
+            recordMemoryCache.evict(this);
+
+          if (!recordMemoryCache.put(ppos.dataSegmentId, iRid.clusterId, iContent, RecordState.MODIFIED)) {
+            recordMemoryCache.evict(this);
+            recordMemoryCache.put(ppos.dataSegmentId, iRid.clusterId, iContent, RecordState.MODIFIED);
           }
 
           return ppos;
@@ -1668,9 +1675,13 @@ public class OStorageLocal extends OStorageEmbedded {
                   + "' because the version is not the latest. Probably you are deleting an old record or it has been modified by another user (db=v"
                   + ppos.recordVersion + " your=v" + iVersion + ")", iRid, ppos.recordVersion, iVersion);
 
-        final OClusterLocalMemoryCache memoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
-        if (memoryCache != null)
+        final ORecordMemoryCache memoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
+        if (memoryCache != null) {
           memoryCache.remove(iRid.clusterId);
+
+          if (memoryCache.isScheduleEviction())
+            memoryCache.evict(this);
+        }
 
         if (ppos.dataSegmentPos > -1)
           getDataSegmentById(ppos.dataSegmentId).deleteRecord(ppos.dataSegmentPos);
@@ -1712,5 +1723,8 @@ public class OStorageLocal extends OStorageEmbedded {
       final Object... iArgs) {
     if (iVerbose)
       iListener.onMessage(String.format(iMessage, iArgs));
+  }
+
+  public void flushRecord(int clusterId, int dataSegmentId, byte[] content, RecordState recordState) {
   }
 }
