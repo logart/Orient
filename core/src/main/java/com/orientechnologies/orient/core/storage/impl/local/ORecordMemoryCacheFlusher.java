@@ -5,5 +5,6 @@ package com.orientechnologies.orient.core.storage.impl.local;
  * @since 29.06.12
  */
 public interface ORecordMemoryCacheFlusher {
-  public void flushRecord(int clusterId, int dataSegmentId, byte[] content, ORecordMemoryCache.RecordState recordState);
+  public void flushRecord(int clusterId, long clusterPosition, int dataSegmentId, byte[] content,
+      ORecordMemoryCache.RecordState recordState);
 }

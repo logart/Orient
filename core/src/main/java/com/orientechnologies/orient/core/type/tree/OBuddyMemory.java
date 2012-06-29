@@ -178,6 +178,14 @@ public class OBuddyMemory implements OMemory {
     return readInt(pointer, offset + SYSTEM_INFO_SIZE);
   }
 
+  public long getLong(int pointer, int offset) {
+    return CONVERTER.getLong(buffer, pointer + offset + SYSTEM_INFO_SIZE);
+  }
+
+  public void setLong(int pointer, int offset, long value) {
+    CONVERTER.putLong(buffer, pointer + offset + SYSTEM_INFO_SIZE, value);
+  }
+
   public byte getByte(int pointer, int offset) {
     int index = offset + SYSTEM_INFO_SIZE;
     return buffer[index];

@@ -3,46 +3,57 @@ package com.orientechnologies.orient.core.storage.impl.local;
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OByteSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLongSerializer;
 import com.orientechnologies.orient.core.type.tree.OMemory;
-import com.orientechnologies.orient.core.type.tree.OMemoryIntHashMap;
+import com.orientechnologies.orient.core.type.tree.OMemoryLongHashMap;
 
 /**
  * @author LomakiA <a href="mailto:Andrey.Lomakin@exigenservices.com">Andrey Lomakin</a>
  * @since 24.06.12
  */
 public class ORecordMemoryCache {
-  private static final int        CLUSTER_ID_OFFSET      = 0;
-  private static final int        NEXT_POINTER_OFFSET    = OIntegerSerializer.INT_SIZE;
-  private static final int        PREV_POINTER_OFFSET    = 2 * OIntegerSerializer.INT_SIZE;
-  private static final int        DATA_POINTER_OFFSET    = 3 * OIntegerSerializer.INT_SIZE;
-  private static final int        RECORD_STATE_OFFSET    = 4 * OIntegerSerializer.INT_SIZE;
-  private static final int        DATA_SEGMENT_ID_OFFSET = 4 * OIntegerSerializer.INT_SIZE + OByteSerializer.BYTE_SIZE;
+  private static final int         CLUSTER_POSITION_OFFSET = 0;
+  private static final int         NEXT_POINTER_OFFSET     = OLongSerializer.LONG_SIZE;
+  private static final int         PREV_POINTER_OFFSET     = OIntegerSerializer.INT_SIZE + OLongSerializer.LONG_SIZE;
+  private static final int         DATA_POINTER_OFFSET     = 2 * OIntegerSerializer.INT_SIZE + OLongSerializer.LONG_SIZE;
+  private static final int         RECORD_STATE_OFFSET     = 3 * OIntegerSerializer.INT_SIZE + OLongSerializer.LONG_SIZE;
+  private static final int         DATA_SEGMENT_ID_OFFSET  = 3 * OIntegerSerializer.INT_SIZE + OByteSerializer.BYTE_SIZE
+                                                               + OLongSerializer.LONG_SIZE;
 
-  private static final int        ENTRY_SIZE             = 5 * OIntegerSerializer.INT_SIZE + OByteSerializer.BYTE_SIZE;
+  private static final int         ENTRY_SIZE              = 4 * OIntegerSerializer.INT_SIZE + OByteSerializer.BYTE_SIZE
+                                                               + OLongSerializer.LONG_SIZE;
 
-  private final OMemory           memory;
-  private final OMemoryIntHashMap memoryIntHashMap;
+  private final OMemory            memory;
+  private final OMemoryLongHashMap memoryLongHashMap;
 
-  private int                     lruHeader              = OMemory.NULL_POINTER;
-  private int                     lruTail                = OMemory.NULL_POINTER;
+  private int                      lruHeader               = OMemory.NULL_POINTER;
+  private int                      lruTail                 = OMemory.NULL_POINTER;
 
-  private int                     defaultEvictionPercent = 20;
+  private final int                clusterId;
 
-  private long                    size                   = 0;
+  private int                      defaultEvictionPercent  = 20;
 
-  private boolean                 scheduleEviction       = true;
+  private long                     size                    = 0;
+  private long                     evictionSize            = -1;
+
+  private volatile boolean         scheduleEviction        = true;
 
   public enum RecordState {
     SHARED, MODIFIED, NEW
   }
 
-  public ORecordMemoryCache(OMemory memory) {
+  public ORecordMemoryCache(OMemory memory, int clusterId) {
     this.memory = memory;
-    this.memoryIntHashMap = new OMemoryIntHashMap(memory);
+    this.memoryLongHashMap = new OMemoryLongHashMap(memory);
+    this.clusterId = clusterId;
   }
 
-  public synchronized boolean put(int dataSegmentId, int clusterId, byte[] content, RecordState recordState) {
-    final int existingEntryPointer = memoryIntHashMap.get(clusterId);
+  public synchronized boolean put(int dataSegmentId, long clusterPosition, byte[] content, RecordState recordState) {
+
+    if (evictionSize > 0 && size >= evictionSize)
+      return false;
+
+    final int existingEntryPointer = memoryLongHashMap.get(clusterPosition);
     if (existingEntryPointer != OMemory.NULL_POINTER) {
       final RecordState existingRecordState = getRecordState(existingEntryPointer);
 
@@ -65,16 +76,16 @@ public class ORecordMemoryCache {
       setRecordState(existingEntryPointer, recordState);
       setDataPointer(existingEntryPointer, dataPointer);
 
-      updateItemInLRU(existingEntryPointer);
+      updateEntryInLRU(existingEntryPointer);
     } else {
-      final int entryPointer = storeEntry(clusterId, dataPointer, recordState, dataSegmentId);
+      final int entryPointer = storeEntry(clusterPosition, dataPointer, recordState, dataSegmentId);
       if (entryPointer == OMemory.NULL_POINTER) {
         memory.free(dataPointer);
 
         return false;
       }
 
-      final int result = memoryIntHashMap.put(clusterId, dataPointer);
+      final int result = memoryLongHashMap.put(clusterPosition, entryPointer);
       if (result == -1) {
         memory.free(dataPointer);
         memory.free(entryPointer);
@@ -90,18 +101,34 @@ public class ORecordMemoryCache {
     return true;
   }
 
-  public synchronized byte[] get(int clusterId) {
-    final int existingEntryPointer = memoryIntHashMap.get(clusterId);
+  public synchronized long getEvictionSize() {
+    return evictionSize;
+  }
+
+  public synchronized void setEvictionSize(long evictionSize) {
+    this.evictionSize = evictionSize;
+  }
+
+  public synchronized int getDefaultEvictionPercent() {
+    return defaultEvictionPercent;
+  }
+
+  public synchronized void setDefaultEvictionPercent(int defaultEvictionPercent) {
+    this.defaultEvictionPercent = defaultEvictionPercent;
+  }
+
+  public synchronized byte[] get(long clusterPosition) {
+    final int existingEntryPointer = memoryLongHashMap.get(clusterPosition);
     if (existingEntryPointer == OMemory.NULL_POINTER)
       return null;
 
-    updateItemInLRU(existingEntryPointer);
+    updateEntryInLRU(existingEntryPointer);
 
     return getData(getDataPointer(existingEntryPointer));
   }
 
-  public synchronized boolean remove(int clusterId) {
-    final int removedDataPointer = memoryIntHashMap.remove(clusterId);
+  public synchronized boolean remove(long clusterPosition) {
+    final int removedDataPointer = memoryLongHashMap.remove(clusterPosition);
     if (removedDataPointer == OMemory.NULL_POINTER)
       return false;
 
@@ -144,7 +171,7 @@ public class ORecordMemoryCache {
     }
   }
 
-  private void updateItemInLRU(final int pointer) {
+  private void updateEntryInLRU(final int pointer) {
     if (pointer == lruHeader)
       return;
 
@@ -211,13 +238,13 @@ public class ORecordMemoryCache {
     return memory.get(pointer, OIntegerSerializer.INT_SIZE, dataLength);
   }
 
-  private int storeEntry(int clusterId, int dataPointer, RecordState recordState, int dataSegmentId) {
+  private int storeEntry(long clusterPosition, int dataPointer, RecordState recordState, int dataSegmentId) {
     final int entryPointer = memory.allocate(ENTRY_SIZE);
 
     if (entryPointer == OMemory.NULL_POINTER)
       return OMemory.NULL_POINTER;
 
-    memory.setInt(entryPointer, CLUSTER_ID_OFFSET, clusterId);
+    memory.setLong(entryPointer, CLUSTER_POSITION_OFFSET, clusterPosition);
     memory.setInt(entryPointer, NEXT_POINTER_OFFSET, OMemory.NULL_POINTER);
     memory.setInt(entryPointer, PREV_POINTER_OFFSET, OMemory.NULL_POINTER);
     memory.setInt(entryPointer, DATA_POINTER_OFFSET, dataPointer);
@@ -240,8 +267,8 @@ public class ORecordMemoryCache {
     setPrevLRUPointer(nextPointer, pointer);
   }
 
-  private int getClusterId(int pointer) {
-    return memory.getInt(pointer, CLUSTER_ID_OFFSET);
+  private long getClusterPosition(int pointer) {
+    return memory.getLong(pointer, CLUSTER_POSITION_OFFSET);
   }
 
   private void setPrevLRUPointer(int pointer, int prevPointer) {
@@ -296,10 +323,10 @@ public class ORecordMemoryCache {
       final RecordState recordState = getRecordState(evictedItem);
 
       if (recordState != RecordState.SHARED)
-        flusher.flushRecord(getClusterId(evictedItem), getDataSegmentId(evictedItem), getData(getDataPointer(evictedItem)),
-            recordState);
+        flusher.flushRecord(clusterId, getClusterPosition(evictedItem), getDataSegmentId(evictedItem),
+            getData(getDataPointer(evictedItem)), recordState);
 
-      memoryIntHashMap.remove(getClusterId(evictedItem));
+      memoryLongHashMap.remove(getClusterPosition(evictedItem));
       evicted++;
       size--;
 
@@ -335,7 +362,7 @@ public class ORecordMemoryCache {
         continue;
       }
 
-      memoryIntHashMap.remove(getClusterId(evictedItem));
+      memoryLongHashMap.remove(getClusterPosition(evictedItem));
       evicted++;
       size--;
 

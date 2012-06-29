@@ -1,20 +1,21 @@
 package com.orientechnologies.orient.core.type.tree;
 
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLongSerializer;
 
 /**
  * @author LomakiA <a href="mailto:Andrey.Lomakin@exigenservices.com">Andrey Lomakin</a>
  * @since 23.06.12
  */
-public class OMemoryIntHashMap {
+public class OMemoryLongHashMap {
   private static final int   DEFAULT_INITIAL_CAPACITY = 128;
   private static final float DEFAULT_LOAD_FACTOR      = 0.8f;
 
-  private static final int   CLUSTER_ID_OFFSET        = 0;
-  private static final int   NEXT_OFFSET              = OIntegerSerializer.INT_SIZE;
-  private static final int   DATA_POINTER_OFFSET      = 2 * OIntegerSerializer.INT_SIZE;
+  private static final int   NEXT_OFFSET              = 0;
+  private static final int   CLUSTER_POSITION_OFFSET  = OIntegerSerializer.INT_SIZE;
+  private static final int   DATA_POINTER_OFFSET      = OIntegerSerializer.INT_SIZE + OLongSerializer.LONG_SIZE;
 
-  private static final int   ENTRY_SIZE               = 3 * OIntegerSerializer.INT_SIZE;
+  private static final int   ENTRY_SIZE               = 2 * OIntegerSerializer.INT_SIZE + OLongSerializer.LONG_SIZE;
 
   private float              loadFactor;
 
@@ -27,11 +28,11 @@ public class OMemoryIntHashMap {
 
   private final OMemory      memory;
 
-  public OMemoryIntHashMap(OMemory memory) {
+  public OMemoryLongHashMap(OMemory memory) {
     this(memory, DEFAULT_LOAD_FACTOR, DEFAULT_INITIAL_CAPACITY);
   }
 
-  public OMemoryIntHashMap(OMemory memory, float loadFactor, int initialCapacity) {
+  public OMemoryLongHashMap(OMemory memory, float loadFactor, int initialCapacity) {
     this.memory = memory;
     this.loadFactor = loadFactor;
 
@@ -42,17 +43,17 @@ public class OMemoryIntHashMap {
     init(cp);
   }
 
-  public int put(int clusterId, int dataPointer) {
-    int[] res = doGet(clusterId);
+  public int put(long clusterPosition, int dataPointer) {
+    int[] res = doGet(clusterPosition);
 
     if (res[0] == 0) {
-      final int entryPointer = storeEntry(clusterId, dataPointer);
+      final int entryPointer = storeEntry(clusterPosition, dataPointer);
 
       if (entryPointer == OMemory.NULL_POINTER)
         return -1;
 
       if (res[1] == OMemory.NULL_POINTER) {
-        final int index = index(clusterId);
+        final int index = index(clusterPosition);
         setEntryPointer(index, entryPointer);
       } else
         setNext(res[1], entryPointer);
@@ -67,22 +68,22 @@ public class OMemoryIntHashMap {
     return 1;
   }
 
-  public int get(int clusterId) {
-    int[] res = doGet(clusterId);
+  public int get(long clusterPosition) {
+    int[] res = doGet(clusterPosition);
     if (res[0] == 1)
       return getDataPointer(res[1]);
 
     return OMemory.NULL_POINTER;
   }
 
-  public int remove(int clusterId) {
-    final int index = index(clusterId);
+  public int remove(long clusterPosition) {
+    final int index = index(clusterPosition);
 
     int current = getEntryPointer(index);
     int prevCurrent = OMemory.NULL_POINTER;
 
     while (current != OMemory.NULL_POINTER) {
-      if (getClusterId(current) == clusterId) {
+      if (getClusterPosition(current) == clusterPosition) {
         final int dataPointer = getDataPointer(current);
 
         doRemove(index, prevCurrent, current);
@@ -116,14 +117,14 @@ public class OMemoryIntHashMap {
     memory.free(current);
   }
 
-  private int[] doGet(int clusterId) {
-    final int index = index(clusterId);
+  private int[] doGet(long clusterPosition) {
+    final int index = index(clusterPosition);
 
     int current = getEntryPointer(index);
     int prevCurrent = OMemory.NULL_POINTER;
 
     while (current != OMemory.NULL_POINTER) {
-      if (getClusterId(current) == clusterId)
+      if (getClusterPosition(current) == clusterPosition)
         return new int[] { 1, current };
 
       prevCurrent = current;
@@ -154,8 +155,8 @@ public class OMemoryIntHashMap {
     return true;
   }
 
-  private int index(int hashCode) {
-    return hashCode & (entriesLength - 1);
+  private int index(long value) {
+    return ((int) (value ^ (value >>> 32))) & (entriesLength - 1);
   }
 
   private void rehash() {
@@ -174,8 +175,8 @@ public class OMemoryIntHashMap {
       int oldCurrent = getOldEntryPointer(oldEntriesPointer, oldIndex);
 
       while (oldCurrent != OMemory.NULL_POINTER) {
-        final int oldClusterId = getClusterId(oldCurrent);
-        final int newIndex = index(oldClusterId);
+        final long oldClusterPosition = getClusterPosition(oldCurrent);
+        final int newIndex = index(oldClusterPosition);
 
         int current = getEntryPointer(newIndex);
 
@@ -196,8 +197,8 @@ public class OMemoryIntHashMap {
     }
   }
 
-  private int getClusterId(int pointer) {
-    return memory.getInt(pointer, CLUSTER_ID_OFFSET);
+  private long getClusterPosition(int pointer) {
+    return memory.getLong(pointer, CLUSTER_POSITION_OFFSET);
   }
 
   private int getNext(int pointer) {
@@ -216,14 +217,14 @@ public class OMemoryIntHashMap {
     memory.setInt(pointer, DATA_POINTER_OFFSET, dataPointer);
   }
 
-  private int storeEntry(int clusterId, int dataPointer) {
+  private int storeEntry(long clusterPosition, int dataPointer) {
     final int pointer = memory.allocate(ENTRY_SIZE);
 
     if (pointer == OMemory.NULL_POINTER)
       return OMemory.NULL_POINTER;
 
     memory.setInt(pointer, NEXT_OFFSET, OMemory.NULL_POINTER);
-    memory.setInt(pointer, CLUSTER_ID_OFFSET, clusterId);
+    memory.setLong(pointer, CLUSTER_POSITION_OFFSET, clusterPosition);
     memory.setInt(pointer, DATA_POINTER_OFFSET, dataPointer);
 
     return pointer;
