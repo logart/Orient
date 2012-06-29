@@ -13,16 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.orientechnologies.orient.core.command;
+package com.orientechnologies.orient.server.distributed;
 
 /**
- * SQL Command to parse.
+ * Exception thrown during distributed operation and the server is not ready to execute an operation because it's not online.
  * 
- * @author Luca Garulli
+ * @author Luca Garulli (l.garulli--at--orientechnologies.com)
  * 
  */
-public class OCommandToParse {
-	public String	text;
-	public String	textUpperCase;
-	public int		currentPos	= 0;
+public class OServerOfflineException extends ODistributedException {
+  private static final long serialVersionUID = 1L;
+
+  public OServerOfflineException() {
+  }
+
+  public OServerOfflineException(String message, Throwable cause) {
+    super(message, cause);
+  }
+
+  public OServerOfflineException(String message) {
+    super(message);
+  }
+
+  public OServerOfflineException(Throwable cause) {
+    super(cause);
+  }
 }

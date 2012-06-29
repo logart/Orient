@@ -16,6 +16,7 @@
 package com.orientechnologies.orient.core.serialization.serializer;
 
 import java.io.IOException;
+import java.io.StringWriter;
 import java.io.Writer;
 import java.lang.reflect.Array;
 import java.text.SimpleDateFormat;
@@ -25,6 +26,8 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import com.orientechnologies.common.log.OLogManager;
+import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.db.record.ORecordLazyMultiValue;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.record.ORecord;
@@ -118,8 +121,11 @@ public class OJSONWriter {
 
     format(iIdentLevel, iNewLine);
 
-    out.append(writeValue(iName));
-    out.append(": [");
+    if (iName != null && !iName.isEmpty()) {
+      out.append(writeValue(iName));
+      out.append(": ");
+    }
+    out.append("[");
 
     firstAttribute = true;
     return this;
@@ -320,6 +326,33 @@ public class OJSONWriter {
       return OStringSerializerHelper.java2unicode(((String) iValue).replace("\\", "\\\\").replace("\"", "\\\""));
     } else
       return iValue;
+  }
+
+  public static String listToJSON(Collection<? extends OIdentifiable> iRecords) throws IOException {
+    final StringWriter buffer = new StringWriter();
+    final OJSONWriter json = new OJSONWriter(buffer);
+    // WRITE RECORDS
+    json.beginCollection(0, false, null);
+    if (iRecords != null) {
+      int counter = 0;
+      String objectJson;
+      for (OIdentifiable rec : iRecords) {
+        if (rec != null)
+          try {
+            objectJson = rec.getRecord().toJSON();
+
+            if (counter++ > 0)
+              buffer.append(", ");
+
+            buffer.append(objectJson);
+          } catch (Exception e) {
+            OLogManager.instance().error(json, "Error transforming record " + rec.getIdentity() + " to JSON", e);
+          }
+      }
+    }
+    json.endCollection(0, false);
+
+    return buffer.toString();
   }
 
   public void newline() throws IOException {

@@ -15,6 +15,10 @@
  */
 package com.orientechnologies.orient.client.db;
 
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+
 import com.orientechnologies.common.parser.OSystemVariableResolver;
 import com.orientechnologies.orient.client.remote.OEngineRemote;
 import com.orientechnologies.orient.client.remote.OServerAdmin;
@@ -22,10 +26,6 @@ import com.orientechnologies.orient.core.OConstants;
 import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.db.ODatabase;
 import com.orientechnologies.orient.core.exception.OConfigurationException;
-
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
 
 public class ODatabaseHelper {
   public static void createDatabase(ODatabase database, final String iURL) throws IOException {
@@ -82,6 +82,8 @@ public class ODatabaseHelper {
     // LOAD SERVER CONFIG FILE TO EXTRACT THE ROOT'S PASSWORD
     File file = new File("../releases/orientdb-" + OConstants.ORIENT_VERSION + "/config/orientdb-server-config.xml");
     if (!file.exists())
+      file = new File("../../releases/orientdb-" + OConstants.ORIENT_VERSION + "/config/orientdb-server-config.xml");
+    if (!file.exists())
       file = new File(iDirectory + "/config/orientdb-server-config.xml");
     if (!file.exists())
       file = new File("../" + iDirectory + "/config/orientdb-server-config.xml");
@@ -89,7 +91,9 @@ public class ODatabaseHelper {
       file = new File(OSystemVariableResolver.resolveSystemVariables("${" + Orient.ORIENTDB_HOME
           + "}/config/orientdb-server-config.xml"));
     if (!file.exists())
-      throw new OConfigurationException("Cannot load file orientdb-server-config.xml to execute remote tests");
+      throw new OConfigurationException(
+          "Cannot load file orientdb-server-config.xml to execute remote tests. Current directory is "
+              + new File(".").getAbsolutePath());
 
     FileReader f = new FileReader(file);
     final char[] buffer = new char[(int) file.length()];

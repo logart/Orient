@@ -15,7 +15,7 @@
  */
 package com.orientechnologies.orient.core.sql.filter;
 
-import com.orientechnologies.orient.core.command.OCommandToParse;
+import com.orientechnologies.common.parser.OBaseParser;
 import com.orientechnologies.orient.core.serialization.serializer.OStringSerializerHelper;
 
 /**
@@ -25,19 +25,19 @@ import com.orientechnologies.orient.core.serialization.serializer.OStringSeriali
  * 
  */
 public class OSQLFilterItemFieldAll extends OSQLFilterItemFieldMultiAbstract {
-	public static final String	NAME			= "ALL";
-	public static final String	FULL_NAME	= "ALL()";
+  public static final String NAME      = "ALL";
+  public static final String FULL_NAME = "ALL()";
 
   public OSQLFilterItemFieldAll(final OSQLPredicate iQueryCompiled, final String iName) {
-		super(iQueryCompiled, iName, OStringSerializerHelper.getParameters(iName));
-	}
+    super(iQueryCompiled, iName, OStringSerializerHelper.getParameters(iName));
+  }
 
-	@Override
-	public String getRoot() {
-		return FULL_NAME;
-	}
+  @Override
+  public String getRoot() {
+    return FULL_NAME;
+  }
 
-	@Override
-	protected void setRoot(final OCommandToParse iQueryToParse, final String iRoot) {
-	}
+  @Override
+  protected void setRoot(final OBaseParser iQueryToParse, final String iRoot) {
+  }
 }

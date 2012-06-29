@@ -37,14 +37,20 @@ public abstract class OCommandExecutorSQLAbstract extends OCommandExecutorAbstra
   public static final String CLASS_PREFIX   = "CLASS:";
   public static final String INDEX_PREFIX   = "INDEX:";
 
+  protected void throwSyntaxErrorException(final String iText) {
+    throw new OCommandSQLParsingException(iText + ". Use " + getSyntax(), text, parserGetPreviousPosition());
+  }
+
+  protected void throwParsingException(final String iText) {
+    throw new OCommandSQLParsingException(iText, text, parserGetPreviousPosition());
+  }
+
   @Override
   public OCommandExecutorSQLAbstract init(String iText) {
     iText = iText.trim();
     textUpperCase = iText.toUpperCase(Locale.ENGLISH);
     return (OCommandExecutorSQLAbstract) super.init(iText);
   }
-
-  public abstract String getSyntax();
 
   public boolean isIdempotent() {
     return false;

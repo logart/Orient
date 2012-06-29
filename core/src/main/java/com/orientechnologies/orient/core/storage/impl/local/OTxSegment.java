@@ -362,7 +362,7 @@ public class OTxSegment extends OSingleFileSegment {
 
     case OPERATION_DELETE:
       final ODataLocal dataSegment = storage.getDataSegmentById(dataSegmentId);
-      storage.createRecord(dataSegmentId, dataSegment, cluster, iRecordContent, iRecordType, iRid, iRecordVersion);
+      storage.createRecord(dataSegment, cluster, iRecordContent, iRecordType, iRid, iRecordVersion);
       break;
     }
   }

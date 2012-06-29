@@ -20,7 +20,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.orientechnologies.common.parser.OStringParser;
 import com.orientechnologies.orient.core.command.OCommandRequest;
 import com.orientechnologies.orient.core.command.OCommandRequestText;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
@@ -42,7 +41,6 @@ import com.orientechnologies.orient.core.serialization.serializer.OStringSeriali
 public class OCommandExecutorSQLInsert extends OCommandExecutorSQLSetAware {
   public static final String        KEYWORD_INSERT = "INSERT";
   private static final String       KEYWORD_VALUES = "VALUES";
-  private static final String       KEYWORD_INTO   = "INTO";
   private static final String       KEYWORD_SET    = "SET";
   private String                    className      = null;
   private String                    clusterName    = null;
@@ -59,23 +57,10 @@ public class OCommandExecutorSQLInsert extends OCommandExecutorSQLSetAware {
     className = null;
     newRecords = null;
 
-    StringBuilder word = new StringBuilder();
+    parserRequiredKeyword("INSERT");
+    parserRequiredKeyword("INTO");
 
-    int pos = OSQLHelper.nextWord(text, textUpperCase, 0, word, true);
-    if (pos == -1 || !word.toString().equals(OCommandExecutorSQLInsert.KEYWORD_INSERT))
-      throw new OCommandSQLParsingException("Keyword " + OCommandExecutorSQLInsert.KEYWORD_INSERT + " not found. Use "
-          + getSyntax(), text, 0);
-
-    pos = OSQLHelper.nextWord(text, textUpperCase, pos, word, true);
-    if (pos == -1 || !word.toString().equals(KEYWORD_INTO))
-      throw new OCommandSQLParsingException("Keyword " + KEYWORD_INTO + " not found. Use " + getSyntax(), text, 0);
-
-    pos = OSQLHelper.nextWord(text, textUpperCase, pos, word, true);
-    if (pos == -1)
-      throw new OCommandSQLParsingException("Invalid subject name. Expected cluster, class or index. Use " + getSyntax(), text, pos);
-
-    String subjectName = word.toString();
-
+    String subjectName = parserRequiredWord(true, "Invalid subject name. Expected cluster, class or index");
     if (subjectName.startsWith(OCommandExecutorSQLAbstract.CLUSTER_PREFIX))
       // CLUSTER
       clusterName = subjectName.substring(OCommandExecutorSQLAbstract.CLUSTER_PREFIX.length());
@@ -91,63 +76,63 @@ public class OCommandExecutorSQLInsert extends OCommandExecutorSQLSetAware {
 
       final OClass cls = database.getMetadata().getSchema().getClass(subjectName);
       if (cls == null)
-        throw new OCommandSQLParsingException("Class " + subjectName + " not found in database", text, pos);
+        throwParsingException("Class " + subjectName + " not found in database");
 
       className = cls.getName();
     }
 
-    final int beginFields = OStringParser.jumpWhiteSpaces(text, pos);
-    if (beginFields == -1 || (text.charAt(beginFields) != '(' && !text.startsWith(KEYWORD_SET, beginFields)))
-      throw new OCommandSQLParsingException("Set of fields is missed. Example: (name, surname) or SET name = 'Bill'. Use "
-          + getSyntax(), text, pos);
+    parserSkipWhiteSpaces();
+    if (parserIsEnded())
+      throwSyntaxErrorException("Set of fields is missed. Example: (name, surname) or SET name = 'Bill'");
 
     newRecords = new ArrayList<Map<String, Object>>();
-    if (text.charAt(beginFields) == '(') {
-      parseBracesFields(word, beginFields);
+    if (parserGetCurrentChar() == '(') {
+      parseBracesFields();
     } else {
       final LinkedHashMap<String, Object> fields = new LinkedHashMap<String, Object>();
       newRecords.add(fields);
-      pos = OSQLHelper.nextWord(text, textUpperCase, pos, word, true);
-      parseSetFields(word, pos, fields);
+
+      // ADVANCE THE SET KEYWORD
+      parseRequiredWord(false);
+
+      parseSetFields(fields);
     }
 
     return this;
   }
 
-  protected void parseBracesFields(StringBuilder word, final int beginFields) {
-    int pos;
+  protected void parseBracesFields() {
+    final int beginFields = parserGetCurrentPosition();
+
     final int endFields = text.indexOf(')', beginFields + 1);
     if (endFields == -1)
-      throw new OCommandSQLParsingException("Missed closed brace. Use " + getSyntax(), text, beginFields);
+      throwSyntaxErrorException("Missed closed brace");
 
     final ArrayList<String> fieldNames = new ArrayList<String>();
-    OStringSerializerHelper.getParameters(text, beginFields, endFields, fieldNames);
+    parserSetCurrentPosition(OStringSerializerHelper.getParameters(text, beginFields, endFields, fieldNames));
     if (fieldNames.size() == 0)
-      throw new OCommandSQLParsingException("Set of fields is empty. Example: (name, surname). Use " + getSyntax(), text, endFields);
+      throwSyntaxErrorException("Set of fields is empty. Example: (name, surname)");
 
     // REMOVE QUOTATION MARKS IF ANY
     for (int i = 0; i < fieldNames.size(); ++i)
       fieldNames.set(i, OStringSerializerHelper.removeQuotationMarks(fieldNames.get(i)));
 
-    pos = OSQLHelper.nextWord(text, textUpperCase, endFields + 1, word, true);
-    if (pos == -1 || !word.toString().equals(KEYWORD_VALUES))
-      throw new OCommandSQLParsingException("Missed VALUES keyword. Use " + getSyntax(), text, endFields);
-
-    int beginValues = OStringParser.jumpWhiteSpaces(text, pos);
-    if (pos == -1 || text.charAt(beginValues) != '(') {
-      throw new OCommandSQLParsingException("Set of values is missed. Example: ('Bill', 'Stuart', 300). Use " + getSyntax(), text,
-          pos);
+    parserRequiredKeyword(KEYWORD_VALUES);
+    parserSkipWhiteSpaces();
+    if (parserIsEnded() || text.charAt(parserGetCurrentPosition()) != '(') {
+      throwParsingException("Set of values is missed. Example: ('Bill', 'Stuart', 300)");
     }
 
     final int textEnd = text.lastIndexOf(')');
 
-    int blockStart = beginValues;
-    int blockEnd = beginValues;
+    int blockStart = parserGetCurrentPosition();
+    int blockEnd = parserGetCurrentPosition();
+
     while (blockStart != textEnd) {
-      // skip coma between records
+      // skip comma between records
       blockStart = text.indexOf('(', blockStart - 1);
 
-      blockEnd = findRecordEnd(text, '(', ')', blockStart);
+      blockEnd = OStringSerializerHelper.findEndBlock(text, '(', ')', blockStart);
       if (blockEnd == -1)
         throw new OCommandSQLParsingException("Missed closed brace. Use " + getSyntax(), text, blockStart);
 
@@ -171,50 +156,6 @@ public class OCommandExecutorSQLInsert extends OCommandExecutorSQLSetAware {
       blockStart = blockEnd;
     }
 
-  }
-
-  /**
-   * Find closing character, skips text elements.
-   */
-  private static final int findRecordEnd(String candidate, char start, char end, int startIndex) {
-    int inc = 0;
-
-    for (int i = startIndex; i < candidate.length(); i++) {
-      char c = candidate.charAt(i);
-      if (c == '\'') {
-        // skip to text end
-        int tend = i;
-        while (true) {
-          tend = candidate.indexOf('\'', tend + 1);
-          if (tend < 0) {
-            throw new OCommandSQLParsingException("Could not find end of text area.");
-          }
-
-          if (candidate.charAt(tend - 1) == '\\') {
-            // inner quote, skip it
-            continue;
-          } else {
-            break;
-          }
-        }
-        i = tend;
-        continue;
-      }
-
-      if (c != start && c != end)
-        continue;
-
-      if (c == start) {
-        inc++;
-      } else if (c == end) {
-        inc--;
-        if (inc == 0) {
-          return i;
-        }
-      }
-    }
-
-    return -1;
   }
 
   /**

@@ -153,6 +153,8 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
       for (int i = 0; i < configuration.dataSegments.size(); ++i) {
         final OStorageDataConfiguration dataConfig = configuration.dataSegments.get(i);
 
+        if (dataConfig == null)
+          continue;
         pos = registerDataSegment(dataConfig);
         if (pos == -1) {
           // CLOSE AND REOPEN TO BE SURE ALL THE FILE SEGMENTS ARE
@@ -704,9 +706,7 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
     lock.acquireExclusiveLock();
     try {
 
-      final OStorageDataConfiguration conf = new OStorageDataConfiguration(configuration, iSegmentName,
-          configuration.dataSegments.size(), iDirectory);
-      configuration.dataSegments.add(conf);
+      final OStorageDataConfiguration conf = new OStorageDataConfiguration(configuration, iSegmentName, -1, iDirectory);
 
       final int pos = registerDataSegment(conf);
 
@@ -715,6 +715,13 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
             + "'");
 
       dataSegments[pos].create(-1);
+
+      // UPDATE CONFIGURATION
+      conf.id = pos;
+      if (pos == configuration.dataSegments.size())
+        configuration.dataSegments.add(conf);
+      else
+        configuration.dataSegments.set(pos, conf);
       configuration.update();
 
       return pos;
@@ -896,7 +903,7 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
     }
   }
 
-  public OPhysicalPosition createRecord(int iDataSegmentId, final ORecordId iRid, final byte[] iContent, int iRecordVersion,
+  public OPhysicalPosition createRecord(int iDataSegmentId, final ORecordId iRid, final byte[] iContent, final int iRecordVersion,
       final byte iRecordType, final int iMode, ORecordCallback<Long> iCallback) {
     checkOpeness();
 
@@ -909,7 +916,7 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
           iRecordVersion, iRecordType, iDataSegmentId);
       iRid.clusterPosition = ppos.clusterPosition;
     } else {
-      ppos = createRecord(iDataSegmentId, dataSegment, cluster, iContent, iRecordType, iRid, iRecordVersion);
+      ppos = createRecord(dataSegment, cluster, iContent, iRecordType, iRid, iRecordVersion);
 
       if (OGlobalConfiguration.NON_TX_RECORD_UPDATE_SYNCH.getValueAsBoolean())
         synchRecordUpdate(cluster, ppos);
@@ -1419,8 +1426,8 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
       throw new IllegalArgumentException("Cluster segment #" + iClusterId + " does not exist in storage '" + name + "'");
   }
 
-  protected OPhysicalPosition createRecord(int dataSegmentId, final ODataLocal iDataSegment, final OCluster iClusterSegment,
-      final byte[] iContent, final byte iRecordType, final ORecordId iRid, int recordVersion) {
+  protected OPhysicalPosition createRecord(final ODataLocal iDataSegment, final OCluster iClusterSegment, final byte[] iContent,
+      final byte iRecordType, final ORecordId iRid, final int iRecordVersion) {
     checkOpeness();
 
     if (iContent == null)
@@ -1442,9 +1449,9 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
           if (recordMemoryCache.isScheduleEviction())
             recordMemoryCache.evict(this);
 
-          if (!recordMemoryCache.put(dataSegmentId, iRid.clusterId, iContent, ORecordMemoryCache.RecordState.NEW)) {
+          if (!recordMemoryCache.put(iDataSegment.getId(), iRid.clusterId, iContent, ORecordMemoryCache.RecordState.NEW)) {
             recordMemoryCache.evict(this);
-            recordMemoryCache.put(dataSegmentId, iRid.clusterId, iContent, ORecordMemoryCache.RecordState.NEW);
+            recordMemoryCache.put(iDataSegment.getId(), iRid.clusterId, iContent, ORecordMemoryCache.RecordState.NEW);
           }
 
           return ppos;
@@ -1456,9 +1463,10 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
         // UPDATE THE POSITION IN CLUSTER WITH THE POSITION OF RECORD IN DATA
         iClusterSegment.updateDataSegmentPosition(ppos.clusterPosition, ppos.dataSegmentId, ppos.dataSegmentPos);
 
-        if (recordVersion != 0) {
+        if (iRecordVersion > -1 && iRecordVersion > ppos.recordVersion) {
           // OVERWRITE THE VERSION
-          iClusterSegment.updateVersion(iRid.clusterPosition, recordVersion);
+          iClusterSegment.updateVersion(iRid.clusterPosition, iRecordVersion);
+          ppos.recordVersion = iRecordVersion;
         }
 
         return ppos;
@@ -1563,9 +1571,8 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
 
         // UPDATE IT
         final OPhysicalPosition ppos = iClusterSegment.getPhysicalPosition(new OPhysicalPosition(iRid.clusterPosition));
-        if (!checkForRecordValidity(ppos)) {
+        if (!checkForRecordValidity(ppos))
           return null;
-        }
 
         // VERSION CONTROL CHECK
         switch (iVersion) {
