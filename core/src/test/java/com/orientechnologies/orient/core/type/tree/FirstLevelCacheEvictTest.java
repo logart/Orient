@@ -1,7 +1,6 @@
 package com.orientechnologies.orient.core.type.tree;
 
-import junit.framework.Assert;
-
+import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -34,7 +33,7 @@ public class FirstLevelCacheEvictTest {
 
     Assert.assertEquals(7, firstLevelCache.size());
     for (int i = 99; i >= 93; i--)
-      Assert.assertEquals(i + " -key is absent", createCacheEntry(i), firstLevelCache.remove(i));
+      Assert.assertEquals(createCacheEntry(i), firstLevelCache.remove(i));
 
     Assert.assertEquals(0, firstLevelCache.size());
     Assert.assertEquals(memory.capacity(), memory.freeSpace());
@@ -54,9 +53,9 @@ public class FirstLevelCacheEvictTest {
 
     Assert.assertEquals(7, firstLevelCache.size());
     for (int i = 5; i >= 0; i--)
-      Assert.assertEquals(i + " -key is absent", createCacheEntry(i), firstLevelCache.remove(i));
+      Assert.assertEquals(createCacheEntry(i), firstLevelCache.remove(i));
 
-    Assert.assertEquals("9 -key is absent", createCacheEntry(9), firstLevelCache.remove(9));
+    Assert.assertEquals(createCacheEntry(9), firstLevelCache.remove(9));
 
     Assert.assertEquals(0, firstLevelCache.size());
     Assert.assertEquals(memory.capacity(), memory.freeSpace());
@@ -91,10 +90,10 @@ public class FirstLevelCacheEvictTest {
     Assert.assertEquals(7, firstLevelCache.size());
 
     for (int i = 0; i < 3; i++)
-      Assert.assertEquals(i + " -key is absent", createCacheEntry(i), firstLevelCache.remove(i));
+      Assert.assertEquals(createCacheEntry(i), firstLevelCache.remove(i));
 
     for (int i = 99; i >= 96; i--)
-      Assert.assertEquals(i + " -key is absent", createCacheEntry(i), firstLevelCache.remove(i));
+      Assert.assertEquals(createCacheEntry(i), firstLevelCache.remove(i));
 
     Assert.assertEquals(0, firstLevelCache.size());
     Assert.assertEquals(memory.capacity(), memory.freeSpace());
@@ -114,9 +113,9 @@ public class FirstLevelCacheEvictTest {
 
     Assert.assertEquals(7, firstLevelCache.size());
     for (int i = 5; i >= 0; i--)
-      Assert.assertEquals(i + " -key is absent", createCacheEntry(i), firstLevelCache.remove(i));
+      Assert.assertEquals(createCacheEntry(i), firstLevelCache.remove(i));
 
-    Assert.assertEquals("9 -key is absent", createCacheEntry(9), firstLevelCache.remove(9));
+    Assert.assertEquals(createCacheEntry(9), firstLevelCache.remove(9));
 
     Assert.assertEquals(0, firstLevelCache.size());
     Assert.assertEquals(memory.capacity(), memory.freeSpace());
@@ -136,9 +135,9 @@ public class FirstLevelCacheEvictTest {
 
     Assert.assertEquals(7, firstLevelCache.size());
     for (int i = 5; i >= 0; i--)
-      Assert.assertEquals(i + " -key is absent", createCacheEntry(i), firstLevelCache.remove(i));
+      Assert.assertEquals(createCacheEntry(i), firstLevelCache.remove(i));
 
-    Assert.assertEquals("9 -key is absent", createCacheEntry(9), firstLevelCache.remove(9));
+    Assert.assertEquals(createCacheEntry(9), firstLevelCache.remove(9));
 
     Assert.assertEquals(0, firstLevelCache.size());
     Assert.assertEquals(memory.capacity(), memory.freeSpace());
@@ -158,9 +157,9 @@ public class FirstLevelCacheEvictTest {
 
     Assert.assertEquals(7, firstLevelCache.size());
     for (int i = 5; i >= 0; i--)
-      Assert.assertEquals(i + " -key is absent", createUpdateCacheEntry(i), firstLevelCache.remove(i));
+      Assert.assertEquals(createUpdateCacheEntry(i), firstLevelCache.remove(i));
 
-    Assert.assertEquals("9 -key is absent", createCacheEntry(9), firstLevelCache.remove(9));
+    Assert.assertEquals(createCacheEntry(9), firstLevelCache.remove(9));
 
     Assert.assertEquals(0, firstLevelCache.size());
     Assert.assertEquals(memory.capacity(), memory.freeSpace());

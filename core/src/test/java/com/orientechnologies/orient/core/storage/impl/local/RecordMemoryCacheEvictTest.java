@@ -78,11 +78,7 @@ public class RecordMemoryCacheEvictTest {
       recordMemoryCache.get(i);
 
     if (!recordMemoryCache.put(1, 10, new byte[] { 1 }, ORecordMemoryCache.RecordState.NEW))
-      recordMemoryCache.evict(new ORecordMemoryCacheFlusher() {
-        public void flushRecord(int clusterId, long clusterPosition, int dataSegmentId, byte[] content,
-            ORecordMemoryCache.RecordState recordState) {
-        }
-      });
+      recordMemoryCache.evict(new ORecordMemoryCacheFlusherStub());
 
     Assert.assertEquals(7, recordMemoryCache.size());
 
@@ -144,6 +140,75 @@ public class RecordMemoryCacheEvictTest {
       Assert.assertTrue(recordMemoryCache.remove(i));
 
     Assert.assertEquals(recordMemoryCache.size(), 0);
+    Assert.assertEquals(beforeMemory, memory.freeSpace());
+  }
+
+  public void testAdd10RemainFirst6Update() {
+    recordMemoryCache.setEvictionSize(10);
+    recordMemoryCache.setDefaultEvictionPercent(30);
+
+    final int beforeMemory = memory.freeSpace();
+    for (int i = 0; i < 10; i++)
+      if (!recordMemoryCache.put(1, i, new byte[] { 1 }, ORecordMemoryCache.RecordState.NEW)) {
+        recordMemoryCache.evict(new ORecordMemoryCacheFlusherStub());
+        recordMemoryCache.put(1, i, new byte[] { 1 }, ORecordMemoryCache.RecordState.NEW);
+      }
+
+    for (int i = 0; i < 7; i++)
+      if (!recordMemoryCache.put(1, i, new byte[] { 1 }, ORecordMemoryCache.RecordState.MODIFIED)) {
+        recordMemoryCache.evict(new ORecordMemoryCacheFlusherStub());
+        recordMemoryCache.put(1, i, new byte[] { 1 }, ORecordMemoryCache.RecordState.MODIFIED);
+      }
+
+    if (!recordMemoryCache.put(1, 10, new byte[] { 1 }, ORecordMemoryCache.RecordState.NEW)) {
+      recordMemoryCache.evict(new ORecordMemoryCacheFlusherStub());
+      recordMemoryCache.put(1, 10, new byte[] { 1 }, ORecordMemoryCache.RecordState.NEW);
+    }
+
+    Assert.assertEquals(recordMemoryCache.size(), 8);
+    for (int i = 6; i >= 0; i--)
+      Assert.assertTrue(recordMemoryCache.remove(i));
+
+    Assert.assertTrue(recordMemoryCache.remove(10));
+
+    Assert.assertEquals(0, recordMemoryCache.size());
+    Assert.assertEquals(beforeMemory, memory.freeSpace());
+  }
+
+  public void testAdd10RemainLast8OnlySharedTest() {
+    recordMemoryCache.setEvictionSize(10);
+    recordMemoryCache.setDefaultEvictionPercent(30);
+
+    final int beforeMemory = memory.freeSpace();
+
+    for (int i = 0; i < 2; i++)
+      if (!recordMemoryCache.put(1, i, new byte[] { 1 }, ORecordMemoryCache.RecordState.SHARED)) {
+        recordMemoryCache.evict(new ORecordMemoryCacheFlusherStub());
+        recordMemoryCache.put(1, i, new byte[] { 1 }, ORecordMemoryCache.RecordState.SHARED);
+      }
+
+    if (!recordMemoryCache.put(1, 2, new byte[] { 1 }, ORecordMemoryCache.RecordState.NEW)) {
+      recordMemoryCache.evict(new ORecordMemoryCacheFlusherStub());
+      recordMemoryCache.put(1, 2, new byte[] { 1 }, ORecordMemoryCache.RecordState.NEW);
+    }
+
+    for (int i = 3; i < 10; i++)
+      if (!recordMemoryCache.put(1, i, new byte[] { 1 }, ORecordMemoryCache.RecordState.SHARED)) {
+        recordMemoryCache.evict(new ORecordMemoryCacheFlusherStub());
+        recordMemoryCache.put(1, i, new byte[] { 1 }, ORecordMemoryCache.RecordState.SHARED);
+      }
+
+    if (!recordMemoryCache.put(1, 11, new byte[] { 1 }, ORecordMemoryCache.RecordState.SHARED))
+      recordMemoryCache.evictSharedRecordsOnly();
+
+    Assert.assertEquals(recordMemoryCache.size(), 7);
+
+    Assert.assertTrue(recordMemoryCache.remove(2));
+
+    for (int i = 4; i < 10; i++)
+      Assert.assertTrue(recordMemoryCache.remove(i));
+
+    Assert.assertEquals(0, recordMemoryCache.size());
     Assert.assertEquals(beforeMemory, memory.freeSpace());
   }
 

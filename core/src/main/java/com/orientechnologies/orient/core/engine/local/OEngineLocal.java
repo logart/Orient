@@ -24,27 +24,26 @@ import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.impl.local.OStorageLocal;
 
 public class OEngineLocal extends OEngineAbstract {
+  public static final String NAME = "local";
 
-	public static final String	NAME	= "local";
+  public OStorage createStorage(final String iDbName, final Map<String, String> iConfiguration) {
+    try {
+      // GET THE STORAGE
+      return new OStorageLocal(iDbName, iDbName, getMode(iConfiguration));
 
-	public OStorage createStorage(final String iDbName, final Map<String, String> iConfiguration) {
-		try {
-			// GET THE STORAGE
-			return new OStorageLocal(iDbName, iDbName, getMode(iConfiguration));
+    } catch (Throwable t) {
+      OLogManager.instance().error(this,
+          "Error on opening database: " + iDbName + ". Current location is: " + new java.io.File(".").getAbsolutePath(), t,
+          ODatabaseException.class);
+    }
+    return null;
+  }
 
-		} catch (Throwable t) {
-			OLogManager.instance().error(this,
-					"Error on opening database: " + iDbName + ". Current location is: " + new java.io.File(".").getAbsolutePath(), t,
-					ODatabaseException.class);
-		}
-		return null;
-	}
+  public String getName() {
+    return NAME;
+  }
 
-	public String getName() {
-		return NAME;
-	}
-
-	public boolean isShared() {
-		return true;
-	}
+  public boolean isShared() {
+    return true;
+  }
 }

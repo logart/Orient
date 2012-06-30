@@ -36,8 +36,6 @@ public class ORecordMemoryCache {
   private long                     size                    = 0;
   private long                     evictionSize            = -1;
 
-  private volatile boolean         scheduleEviction        = true;
-
   public enum RecordState {
     SHARED, MODIFIED, NEW
   }
@@ -50,14 +48,16 @@ public class ORecordMemoryCache {
 
   public synchronized boolean put(int dataSegmentId, long clusterPosition, byte[] content, RecordState recordState) {
 
-    if (evictionSize > 0 && size >= evictionSize)
+    final int existingEntryPointer = memoryLongHashMap.get(clusterPosition);
+
+    if (existingEntryPointer == OMemory.NULL_POINTER && evictionSize > 0 && size >= evictionSize)
       return false;
 
-    final int existingEntryPointer = memoryLongHashMap.get(clusterPosition);
     if (existingEntryPointer != OMemory.NULL_POINTER) {
       final RecordState existingRecordState = getRecordState(existingEntryPointer);
 
       checkRecordStateChange(existingRecordState, recordState);
+      recordState = updateStateIfNeeded(existingRecordState, recordState);
     }
 
     final int dataPointer = storeData(content);
@@ -307,6 +307,13 @@ public class ORecordMemoryCache {
     return memory.getInt(pointer, DATA_POINTER_OFFSET);
   }
 
+  private RecordState updateStateIfNeeded(RecordState oldRecordState, RecordState newRecordState) {
+    if (oldRecordState == RecordState.NEW)
+      return RecordState.NEW;
+
+    return newRecordState;
+  }
+
   public synchronized boolean evict(final ORecordMemoryCacheFlusher flusher) {
     long evictionSize = (size * defaultEvictionPercent) / 100;
     if (evictionSize == 0)
@@ -314,7 +321,6 @@ public class ORecordMemoryCache {
 
     int evicted = 0;
     int currentVictim = lruTail;
-    scheduleEviction = false;
 
     while (currentVictim != OMemory.NULL_POINTER && evicted < evictionSize) {
       int evictedItem = currentVictim;
@@ -349,8 +355,6 @@ public class ORecordMemoryCache {
 
     int evicted = 0;
     int currentVictim = lruTail;
-    scheduleEviction = false;
-
     while (currentVictim != OMemory.NULL_POINTER && evicted < evictionSize) {
       int evictedItem = currentVictim;
       currentVictim = getPrevLRUPointer(evictedItem);
@@ -358,7 +362,6 @@ public class ORecordMemoryCache {
       final RecordState recordState = getRecordState(evictedItem);
 
       if (recordState != RecordState.SHARED) {
-        scheduleEviction = true;
         continue;
       }
 
@@ -368,17 +371,12 @@ public class ORecordMemoryCache {
 
       memory.free(getDataPointer(evictedItem));
       memory.free(evictedItem);
-
     }
 
     lruTail = currentVictim;
     if (lruTail != OMemory.NULL_POINTER)
       setNextLRUPointer(lruTail, OMemory.NULL_POINTER);
 
-    return true;
-  }
-
-  public boolean isScheduleEviction() {
-    return scheduleEviction;
+    return evicted > 0;
   }
 }

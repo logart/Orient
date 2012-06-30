@@ -1444,16 +1444,18 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
 
       lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
       try {
+        if (iRecordVersion > -1 && iRecordVersion > ppos.recordVersion) {
+          // OVERWRITE THE VERSION
+          iClusterSegment.updateVersion(iRid.clusterPosition, iRecordVersion);
+          ppos.recordVersion = iRecordVersion;
+        }
+
         final ORecordMemoryCache recordMemoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
         if (recordMemoryCache != null) {
-          if (recordMemoryCache.isScheduleEviction())
-            recordMemoryCache.evict(this);
-
           if (!recordMemoryCache.put(iDataSegment.getId(), iRid.clusterPosition, iContent, ORecordMemoryCache.RecordState.NEW)) {
             recordMemoryCache.evict(this);
             recordMemoryCache.put(iDataSegment.getId(), iRid.clusterPosition, iContent, ORecordMemoryCache.RecordState.NEW);
           }
-
           return ppos;
         }
 
@@ -1462,13 +1464,6 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
 
         // UPDATE THE POSITION IN CLUSTER WITH THE POSITION OF RECORD IN DATA
         iClusterSegment.updateDataSegmentPosition(ppos.clusterPosition, ppos.dataSegmentId, ppos.dataSegmentPos);
-
-        if (iRecordVersion > -1 && iRecordVersion > ppos.recordVersion) {
-          // OVERWRITE THE VERSION
-          iClusterSegment.updateVersion(iRid.clusterPosition, iRecordVersion);
-          ppos.recordVersion = iRecordVersion;
-        }
-
         return ppos;
       } finally {
         lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
@@ -1608,11 +1603,11 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
 
         }
 
+        if (ppos.recordType != iRecordType)
+          iClusterSegment.updateRecordType(iRid.clusterPosition, iRecordType);
+
         final ORecordMemoryCache recordMemoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
         if (recordMemoryCache != null) {
-          if (recordMemoryCache.isScheduleEviction())
-            recordMemoryCache.evict(this);
-
           if (!recordMemoryCache.put(ppos.dataSegmentId, iRid.clusterPosition, iContent, RecordState.MODIFIED)) {
             recordMemoryCache.evict(this);
             recordMemoryCache.put(ppos.dataSegmentId, iRid.clusterPosition, iContent, RecordState.MODIFIED);
@@ -1620,9 +1615,6 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
 
           return ppos;
         }
-
-        if (ppos.recordType != iRecordType)
-          iClusterSegment.updateRecordType(iRid.clusterPosition, iRecordType);
 
         final long newDataSegmentOffset;
 
@@ -1683,12 +1675,8 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
                   + ppos.recordVersion + " your=v" + iVersion + ")", iRid, ppos.recordVersion, iVersion);
 
         final ORecordMemoryCache memoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
-        if (memoryCache != null) {
+        if (memoryCache != null)
           memoryCache.remove(iRid.clusterPosition);
-
-          if (memoryCache.isScheduleEviction())
-            memoryCache.evict(this);
-        }
 
         if (ppos.dataSegmentPos > -1)
           getDataSegmentById(ppos.dataSegmentId).deleteRecord(ppos.dataSegmentPos);

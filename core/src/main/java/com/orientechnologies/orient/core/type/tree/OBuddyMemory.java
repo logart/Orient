@@ -187,12 +187,12 @@ public class OBuddyMemory implements OMemory {
   }
 
   public byte getByte(int pointer, int offset) {
-    int index = offset + SYSTEM_INFO_SIZE;
+    int index = pointer + offset + SYSTEM_INFO_SIZE;
     return buffer[index];
   }
 
   public void setByte(int pointer, int offset, byte value) {
-    int index = offset + SYSTEM_INFO_SIZE;
+    int index = pointer + offset + SYSTEM_INFO_SIZE;
     buffer[index] = value;
   }
 
