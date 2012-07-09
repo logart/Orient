@@ -22,14 +22,29 @@ import com.orientechnologies.orient.core.engine.OEngineAbstract;
 import com.orientechnologies.orient.core.exception.ODatabaseException;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.impl.local.OStorageLocal;
+import com.orientechnologies.orient.core.type.tree.OBuddyMemory;
+import com.orientechnologies.orient.core.type.tree.OMemory;
 
 public class OEngineLocal extends OEngineAbstract {
-  public static final String NAME = "local";
+  public static final String   NAME = "local";
+
+  private static final OMemory MEMORY;
+
+  static {
+    final long maxMemory = Runtime.getRuntime().maxMemory();
+    final int maxBuddyMemory;
+    if (maxMemory * 0.25 > Integer.MAX_VALUE)
+      maxBuddyMemory = Integer.MAX_VALUE;
+    else
+      maxBuddyMemory = (int) (0.25 * maxMemory);
+
+    MEMORY = new OBuddyMemory(maxBuddyMemory, 32);
+  }
 
   public OStorage createStorage(final String iDbName, final Map<String, String> iConfiguration) {
     try {
       // GET THE STORAGE
-      return new OStorageLocal(iDbName, iDbName, getMode(iConfiguration));
+      return new OStorageLocal(iDbName, iDbName, getMode(iConfiguration), MEMORY);
 
     } catch (Throwable t) {
       OLogManager.instance().error(this,

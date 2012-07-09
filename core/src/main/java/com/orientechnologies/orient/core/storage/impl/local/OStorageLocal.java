@@ -60,6 +60,7 @@ import com.orientechnologies.orient.core.storage.OStorageEmbedded;
 import com.orientechnologies.orient.core.storage.fs.OMMapManager;
 import com.orientechnologies.orient.core.storage.impl.local.ORecordMemoryCache.RecordState;
 import com.orientechnologies.orient.core.tx.OTransaction;
+import com.orientechnologies.orient.core.type.tree.OMemory;
 
 public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCacheFlusher {
   private final int                                            DELETE_MAX_RETRIES;
@@ -83,10 +84,12 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
   private final String                                         PROFILER_READ_RECORD;
   private final String                                         PROFILER_UPDATE_RECORD;
   private final String                                         PROFILER_DELETE_RECORD;
+  private final OMemory                                        memory;
 
-  public OStorageLocal(final String iName, final String iFilePath, final String iMode) throws IOException {
+  public OStorageLocal(final String iName, final String iFilePath, final String iMode, final OMemory memory) throws IOException {
     super(iName, iFilePath, iMode);
 
+    this.memory = memory;
     File f = new File(url);
 
     if (f.exists() || !exists(f.getParent())) {
@@ -286,6 +289,11 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
         return;
 
       status = STATUS.CLOSING;
+
+      for (ORecordMemoryCache recordMemoryCache : clusterMemoryCacheMap.values())
+        recordMemoryCache.clear(this);
+
+      clusterMemoryCacheMap.clear();
 
       for (OCluster cluster : clusters)
         if (cluster != null)
@@ -660,12 +668,7 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
 
     lock.acquireSharedLock();
     try {
-
-      if (iDataSegmentId >= dataSegments.length)
-        throw new IllegalArgumentException("Data segment #" + iDataSegmentId + " does not exist in storage '" + name + "'");
-
-      return dataSegments[iDataSegmentId];
-
+      return getDataSegmentByIdInternal(iDataSegmentId);
     } finally {
       lock.releaseSharedLock();
     }
@@ -767,6 +770,9 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
         configuration.update();
       }
 
+      if (cluster != null && cluster.getName().equals(OStorage.CLUSTER_INDEX_NAME))
+        clusterMemoryCacheMap.put(cluster.getId(), new ORecordMemoryCache(memory, cluster.getId()));
+
       return cluster.getId();
 
     } catch (Exception e) {
@@ -806,6 +812,7 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
 
       // UPDATE CONFIGURATION
       configuration.dropCluster(iClusterId);
+      clusterMemoryCacheMap.remove(iClusterId);
 
       return true;
     } catch (Exception e) {
@@ -1443,6 +1450,13 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
       iRid.clusterPosition = ppos.clusterPosition;
 
       lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
+
+      if (iRecordVersion > -1 && iRecordVersion > ppos.recordVersion) {
+        // OVERWRITE THE VERSION
+        iClusterSegment.updateVersion(iRid.clusterPosition, iRecordVersion);
+        ppos.recordVersion = iRecordVersion;
+      }
+
       try {
         if (iRecordVersion > -1 && iRecordVersion > ppos.recordVersion) {
           // OVERWRITE THE VERSION
@@ -1452,6 +1466,9 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
 
         final ORecordMemoryCache recordMemoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
         if (recordMemoryCache != null) {
+          if (recordMemoryCache.isScheduleEviction())
+            recordMemoryCache.evict(this);
+
           if (!recordMemoryCache.put(iDataSegment.getId(), iRid.clusterPosition, iContent, ORecordMemoryCache.RecordState.NEW)) {
             recordMemoryCache.evict(this);
             recordMemoryCache.put(iDataSegment.getId(), iRid.clusterPosition, iContent, ORecordMemoryCache.RecordState.NEW);
@@ -1464,6 +1481,13 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
 
         // UPDATE THE POSITION IN CLUSTER WITH THE POSITION OF RECORD IN DATA
         iClusterSegment.updateDataSegmentPosition(ppos.clusterPosition, ppos.dataSegmentId, ppos.dataSegmentPos);
+
+        if (iRecordVersion > -1 && iRecordVersion > ppos.recordVersion) {
+          // OVERWRITE THE VERSION
+          iClusterSegment.updateVersion(iRid.clusterPosition, iRecordVersion);
+          ppos.recordVersion = iRecordVersion;
+        }
+
         return ppos;
       } finally {
         lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
@@ -1603,11 +1627,11 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
 
         }
 
-        if (ppos.recordType != iRecordType)
-          iClusterSegment.updateRecordType(iRid.clusterPosition, iRecordType);
-
         final ORecordMemoryCache recordMemoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
         if (recordMemoryCache != null) {
+          if (recordMemoryCache.isScheduleEviction())
+            recordMemoryCache.evict(this);
+
           if (!recordMemoryCache.put(ppos.dataSegmentId, iRid.clusterPosition, iContent, RecordState.MODIFIED)) {
             recordMemoryCache.evict(this);
             recordMemoryCache.put(ppos.dataSegmentId, iRid.clusterPosition, iContent, RecordState.MODIFIED);
@@ -1615,6 +1639,9 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
 
           return ppos;
         }
+
+        if (ppos.recordType != iRecordType)
+          iClusterSegment.updateRecordType(iRid.clusterPosition, iRecordType);
 
         final long newDataSegmentOffset;
 
@@ -1675,8 +1702,12 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
                   + ppos.recordVersion + " your=v" + iVersion + ")", iRid, ppos.recordVersion, iVersion);
 
         final ORecordMemoryCache memoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
-        if (memoryCache != null)
+        if (memoryCache != null) {
           memoryCache.remove(iRid.clusterPosition);
+
+          if (memoryCache.isScheduleEviction())
+            memoryCache.evict(this);
+        }
 
         if (ppos.dataSegmentPos > -1)
           getDataSegmentById(ppos.dataSegmentId).deleteRecord(ppos.dataSegmentPos);
@@ -1721,5 +1752,78 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
   }
 
   public void flushRecord(int clusterId, long clusterPosition, int dataSegmentId, byte[] content, RecordState recordState) {
+    try {
+      switch (recordState) {
+      case NEW:
+        flushNewRecord(clusterId, clusterPosition, dataSegmentId, content);
+        break;
+      case MODIFIED:
+        flushModifiedRecord(clusterId, clusterPosition, dataSegmentId, content);
+        break;
+      case SHARED:
+        break;
+      default:
+        throw new OStorageException("Invalid record state :" + recordState);
+      }
+    } catch (IOException ioe) {
+      throw new OStorageException("Error during store of cached records.", ioe);
+    }
+
   }
+
+  private ODataLocal getDataSegmentByIdInternal(int iDataSegmentId) {
+    if (iDataSegmentId >= dataSegments.length)
+      throw new IllegalArgumentException("Data segment #" + iDataSegmentId + " does not exist in storage '" + name + "'");
+
+    return dataSegments[iDataSegmentId];
+  }
+
+  private void flushModifiedRecord(int clusterId, long clusterPosition, int dataSegmentId, byte[] content) throws IOException {
+    final OCluster cluster = getClusterById(clusterId);
+
+    final ORecordId rid = new ORecordId(clusterId, clusterPosition);
+
+    lockManager.acquireLock(Thread.currentThread(), rid, LOCK.EXCLUSIVE);
+    try {
+      final OPhysicalPosition ppos = cluster.getPhysicalPosition(new OPhysicalPosition(clusterPosition));
+
+      final long newDataSegmentOffset;
+
+      if (ppos.dataSegmentPos == -1)
+        // WAS EMPTY FIRST TIME, CREATE IT NOW
+        newDataSegmentOffset = getDataSegmentByIdInternal(dataSegmentId).addRecord(rid, content);
+      else
+        newDataSegmentOffset = getDataSegmentByIdInternal(dataSegmentId).setRecord(ppos.dataSegmentPos, rid, content);
+
+      if (newDataSegmentOffset != ppos.dataSegmentPos) {
+        // UPDATE DATA SEGMENT OFFSET WITH THE NEW PHYSICAL POSITION
+        cluster.updateDataSegmentPosition(ppos.clusterPosition, dataSegmentId, newDataSegmentOffset);
+        ppos.dataSegmentPos = newDataSegmentOffset;
+      }
+    } finally {
+      lockManager.acquireLock(Thread.currentThread(), rid, LOCK.EXCLUSIVE);
+    }
+  }
+
+  private void flushNewRecord(int clusterId, long clusterPosition, int dataSegmentId, byte[] content) throws IOException {
+    final OCluster cluster = getClusterById(clusterId);
+
+    final ORecordId rid = new ORecordId(clusterId, clusterPosition);
+
+    lockManager.acquireLock(Thread.currentThread(), rid, LOCK.EXCLUSIVE);
+    try {
+      final OPhysicalPosition ppos = cluster.getPhysicalPosition(new OPhysicalPosition(clusterPosition));
+
+      final ODataLocal dataSegment = getDataSegmentByIdInternal(dataSegmentId);
+
+      ppos.dataSegmentId = dataSegment.getId();
+      ppos.dataSegmentPos = dataSegment.addRecord(rid, content);
+
+      // UPDATE THE POSITION IN CLUSTER WITH THE POSITION OF RECORD IN DATA
+      cluster.updateDataSegmentPosition(ppos.clusterPosition, dataSegmentId, ppos.dataSegmentPos);
+    } finally {
+      lockManager.acquireLock(Thread.currentThread(), rid, LOCK.EXCLUSIVE);
+    }
+  }
+
 }
