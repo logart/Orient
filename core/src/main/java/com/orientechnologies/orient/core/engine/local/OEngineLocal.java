@@ -22,29 +22,43 @@ import com.orientechnologies.orient.core.engine.OEngineAbstract;
 import com.orientechnologies.orient.core.exception.ODatabaseException;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.impl.local.OStorageLocal;
+import com.orientechnologies.orient.core.type.tree.OBuddyMemory;
+import com.orientechnologies.orient.core.type.tree.OMemory;
 
 public class OEngineLocal extends OEngineAbstract {
+  public static final String   NAME = "local";
 
-	public static final String	NAME	= "local";
+  private static final OMemory MEMORY;
 
-	public OStorage createStorage(final String iDbName, final Map<String, String> iConfiguration) {
-		try {
-			// GET THE STORAGE
-			return new OStorageLocal(iDbName, iDbName, getMode(iConfiguration));
+  static {
+    final long maxMemory = Runtime.getRuntime().maxMemory();
+    final int maxBuddyMemory;
+    if (maxMemory * 0.25 > Integer.MAX_VALUE)
+      maxBuddyMemory = Integer.MAX_VALUE;
+    else
+      maxBuddyMemory = (int) (0.25 * maxMemory);
 
-		} catch (Throwable t) {
-			OLogManager.instance().error(this,
-					"Error on opening database: " + iDbName + ". Current location is: " + new java.io.File(".").getAbsolutePath(), t,
-					ODatabaseException.class);
-		}
-		return null;
-	}
+    MEMORY = new OBuddyMemory(maxBuddyMemory, 32);
+  }
 
-	public String getName() {
-		return NAME;
-	}
+  public OStorage createStorage(final String iDbName, final Map<String, String> iConfiguration) {
+    try {
+      // GET THE STORAGE
+      return new OStorageLocal(iDbName, iDbName, getMode(iConfiguration), MEMORY);
 
-	public boolean isShared() {
-		return true;
-	}
+    } catch (Throwable t) {
+      OLogManager.instance().error(this,
+          "Error on opening database: " + iDbName + ". Current location is: " + new java.io.File(".").getAbsolutePath(), t,
+          ODatabaseException.class);
+    }
+    return null;
+  }
+
+  public String getName() {
+    return NAME;
+  }
+
+  public boolean isShared() {
+    return true;
+  }
 }

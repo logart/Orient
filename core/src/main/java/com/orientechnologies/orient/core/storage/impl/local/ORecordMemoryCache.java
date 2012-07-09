@@ -1,6 +1,5 @@
 package com.orientechnologies.orient.core.storage.impl.local;
 
-import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OByteSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLongSerializer;
@@ -68,8 +67,11 @@ public class ORecordMemoryCache {
     if (existingEntryPointer != OMemory.NULL_POINTER) {
       final int existingDataSegmentId = getDataSegmentId(existingEntryPointer);
 
+      if (dataSegmentId == -1)
+        dataSegmentId = existingDataSegmentId;
+
       if (existingDataSegmentId != dataSegmentId)
-        throw new OException("Cached and updated data segment IDs should be the same.");
+        throw new ORecordCacheException("Cached and updated data segment IDs should be the same.");
 
       memory.free(getDataPointer(existingEntryPointer));
 
@@ -99,6 +101,49 @@ public class ORecordMemoryCache {
     }
 
     return true;
+  }
+
+  public synchronized void flush(final ORecordMemoryCacheFlusher flusher) {
+    if (size == 0)
+      return;
+
+    int currentRecord = lruTail;
+    while (currentRecord != OMemory.NULL_POINTER) {
+      int flushedItem = currentRecord;
+      currentRecord = getPrevLRUPointer(flushedItem);
+
+      final RecordState recordState = getRecordState(flushedItem);
+
+      if (recordState != RecordState.SHARED)
+        flusher.flushRecord(clusterId, getClusterPosition(flushedItem), getDataSegmentId(flushedItem),
+            getData(getDataPointer(flushedItem)), recordState);
+    }
+  }
+
+  public synchronized void clear(final ORecordMemoryCacheFlusher flusher) {
+    if (size == 0)
+      return;
+
+    int currentVictim = lruTail;
+    while (currentVictim != OMemory.NULL_POINTER) {
+      int evictedItem = currentVictim;
+      currentVictim = getPrevLRUPointer(evictedItem);
+
+      final RecordState recordState = getRecordState(evictedItem);
+
+      if (recordState != RecordState.SHARED)
+        flusher.flushRecord(clusterId, getClusterPosition(evictedItem), getDataSegmentId(evictedItem),
+            getData(getDataPointer(evictedItem)), recordState);
+
+      memoryLongHashMap.remove(getClusterPosition(evictedItem));
+      size--;
+
+      memory.free(getDataPointer(evictedItem));
+      memory.free(evictedItem);
+    }
+
+    lruTail = OMemory.NULL_POINTER;
+    lruHeader = OMemory.NULL_POINTER;
   }
 
   public synchronized long getEvictionSize() {
@@ -152,22 +197,22 @@ public class ORecordMemoryCache {
     switch (oldRecordState) {
     case NEW:
       if (newRecordState == RecordState.NEW)
-        throw new OException("Existing record can not be new once again");
+        throw new ORecordCacheException("Existing record can not be new once again");
       if (newRecordState == RecordState.SHARED)
-        throw new OException("New records should be flushed before read replacement");
+        throw new ORecordCacheException("New records should be flushed before read replacement");
       break;
 
     case SHARED:
       if (newRecordState == RecordState.NEW)
-        throw new OException("Existing record can not be new once again");
+        throw new ORecordCacheException("Existing record can not be new once again");
       break;
 
     case MODIFIED:
       if (newRecordState == RecordState.NEW)
-        throw new OException("Existing record can not be new once again");
+        throw new ORecordCacheException("Existing record can not be new once again");
 
       if (newRecordState == RecordState.SHARED)
-        throw new OException("Modified records should be flushed before read replacement");
+        throw new ORecordCacheException("Modified records should be flushed before read replacement");
     }
   }
 
@@ -228,14 +273,19 @@ public class ORecordMemoryCache {
       return OMemory.NULL_POINTER;
 
     memory.setInt(pointer, 0, data.length);
-    memory.set(pointer, OIntegerSerializer.INT_SIZE, data.length, data);
+
+    if (data.length > 0)
+      memory.set(pointer, OIntegerSerializer.INT_SIZE, data.length, data);
 
     return pointer;
   }
 
   private byte[] getData(int pointer) {
     int dataLength = memory.getInt(pointer, 0);
-    return memory.get(pointer, OIntegerSerializer.INT_SIZE, dataLength);
+    if (dataLength > 0)
+      return memory.get(pointer, OIntegerSerializer.INT_SIZE, dataLength);
+    else
+      return new byte[0];
   }
 
   private int storeEntry(long clusterPosition, int dataPointer, RecordState recordState, int dataSegmentId) {
@@ -314,7 +364,6 @@ public class ORecordMemoryCache {
 
     int evicted = 0;
     int currentVictim = lruTail;
-    scheduleEviction = false;
 
     while (currentVictim != OMemory.NULL_POINTER && evicted < evictionSize) {
       int evictedItem = currentVictim;
@@ -349,7 +398,6 @@ public class ORecordMemoryCache {
 
     int evicted = 0;
     int currentVictim = lruTail;
-    scheduleEviction = false;
 
     while (currentVictim != OMemory.NULL_POINTER && evicted < evictionSize) {
       int evictedItem = currentVictim;
@@ -376,9 +424,5 @@ public class ORecordMemoryCache {
       setNextLRUPointer(lruTail, OMemory.NULL_POINTER);
 
     return true;
-  }
-
-  public boolean isScheduleEviction() {
-    return scheduleEviction;
   }
 }
