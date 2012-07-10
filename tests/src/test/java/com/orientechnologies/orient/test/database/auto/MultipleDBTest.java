@@ -11,10 +11,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.testng.Assert;
-import org.testng.annotations.Parameters;
-import org.testng.annotations.Test;
-
 import com.orientechnologies.orient.client.db.ODatabaseHelper;
 import com.orientechnologies.orient.client.remote.OStorageRemote;
 import com.orientechnologies.orient.core.db.ODatabase;
@@ -24,246 +20,249 @@ import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 import com.orientechnologies.orient.object.db.OObjectDatabaseTx;
 
+import org.testng.Assert;
+import org.testng.annotations.Parameters;
+import org.testng.annotations.Test;
+
 /**
  * @author Michael Hiess
  * 
  */
 public class MultipleDBTest {
 
-	private String	baseUrl;
+  private String baseUrl;
 
-	@Parameters(value = "url")
-	public MultipleDBTest(String iURL) {
-		baseUrl = iURL + "-";
-	}
+  @Parameters(value = "url")
+  public MultipleDBTest(String iURL) {
+    baseUrl = iURL + "-";
+  }
 
-	@Test
-	public void testObjectMultipleDBsThreaded() throws Exception {
+  @Test(enabled = false)
+  public void testObjectMultipleDBsThreaded() throws Exception {
 
-		final int operations_write = 1000;
-		final int operations_read = 1;
-		final int dbs = 10;
+    final int operations_write = 1000;
+    final int operations_read = 1;
+    final int dbs = 10;
 
-		final Semaphore sem = new Semaphore(4, true);
-		final AtomicInteger activeDBs = new AtomicInteger(dbs);
-		final Set<String> times = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+    final Semaphore sem = new Semaphore(4, true);
+    final AtomicInteger activeDBs = new AtomicInteger(dbs);
+    final Set<String> times = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
 
-		for (int i = 0; i < dbs; i++) {
+    for (int i = 0; i < dbs; i++) {
 
-			sem.acquire();
-			final String dbUrl = baseUrl + i;
+      sem.acquire();
+      final String dbUrl = baseUrl + i;
 
-			Thread t = new Thread(new Runnable() {
+      Thread t = new Thread(new Runnable() {
 
-				public void run() {
+        public void run() {
 
-					OObjectDatabaseTx tx = new OObjectDatabaseTx(dbUrl);
+          OObjectDatabaseTx tx = new OObjectDatabaseTx(dbUrl);
 
-					try {
-						ODatabaseHelper.deleteDatabase(tx);
-						ODatabaseHelper.createDatabase(tx, dbUrl);
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
+          try {
+            ODatabaseHelper.deleteDatabase(tx);
+            ODatabaseHelper.createDatabase(tx, dbUrl);
+          } catch (IOException e) {
+            e.printStackTrace();
+          }
 
-					try {
-						System.out.println("(" + getDbId(tx) + ") " + "Created");
+          try {
+            System.out.println("(" + getDbId(tx) + ") " + "Created");
 
-						if (tx.isClosed()) {
-							tx.open("admin", "admin");
-						}
-						tx.getEntityManager().registerEntityClass(DummyObject.class);
+            if (tx.isClosed()) {
+              tx.open("admin", "admin");
+            }
+            tx.getEntityManager().registerEntityClass(DummyObject.class);
 
-						// System.out.println("(" +getDbId( tx ) + ") " + "Registered: " + DummyObject.class);
-						// System.out.println("(" +getDbId( tx ) + ") " + "Calling: " + operations + " operations");
-						long start = System.currentTimeMillis();
-						for (int j = 0; j < operations_write; j++) {
-							DummyObject dummy = new DummyObject("name" + j);
-							dummy = tx.save(dummy);
+            // System.out.println("(" +getDbId( tx ) + ") " + "Registered: " + DummyObject.class);
+            // System.out.println("(" +getDbId( tx ) + ") " + "Calling: " + operations + " operations");
+            long start = System.currentTimeMillis();
+            for (int j = 0; j < operations_write; j++) {
+              DummyObject dummy = new DummyObject("name" + j);
+              dummy = tx.save(dummy);
 
-							Assert.assertEquals(((ORID) dummy.getId()).getClusterPosition(), j);
+              Assert.assertEquals(((ORID) dummy.getId()).getClusterPosition(), j);
 
-							if ((j + 1) % 20000 == 0) {
-								System.out.println("(" + getDbId(tx) + ") " + "Operations (WRITE) executed: " + (j + 1));
-							}
-						}
-						long end = System.currentTimeMillis();
+              if ((j + 1) % 20000 == 0) {
+                System.out.println("(" + getDbId(tx) + ") " + "Operations (WRITE) executed: " + (j + 1));
+              }
+            }
+            long end = System.currentTimeMillis();
 
-						String time = "(" + getDbId(tx) + ") " + "Executed operations (WRITE) in: " + (end - start) + " ms";
-						System.out.println(time);
-						times.add(time);
+            String time = "(" + getDbId(tx) + ") " + "Executed operations (WRITE) in: " + (end - start) + " ms";
+            System.out.println(time);
+            times.add(time);
 
-						start = System.currentTimeMillis();
-						for (int j = 0; j < operations_read; j++) {
-							List<DummyObject> l = tx.query(new OSQLSynchQuery<DummyObject>(" select * from DummyObject "));
-							Assert.assertEquals(l.size(), operations_write);
+            start = System.currentTimeMillis();
+            for (int j = 0; j < operations_read; j++) {
+              List<DummyObject> l = tx.query(new OSQLSynchQuery<DummyObject>(" select * from DummyObject "));
+              Assert.assertEquals(l.size(), operations_write);
 
-							if ((j + 1) % 20000 == 0) {
-								System.out.println("(" + getDbId(tx) + ") " + "Operations (READ) executed: " + j + 1);
-							}
-						}
-						end = System.currentTimeMillis();
+              if ((j + 1) % 20000 == 0) {
+                System.out.println("(" + getDbId(tx) + ") " + "Operations (READ) executed: " + j + 1);
+              }
+            }
+            end = System.currentTimeMillis();
 
-						time = "(" + getDbId(tx) + ") " + "Executed operations (READ) in: " + (end - start) + " ms";
-						System.out.println(time);
-						times.add(time);
+            time = "(" + getDbId(tx) + ") " + "Executed operations (READ) in: " + (end - start) + " ms";
+            System.out.println(time);
+            times.add(time);
 
-						tx.close();
+            tx.close();
 
-						sem.release();
-						activeDBs.decrementAndGet();
-					} finally {
-						try {
-							System.out.println("(" + getDbId(tx) + ") " + "Dropping");
-							System.out.flush();
-							ODatabaseHelper.deleteDatabase(tx);
-							System.out.println("(" + getDbId(tx) + ") " + "Dropped");
-							System.out.flush();
-						} catch (IOException e) {
-							e.printStackTrace();
-						}
-					}
-				}
-			});
+            sem.release();
+            activeDBs.decrementAndGet();
+          } finally {
+            try {
+              System.out.println("(" + getDbId(tx) + ") " + "Dropping");
+              System.out.flush();
+              ODatabaseHelper.deleteDatabase(tx);
+              System.out.println("(" + getDbId(tx) + ") " + "Dropped");
+              System.out.flush();
+            } catch (IOException e) {
+              e.printStackTrace();
+            }
+          }
+        }
+      });
 
-			t.start();
-		}
+      t.start();
+    }
 
-		while (activeDBs.get() != 0) {
-			Thread.sleep(300);
-		}
+    while (activeDBs.get() != 0) {
+      Thread.sleep(300);
+    }
 
-		// System.out.println("Times:");
-		// for (String s : times) {
-		// System.out.println(s);
-		// }
+    // System.out.println("Times:");
+    // for (String s : times) {
+    // System.out.println(s);
+    // }
 
-		System.out.println("Test testObjectMultipleDBsThreaded ended");
-	}
+    System.out.println("Test testObjectMultipleDBsThreaded ended");
+  }
 
-	@Test
-	public void testDocumentMultipleDBsThreaded() throws Exception {
+  public void testDocumentMultipleDBsThreaded() throws Exception {
 
-		final int operations_write = 1000;
-		final int operations_read = 1;
-		final int dbs = 10;
+    final int operations_write = 1000;
+    final int operations_read = 1;
+    final int dbs = 10;
 
-		final Semaphore sem = new Semaphore(4, true);
-		final AtomicInteger activeDBs = new AtomicInteger(dbs);
-		final Set<String> times = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+    final Semaphore sem = new Semaphore(4, true);
+    final AtomicInteger activeDBs = new AtomicInteger(dbs);
+    final Set<String> times = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
 
-		for (int i = 0; i < dbs; i++) {
+    for (int i = 0; i < dbs; i++) {
 
-			final String dbUrl = baseUrl + i;
+      final String dbUrl = baseUrl + i;
 
-			sem.acquire();
-			Thread t = new Thread(new Runnable() {
+      sem.acquire();
+      Thread t = new Thread(new Runnable() {
 
-				public void run() {
+        public void run() {
 
-					ODatabaseDocumentTx tx = new ODatabaseDocumentTx(dbUrl);
+          ODatabaseDocumentTx tx = new ODatabaseDocumentTx(dbUrl);
 
-					try {
-						ODatabaseHelper.deleteDatabase(tx);
-						System.out.println("Thread " + this + " is creating database " + dbUrl);
-						System.out.flush();
-						ODatabaseHelper.createDatabase(tx, dbUrl);
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
+          try {
+            ODatabaseHelper.deleteDatabase(tx);
+            System.out.println("Thread " + this + " is creating database " + dbUrl);
+            System.out.flush();
+            ODatabaseHelper.createDatabase(tx, dbUrl);
+          } catch (IOException e) {
+            e.printStackTrace();
+          }
 
-					try {
-						System.out.println("(" + getDbId(tx) + ") " + "Created");
-						System.out.flush();
+          try {
+            System.out.println("(" + getDbId(tx) + ") " + "Created");
+            System.out.flush();
 
-						if (tx.isClosed()) {
-							tx.open("admin", "admin");
-						}
-						// tx.getEntityManager().registerEntityClass(DummyObject.class);
+            if (tx.isClosed()) {
+              tx.open("admin", "admin");
+            }
+            // tx.getEntityManager().registerEntityClass(DummyObject.class);
 
-						// System.out.println("(" +getDbId( tx ) + ") " + "Registered: " + DummyObject.class);
-						// System.out.println("(" +getDbId( tx ) + ") " + "Calling: " + operations + " operations");
-						long start = System.currentTimeMillis();
-						for (int j = 0; j < operations_write; j++) {
-							// DummyObject dummy = new DummyObject("name" + j);
-							// tx.save(dummy);
+            // System.out.println("(" +getDbId( tx ) + ") " + "Registered: " + DummyObject.class);
+            // System.out.println("(" +getDbId( tx ) + ") " + "Calling: " + operations + " operations");
+            long start = System.currentTimeMillis();
+            for (int j = 0; j < operations_write; j++) {
+              // DummyObject dummy = new DummyObject("name" + j);
+              // tx.save(dummy);
 
-							ODocument dummy = new ODocument("DummyObject");
-							dummy.field("name", "name" + j);
+              ODocument dummy = new ODocument("DummyObject");
+              dummy.field("name", "name" + j);
 
-							dummy =	tx.save(dummy);
-							Assert.assertEquals(((ORID) dummy.getIdentity()).getClusterPosition(), j);
+              dummy = tx.save(dummy);
+              Assert.assertEquals(((ORID) dummy.getIdentity()).getClusterPosition(), j);
 
-							// Assert.assertEquals(dummy.getId().toString(), "#5:" + j);
+              // Assert.assertEquals(dummy.getId().toString(), "#5:" + j);
 
-							if ((j + 1) % 20000 == 0) {
-								System.out.println("(" + getDbId(tx) + ") " + "Operations (WRITE) executed: " + (j + 1));
-								System.out.flush();
-							}
-						}
-						long end = System.currentTimeMillis();
+              if ((j + 1) % 20000 == 0) {
+                System.out.println("(" + getDbId(tx) + ") " + "Operations (WRITE) executed: " + (j + 1));
+                System.out.flush();
+              }
+            }
+            long end = System.currentTimeMillis();
 
-						String time = "(" + getDbId(tx) + ") " + "Executed operations (WRITE) in: " + (end - start) + " ms";
-						System.out.println(time);
-						System.out.flush();
+            String time = "(" + getDbId(tx) + ") " + "Executed operations (WRITE) in: " + (end - start) + " ms";
+            System.out.println(time);
+            System.out.flush();
 
-						times.add(time);
+            times.add(time);
 
-						start = System.currentTimeMillis();
-						for (int j = 0; j < operations_read; j++) {
-							List<DummyObject> l = tx.query(new OSQLSynchQuery<DummyObject>(" select * from DummyObject "));
-							Assert.assertEquals(l.size(), operations_write);
+            start = System.currentTimeMillis();
+            for (int j = 0; j < operations_read; j++) {
+              List<DummyObject> l = tx.query(new OSQLSynchQuery<DummyObject>(" select * from DummyObject "));
+              Assert.assertEquals(l.size(), operations_write);
 
-							if ((j + 1) % 20000 == 0) {
-								System.out.println("(" + getDbId(tx) + ") " + "Operations (READ) executed: " + j + 1);
-								System.out.flush();
-							}
-						}
-						end = System.currentTimeMillis();
+              if ((j + 1) % 20000 == 0) {
+                System.out.println("(" + getDbId(tx) + ") " + "Operations (READ) executed: " + j + 1);
+                System.out.flush();
+              }
+            }
+            end = System.currentTimeMillis();
 
-						time = "(" + getDbId(tx) + ") " + "Executed operations (READ) in: " + (end - start) + " ms";
-						System.out.println(time);
-						System.out.flush();
+            time = "(" + getDbId(tx) + ") " + "Executed operations (READ) in: " + (end - start) + " ms";
+            System.out.println(time);
+            System.out.flush();
 
-						times.add(time);
+            times.add(time);
 
-					} finally {
-						try {
-							tx.close();
+          } finally {
+            try {
+              tx.close();
 
-							System.out.println("Thread " + this + "  is dropping database " + dbUrl);
-							System.out.flush();
-							ODatabaseHelper.deleteDatabase(tx);
+              System.out.println("Thread " + this + "  is dropping database " + dbUrl);
+              System.out.flush();
+              ODatabaseHelper.deleteDatabase(tx);
 
-							sem.release();
-							activeDBs.decrementAndGet();
-						} catch (Exception e) {
-						}
-					}
-				}
-			});
+              sem.release();
+              activeDBs.decrementAndGet();
+            } catch (Exception e) {
+            }
+          }
+        }
+      });
 
-			t.start();
-		}
+      t.start();
+    }
 
-		while (activeDBs.get() != 0) {
-			Thread.sleep(300);
-		}
+    while (activeDBs.get() != 0) {
+      Thread.sleep(300);
+    }
 
-		// System.out.println("Times:");
-		// for (String s : times) {
-		// System.out.println(s);
-		// }
+    // System.out.println("Times:");
+    // for (String s : times) {
+    // System.out.println(s);
+    // }
 
-		System.out.println("Test testDocumentMultipleDBsThreaded ended");
-		System.out.flush();
-	}
+    System.out.println("Test testDocumentMultipleDBsThreaded ended");
+    System.out.flush();
+  }
 
-	private String getDbId(ODatabase tx) {
-		if (tx.getStorage() instanceof OStorageRemote)
-			return tx.getURL() + " - sessionId: " + ((OStorageRemote) tx.getStorage()).getSessionId();
-		else
-			return tx.getURL();
-	}
+  private String getDbId(ODatabase tx) {
+    if (tx.getStorage() instanceof OStorageRemote)
+      return tx.getURL() + " - sessionId: " + ((OStorageRemote) tx.getStorage()).getSessionId();
+    else
+      return tx.getURL();
+  }
 
 }

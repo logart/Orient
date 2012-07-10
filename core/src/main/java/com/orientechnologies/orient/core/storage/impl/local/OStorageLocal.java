@@ -1466,9 +1466,6 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
 
         final ORecordMemoryCache recordMemoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
         if (recordMemoryCache != null) {
-          if (recordMemoryCache.isScheduleEviction())
-            recordMemoryCache.evict(this);
-
           if (!recordMemoryCache.put(iDataSegment.getId(), iRid.clusterPosition, iContent, ORecordMemoryCache.RecordState.NEW)) {
             recordMemoryCache.evict(this);
             recordMemoryCache.put(iDataSegment.getId(), iRid.clusterPosition, iContent, ORecordMemoryCache.RecordState.NEW);
@@ -1629,9 +1626,6 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
 
         final ORecordMemoryCache recordMemoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
         if (recordMemoryCache != null) {
-          if (recordMemoryCache.isScheduleEviction())
-            recordMemoryCache.evict(this);
-
           if (!recordMemoryCache.put(ppos.dataSegmentId, iRid.clusterPosition, iContent, RecordState.MODIFIED)) {
             recordMemoryCache.evict(this);
             recordMemoryCache.put(ppos.dataSegmentId, iRid.clusterPosition, iContent, RecordState.MODIFIED);
@@ -1702,12 +1696,8 @@ public class OStorageLocal extends OStorageEmbedded implements ORecordMemoryCach
                   + ppos.recordVersion + " your=v" + iVersion + ")", iRid, ppos.recordVersion, iVersion);
 
         final ORecordMemoryCache memoryCache = clusterMemoryCacheMap.get(iRid.clusterId);
-        if (memoryCache != null) {
+        if (memoryCache != null)
           memoryCache.remove(iRid.clusterPosition);
-
-          if (memoryCache.isScheduleEviction())
-            memoryCache.evict(this);
-        }
 
         if (ppos.dataSegmentPos > -1)
           getDataSegmentById(ppos.dataSegmentId).deleteRecord(ppos.dataSegmentPos);

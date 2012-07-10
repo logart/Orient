@@ -341,25 +341,25 @@ public class OMVRBTreeMapEntryProvider<K, V> extends OMVRBTreeEntryDataProviderA
       boolean iColor) {
     int offset = 0;
 
-    OIntegerSerializer.INSTANCE.serialize(CURRENT_VERSION, newBuffer, offset);
+    OIntegerSerializer.INSTANCE.serializeNative(CURRENT_VERSION, newBuffer, offset);
     offset += OIntegerSerializer.INT_SIZE;
 
-    OIntegerSerializer.INSTANCE.serialize(iPageSize, newBuffer, offset);
+    OIntegerSerializer.INSTANCE.serializeNative(iPageSize, newBuffer, offset);
     offset += OIntegerSerializer.INT_SIZE;
 
-    OLinkSerializer.INSTANCE.serialize(iParentId, newBuffer, offset);
+    OLinkSerializer.INSTANCE.serializeNative(iParentId, newBuffer, offset);
     offset += OLinkSerializer.INSTANCE.getObjectSize(iParentId);
 
-    OLinkSerializer.INSTANCE.serialize(iLeftRid, newBuffer, offset);
+    OLinkSerializer.INSTANCE.serializeNative(iLeftRid, newBuffer, offset);
     offset += OLinkSerializer.INSTANCE.getObjectSize(iLeftRid);
 
-    OLinkSerializer.INSTANCE.serialize(iRightRid, newBuffer, offset);
+    OLinkSerializer.INSTANCE.serializeNative(iRightRid, newBuffer, offset);
     offset += OLinkSerializer.INSTANCE.getObjectSize(iRightRid);
 
-    OBooleanSerializer.INSTANCE.serialize(iColor, newBuffer, offset);
+    OBooleanSerializer.INSTANCE.serializeNative(iColor, newBuffer, offset);
     offset += OBooleanSerializer.BOOLEAN_SIZE;
 
-    OIntegerSerializer.INSTANCE.serialize(iSize, newBuffer, offset);
+    OIntegerSerializer.INSTANCE.serializeNative(iSize, newBuffer, offset);
     offset += OIntegerSerializer.INT_SIZE;
     return offset;
   }
@@ -367,29 +367,29 @@ public class OMVRBTreeMapEntryProvider<K, V> extends OMVRBTreeEntryDataProviderA
   private int deserializeMetadata(byte[] inBuffer) {
     int offset = 0;
 
-    int currentVersion = OIntegerSerializer.INSTANCE.deserialize(inBuffer, offset);
+    int currentVersion = OIntegerSerializer.INSTANCE.deserializeNative(inBuffer, offset);
     offset += OIntegerSerializer.INT_SIZE;
 
     if (currentVersion != CURRENT_VERSION)
       throw new OSerializationException("MVRBTree node is stored using " + currentVersion
           + " version of serialization format but current version is " + CURRENT_VERSION + ".");
 
-    pageSize = OIntegerSerializer.INSTANCE.deserialize(inBuffer, offset);
+    pageSize = OIntegerSerializer.INSTANCE.deserializeNative(inBuffer, offset);
     offset += OIntegerSerializer.INT_SIZE;
 
-    parentRid = OLinkSerializer.INSTANCE.deserialize(inBuffer, offset);
+    parentRid = OLinkSerializer.INSTANCE.deserializeNative(inBuffer, offset);
     offset += OLinkSerializer.INSTANCE.getObjectSize(parentRid);
 
-    leftRid = OLinkSerializer.INSTANCE.deserialize(inBuffer, offset);
+    leftRid = OLinkSerializer.INSTANCE.deserializeNative(inBuffer, offset);
     offset += OLinkSerializer.INSTANCE.getObjectSize(leftRid);
 
-    rightRid = OLinkSerializer.INSTANCE.deserialize(inBuffer, offset);
+    rightRid = OLinkSerializer.INSTANCE.deserializeNative(inBuffer, offset);
     offset += OLinkSerializer.INSTANCE.getObjectSize(rightRid);
 
-    color = OBooleanSerializer.INSTANCE.deserialize(inBuffer, offset);
+    color = OBooleanSerializer.INSTANCE.deserializeNative(inBuffer, offset);
     offset += OBooleanSerializer.BOOLEAN_SIZE;
 
-    size = OIntegerSerializer.INSTANCE.deserialize(inBuffer, offset);
+    size = OIntegerSerializer.INSTANCE.deserializeNative(inBuffer, offset);
     offset += OIntegerSerializer.INT_SIZE;
 
     if (size > pageSize)
@@ -404,10 +404,10 @@ public class OMVRBTreeMapEntryProvider<K, V> extends OMVRBTreeEntryDataProviderA
 
     if (serializedValues[i] <= 0) {
       OProfiler.getInstance().updateCounter("OMVRBTreeMapEntry.serializeValue", 1);
-      valueSerializer.serialize(values[i], newBuffer, offset);
+      valueSerializer.serializeNative(values[i], newBuffer, offset);
       offset += valueSerializer.getObjectSize(values[i]);
     } else {
-      final int size = valueSerializer.getObjectSize(buffer, serializedValues[i]);
+      final int size = valueSerializer.getObjectSizeNative(buffer, serializedValues[i]);
       System.arraycopy(buffer, serializedValues[i], newBuffer, offset, size);
       serializedValues[i] = offset;
       offset += size;
@@ -419,10 +419,10 @@ public class OMVRBTreeMapEntryProvider<K, V> extends OMVRBTreeEntryDataProviderA
     final OBinarySerializer<K> keySerializer = ((OMVRBTreeMapProvider<K, V>) treeDataProvider).keySerializer;
     if (serializedKeys[i] <= 0) {
       OProfiler.getInstance().updateCounter("OMVRBTreeMapEntry.serializeKey", 1);
-      keySerializer.serialize(keys[i], newBuffer, offset);
+      keySerializer.serializeNative(keys[i], newBuffer, offset);
       offset += keySerializer.getObjectSize(keys[i]);
     } else {
-      final int size = keySerializer.getObjectSize(buffer, serializedKeys[i]);
+      final int size = keySerializer.getObjectSizeNative(buffer, serializedKeys[i]);
       System.arraycopy(buffer, serializedKeys[i], newBuffer, offset, size);
       serializedKeys[i] = offset;
       offset += size;
@@ -435,7 +435,7 @@ public class OMVRBTreeMapEntryProvider<K, V> extends OMVRBTreeEntryDataProviderA
     if (serializedKeys[iIndex] <= 0)
       return serializer.getObjectSize(keys[iIndex]);
 
-    return serializer.getObjectSize(buffer, serializedKeys[iIndex]);
+    return serializer.getObjectSizeNative(buffer, serializedKeys[iIndex]);
   }
 
   private int getBinaryValueSize(final int iIndex) {
@@ -444,7 +444,7 @@ public class OMVRBTreeMapEntryProvider<K, V> extends OMVRBTreeEntryDataProviderA
     if (serializedValues[iIndex] <= 0)
       return serializer.getObjectSize(values[iIndex]);
 
-    return serializer.getObjectSize(buffer, serializedValues[iIndex]);
+    return serializer.getObjectSizeNative(buffer, serializedValues[iIndex]);
   }
 
   private void toStreamUsingBinaryStreamSerializer() throws IOException {
@@ -490,7 +490,7 @@ public class OMVRBTreeMapEntryProvider<K, V> extends OMVRBTreeEntryDataProviderA
       throw new IllegalStateException("key serializer wasn't found");
     for (int i = 0; i < size; i++) {
       serializedKeys[i] = offset;
-      offset += keySerializer.getObjectSize(inBuffer, offset);
+      offset += keySerializer.getObjectSizeNative(inBuffer, offset);
     }
 
     serializedValues = new int[pageSize];
@@ -502,7 +502,7 @@ public class OMVRBTreeMapEntryProvider<K, V> extends OMVRBTreeEntryDataProviderA
 
     for (int i = 0; i < size; i++) {
       serializedValues[i] = offset;
-      offset += valueSerializer.getObjectSize(inBuffer, offset);
+      offset += valueSerializer.getObjectSizeNative(inBuffer, offset);
     }
 
     buffer = inBuffer;
@@ -517,7 +517,7 @@ public class OMVRBTreeMapEntryProvider<K, V> extends OMVRBTreeEntryDataProviderA
     final OBinarySerializer<K> keySerializer = ((OMVRBTreeMapProvider<K, V>) treeDataProvider).keySerializer;
     for (int i = 0; i < size; i++) {
       serializedKeys[i] = offset;
-      offset += keySerializer.getObjectSize(inBuffer, offset);
+      offset += keySerializer.getObjectSizeNative(inBuffer, offset);
     }
 
     serializedValues = new int[pageSize];
@@ -553,13 +553,13 @@ public class OMVRBTreeMapEntryProvider<K, V> extends OMVRBTreeEntryDataProviderA
   }
 
   protected Object keyFromStream(final int iIndex) throws IOException {
-    return ((OMVRBTreeMapProvider<K, V>) treeDataProvider).keySerializer.deserialize(buffer, serializedKeys[iIndex]);
+    return ((OMVRBTreeMapProvider<K, V>) treeDataProvider).keySerializer.deserializeNative(buffer, serializedKeys[iIndex]);
   }
 
   protected Object valueFromStream(final int iIndex) throws IOException {
     final OStreamSerializer valueSerializer = ((OMVRBTreeMapProvider<K, V>) treeDataProvider).valueSerializer;
     if (valueSerializer instanceof OBinarySerializer)
-      return ((OBinarySerializer<V>) valueSerializer).deserialize(buffer, serializedValues[iIndex]);
+      return ((OBinarySerializer<V>) valueSerializer).deserializeNative(buffer, serializedValues[iIndex]);
 
     return valueSerializer.fromStream(stream.getAsByteArray(serializedValues[iIndex]));
   }
@@ -623,12 +623,12 @@ public class OMVRBTreeMapEntryProvider<K, V> extends OMVRBTreeEntryDataProviderA
     int offset = serializeMetadata(outBuffer, oldSize, oldPageSize, oldParentRid, oldLeftRid, oldRightRid, oldColor);
 
     for (int i = 0; i < oldSize; i++) {
-      keySerializer.serialize(oldKeys[i], outBuffer, offset);
+      keySerializer.serializeNative(oldKeys[i], outBuffer, offset);
       offset += keySerializer.getObjectSize(oldKeys[i]);
     }
 
     for (int i = 0; i < oldSize; i++) {
-      valueSerializer.serialize(oldValues[i], outBuffer, offset);
+      valueSerializer.serializeNative(oldValues[i], outBuffer, offset);
       offset += valueSerializer.getObjectSize(oldValues[i]);
     }
 
@@ -654,7 +654,7 @@ public class OMVRBTreeMapEntryProvider<K, V> extends OMVRBTreeEntryDataProviderA
     int offset = serializeMetadata(outBuffer, oldSize, oldPageSize, oldParentRid, oldLeftRid, oldRightRid, oldColor);
 
     for (int i = 0; i < oldSize; i++) {
-      keySerializer.serialize(oldKeys[i], outBuffer, offset);
+      keySerializer.serializeNative(oldKeys[i], outBuffer, offset);
       offset += keySerializer.getObjectSize(oldKeys[i]);
     }
 

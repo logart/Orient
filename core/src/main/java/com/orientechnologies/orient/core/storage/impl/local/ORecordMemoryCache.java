@@ -371,7 +371,6 @@ public class ORecordMemoryCache {
 
     int evicted = 0;
     int currentVictim = lruTail;
-    scheduleEviction = false;
 
     while (currentVictim != OMemory.NULL_POINTER && evicted < evictionSize) {
       int evictedItem = currentVictim;
@@ -406,7 +405,6 @@ public class ORecordMemoryCache {
 
     int evicted = 0;
     int currentVictim = lruTail;
-    scheduleEviction = false;
 
     while (currentVictim != OMemory.NULL_POINTER && evicted < evictionSize) {
       int evictedItem = currentVictim;
@@ -431,9 +429,5 @@ public class ORecordMemoryCache {
       setNextLRUPointer(lruTail, OMemory.NULL_POINTER);
 
     return true;
-  }
-
-  public boolean isScheduleEviction() {
-    return scheduleEviction;
   }
 }
