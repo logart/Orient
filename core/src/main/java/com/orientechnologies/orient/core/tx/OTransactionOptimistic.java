@@ -38,6 +38,7 @@ import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.ORecordCallback;
 import com.orientechnologies.orient.core.storage.OStorageEmbedded;
+import com.orientechnologies.orient.core.storage.OStorageProxy;
 
 public class OTransactionOptimistic extends OTransactionRealAbstract {
   private boolean              usingLog;
@@ -56,7 +57,7 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
     checkTransaction();
     status = TXSTATUS.COMMITTING;
 
-    if (!(database.getStorage() instanceof OStorageEmbedded))
+    if (database.getStorage() instanceof OStorageProxy)
       database.getStorage().commit(this);
     else {
       final List<String> involvedIndexes = getInvolvedIndexes();
@@ -74,7 +75,7 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
             if (lockedIndexes == null)
               lockedIndexes = new ArrayList<OIndexMVRBTreeAbstract<?>>();
 
-            index.acquireExclusiveLock();
+            index.acquireModificationLock();
             lockedIndexes.add(index);
           }
 
@@ -101,12 +102,15 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
               ODocument doc = (ODocument) record;
               if (!lockedIndexes.contains(index.getInternal()) && doc.getSchemaClass() != null && index.getDefinition() != null
                   && doc.getSchemaClass().isSubClassOf(index.getDefinition().getClassName())) {
-                ((OIndexMVRBTreeAbstract<?>) index.getInternal()).acquireExclusiveLock();
+                index.getInternal().acquireModificationLock();
                 lockedIndexes.add((OIndexMVRBTreeAbstract<?>) index.getInternal());
               }
             }
           }
         }
+
+        for (OIndexMVRBTreeAbstract<?> index : lockedIndexes)
+          index.acquireExclusiveLock();
 
         database.getStorage().callInLock(new Callable<Void>() {
 
@@ -128,11 +132,14 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
         }, true);
       } finally {
         // RELEASE INDEX LOCKS IF ANY
-        if (lockedIndexes != null)
-          // DON'T USE GENERICS TO AVOID OpenJDK CRASH :-(
-          for (OIndexMVRBTreeAbstract<?> index : lockedIndexes) {
+        if (lockedIndexes != null) {
+          for (OIndexMVRBTreeAbstract<?> index : lockedIndexes)
             index.releaseExclusiveLock();
-          }
+
+          for (OIndexMVRBTreeAbstract<?> index : lockedIndexes)
+            index.releaseModificationLock();
+
+        }
       }
     }
   }

@@ -373,6 +373,9 @@ public class OStorageConfiguration implements OSerializableStream {
   public void synch() throws IOException {
   }
 
+  public void setSoftlyClosed(boolean softlyClosed) throws IOException {
+  }
+
   public void close() throws IOException {
   }
 

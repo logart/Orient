@@ -76,6 +76,10 @@ public class OChannelBinaryProtocol {
   public static final byte  REQUEST_CLUSTER               = 92; // SINCE 1.0
   public static final byte  REQUEST_DB_TRANSFER           = 93; // SINCE 1.0.2
 
+  // Lock + sync
+  public static final byte  REQUEST_DB_FREEZE             = 94; // SINCE 1.1.0
+  public static final byte  REQUEST_DB_RELEASE            = 95; // SINCE 1.1.0
+
   // INCOMING
   public static final byte  RESPONSE_STATUS_OK            = 0;
   public static final byte  RESPONSE_STATUS_ERROR         = 1;

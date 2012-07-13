@@ -20,8 +20,11 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 
 import com.orientechnologies.common.log.OLogManager;
+import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.sql.OCommandSQL;
 import com.orientechnologies.orient.server.distributed.ODistributedServerManager.EXECUTION_MODE;
+import com.orientechnologies.orient.server.distributed.ODistributedThreadLocal;
+import com.orientechnologies.orient.server.distributed.OServerOfflineException;
 
 /**
  * Distributed task used for synchronization.
@@ -49,14 +52,29 @@ public class OSQLCommandDistributedTask extends OAbstractDistributedTask<Object>
 
   @Override
   public Object call() throws Exception {
-    OLogManager.instance().debug(this, "DISTRIBUTED <- command: %s", text.toString());
+    if (OLogManager.instance().isDebugEnabled())
+      OLogManager.instance().debug(this, "DISTRIBUTED <- command: %s", text.toString());
 
-    Object result = new OCommandSQL(text).execute();
-    if (mode != EXECUTION_MODE.FIRE_AND_FORGET)
-      return result;
+    if (status != STATUS.ALIGN && !getDistributedServerManager().checkStatus("online"))
+      // NODE NOT ONLINE, REFUSE THE OEPRATION
+      throw new OServerOfflineException();
 
-    // FIRE AND FORGET MODE: AVOID THE PAYLOAD AS RESULT
-    return null;
+    final ODatabaseDocumentTx db = getDatabase();
+    ODistributedThreadLocal.INSTANCE.distributedExecution = true;
+    try {
+
+      Object result = getStorage().command(new OCommandSQL(text));
+
+      if (mode != EXECUTION_MODE.FIRE_AND_FORGET)
+        return result;
+
+      // FIRE AND FORGET MODE: AVOID THE PAYLOAD AS RESULT
+      return null;
+
+    } finally {
+      ODistributedThreadLocal.INSTANCE.distributedExecution = false;
+      db.close();
+    }
   }
 
   @Override

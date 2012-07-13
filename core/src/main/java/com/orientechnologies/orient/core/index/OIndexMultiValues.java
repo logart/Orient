@@ -15,16 +15,6 @@
  */
 package com.orientechnologies.orient.core.index;
 
-import com.orientechnologies.common.collection.OMVRBTree;
-import com.orientechnologies.common.collection.OMVRBTreeEntry;
-import com.orientechnologies.common.listener.OProgressListener;
-import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
-import com.orientechnologies.orient.core.db.record.OIdentifiable;
-import com.orientechnologies.orient.core.record.ORecord;
-import com.orientechnologies.orient.core.record.impl.ODocument;
-import com.orientechnologies.orient.core.serialization.serializer.stream.OStreamSerializerListRID;
-import com.orientechnologies.orient.core.type.tree.OMVRBTreeRIDSet;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -32,6 +22,17 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
+
+import com.orientechnologies.common.collection.OMVRBTree;
+import com.orientechnologies.common.collection.OMVRBTreeEntry;
+import com.orientechnologies.common.comparator.ODefaultComparator;
+import com.orientechnologies.common.listener.OProgressListener;
+import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
+import com.orientechnologies.orient.core.db.record.OIdentifiable;
+import com.orientechnologies.orient.core.record.ORecord;
+import com.orientechnologies.orient.core.record.impl.ODocument;
+import com.orientechnologies.orient.core.serialization.serializer.stream.OStreamSerializerListRID;
+import com.orientechnologies.orient.core.type.tree.OMVRBTreeRIDSet;
 
 /**
  * Abstract index implementation that supports multi-values for the same key.
@@ -54,7 +55,7 @@ public abstract class OIndexMultiValues extends OIndexMVRBTreeAbstract<Set<OIden
       if (values == null)
         return Collections.emptySet();
 
-      return values;
+      return new HashSet<OIdentifiable>(values);
 
     } finally {
       releaseExclusiveLock();
@@ -62,48 +63,62 @@ public abstract class OIndexMultiValues extends OIndexMVRBTreeAbstract<Set<OIden
   }
 
   public OIndexMultiValues put(final Object iKey, final OIdentifiable iSingleValue) {
+    modificationLock.requestModificationLock();
 
-    acquireExclusiveLock();
     try {
+      acquireExclusiveLock();
+      try {
 
-      checkForKeyType(iKey);
+        checkForKeyType(iKey);
 
-      Set<OIdentifiable> values = map.get(iKey);
+        Set<OIdentifiable> values = map.get(iKey);
 
-      if (values == null)
-        values = new OMVRBTreeRIDSet().setAutoConvert(false);
+        if (values == null)
+          values = new OMVRBTreeRIDSet().setAutoConvert(false);
 
-      if (!iSingleValue.getIdentity().isValid())
-        ((ORecord<?>) iSingleValue).save();
+        if (!iSingleValue.getIdentity().isValid())
+          ((ORecord<?>) iSingleValue).save();
 
-      values.add(iSingleValue.getIdentity());
+        values.add(iSingleValue.getIdentity());
 
-      map.put(iKey, values);
-      return this;
+        map.put(iKey, values);
+        return this;
 
+      } finally {
+        releaseExclusiveLock();
+      }
     } finally {
-      releaseExclusiveLock();
+      modificationLock.releaseModificationLock();
     }
   }
 
   @Override
   public boolean remove(final Object iKey, final OIdentifiable iValue) {
+    modificationLock.requestModificationLock();
 
-    acquireExclusiveLock();
     try {
+      acquireExclusiveLock();
+      try {
 
-      final Set<OIdentifiable> recs = get(iKey);
-      if (recs.remove(iValue)) {
-        if (recs.isEmpty())
-          map.remove(iKey);
-        else
-          map.put(iKey, recs);
-        return true;
+        Set<OIdentifiable> recs = map.get(iKey);
+
+        if (recs == null)
+          return false;
+
+        if (recs.remove(iValue)) {
+          if (recs.isEmpty())
+            map.remove(iKey);
+          else
+            map.put(iKey, recs);
+          return true;
+        }
+        return false;
+
+      } finally {
+        releaseExclusiveLock();
       }
-      return false;
-
     } finally {
-      releaseExclusiveLock();
+      modificationLock.releaseModificationLock();
     }
   }
 
@@ -296,8 +311,8 @@ public abstract class OIndexMultiValues extends OIndexMVRBTreeAbstract<Set<OIden
 
   @SuppressWarnings({ "rawtypes", "unchecked" })
   public Collection<OIdentifiable> getValues(final Collection<?> iKeys, final int maxValuesToFetch) {
-    final List<Comparable> sortedKeys = new ArrayList<Comparable>((Collection<? extends Comparable>) iKeys);
-    Collections.sort(sortedKeys);
+    final List<Object> sortedKeys = new ArrayList<Object>(iKeys);
+    Collections.sort(sortedKeys, ODefaultComparator.INSTANCE);
 
     acquireExclusiveLock();
     try {
@@ -482,8 +497,8 @@ public abstract class OIndexMultiValues extends OIndexMVRBTreeAbstract<Set<OIden
 
   @SuppressWarnings({ "rawtypes", "unchecked" })
   public Collection<ODocument> getEntries(Collection<?> iKeys, int maxEntriesToFetch) {
-    final List<Comparable> sortedKeys = new ArrayList<Comparable>((Collection<? extends Comparable>) iKeys);
-    Collections.sort(sortedKeys);
+    final List<Object> sortedKeys = new ArrayList<Object>(iKeys);
+    Collections.sort(sortedKeys, ODefaultComparator.INSTANCE);
 
     acquireExclusiveLock();
     try {

@@ -98,4 +98,9 @@ public class OStorageConfigurationSegment extends OStorageConfiguration {
   public void synch() throws IOException {
     segment.getFile().synch();
   }
+
+  @Override
+  public void setSoftlyClosed(boolean softlyClosed) throws IOException {
+    segment.getFile().setSoftlyClosed(softlyClosed);
+  }
 }

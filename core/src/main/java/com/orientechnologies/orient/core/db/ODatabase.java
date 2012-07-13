@@ -51,7 +51,7 @@ public interface ODatabase {
   }
 
   public static enum ATTRIBUTES {
-    STATUS, DEFAULTCLUSTERID
+    TYPE, STATUS, DEFAULTCLUSTERID
   }
 
   /**
@@ -362,7 +362,7 @@ public interface ODatabase {
   /**
    * Drop a data segment and all the contained data.
    * 
-   * @param data
+   * @param name
    *          segment name
    * @return true if the segment has been removed, otherwise false
    */
@@ -428,4 +428,36 @@ public interface ODatabase {
   public void unregisterListener(ODatabaseListener iListener);
 
   public <V> V callInLock(Callable<V> iCallable, boolean iExclusiveLock);
+
+  /**
+   * Flush cached storage content to the disk.
+   * 
+   * After this call users can perform only select queries. All write-related commands will queued till {@link #release()} command
+   * will be called.
+   * 
+   * Given command waits till all on going modifications in indexes or DB will be finished.
+   * 
+   * IMPORTANT: This command is not reentrant.
+   */
+  public void freeze();
+
+  /**
+   * Allows to execute write-related commands on DB. Called after {@link #freeze()} command.
+   */
+  public void release();
+
+  /**
+   * Flush cached storage content to the disk.
+   * 
+   * After this call users can perform only select queries. All write-related commands will queued till {@link #release()} command
+   * will be called or exception will be thrown on attempt to modify DB data. Concrete behaviour depends on
+   * <code>throwException</code> parameter.
+   * 
+   * IMPORTANT: This command is not reentrant.
+   * 
+   * @param throwException
+   *          If <code>true</code> {@link com.orientechnologies.common.concur.lock.OModificationOperationProhibitedException}
+   *          exception will be thrown in case of write command will be performed.
+   */
+  public void freeze(boolean throwException);
 }

@@ -16,69 +16,68 @@
 
 package com.orientechnologies.orient.core.serialization.serializer.binary.impl;
 
+import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.bytes2int;
+import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.int2bytes;
+
+import java.util.Arrays;
+
 import com.orientechnologies.common.types.OBinaryConverter;
 import com.orientechnologies.common.types.OBinaryConverterFactory;
 import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
 
-import java.util.Arrays;
-
-import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.bytes2int;
-import static com.orientechnologies.orient.core.serialization.OBinaryProtocol.int2bytes;
-
 /**
- * Serializer for  {@link com.orientechnologies.orient.core.metadata.schema.OType#BINARY} .
- *
+ * Serializer for {@link com.orientechnologies.orient.core.metadata.schema.OType#BINARY} .
+ * 
  * @author ibershadskiy <a href="mailto:ibersh20@gmail.com">Ilya Bershadskiy</a>
  * @since 20.01.12
  */
 public class OBinaryTypeSerializer implements OBinarySerializer<byte[]> {
-	private static final OBinaryConverter BINARY_CONVERTER = OBinaryConverterFactory.getConverter();
+  private static final OBinaryConverter     BINARY_CONVERTER = OBinaryConverterFactory.getConverter();
 
-	public static final OBinaryTypeSerializer INSTANCE = new OBinaryTypeSerializer();
-	public static final byte ID = 17;
+  public static final OBinaryTypeSerializer INSTANCE         = new OBinaryTypeSerializer();
+  public static final byte                  ID               = 17;
 
-	public int getObjectSize(int length) {
-		return length + OIntegerSerializer.INT_SIZE;
-	}
+  public int getObjectSize(int length) {
+    return length + OIntegerSerializer.INT_SIZE;
+  }
 
-	public int getObjectSize(byte[] object) {
-		return object.length + OIntegerSerializer.INT_SIZE;
-	}
+  public int getObjectSize(byte[] object) {
+    return object.length + OIntegerSerializer.INT_SIZE;
+  }
 
-	public void serialize(byte[] object, byte[] stream, int startPosition) {
-		int len = object.length;
-		int2bytes(len, stream, startPosition);
-		System.arraycopy(object, 0, stream, startPosition + OIntegerSerializer.INT_SIZE, len);
-	}
+  public void serialize(byte[] object, byte[] stream, int startPosition) {
+    int len = object.length;
+    int2bytes(len, stream, startPosition);
+    System.arraycopy(object, 0, stream, startPosition + OIntegerSerializer.INT_SIZE, len);
+  }
 
-	public byte[] deserialize(byte[] stream, int startPosition) {
-		int len = bytes2int(stream, startPosition);
-		return Arrays.copyOfRange(stream, startPosition + OIntegerSerializer.INT_SIZE, startPosition + OIntegerSerializer.INT_SIZE + len);
-	}
+  public byte[] deserialize(byte[] stream, int startPosition) {
+    int len = bytes2int(stream, startPosition);
+    return Arrays.copyOfRange(stream, startPosition + OIntegerSerializer.INT_SIZE, startPosition + OIntegerSerializer.INT_SIZE
+        + len);
+  }
 
-	public int getObjectSize(byte[] stream, int startPosition) {
-		return  bytes2int(stream, startPosition);
-	}
+  public int getObjectSize(byte[] stream, int startPosition) {
+    return bytes2int(stream, startPosition) + OIntegerSerializer.INT_SIZE;
+  }
 
-	public int getObjectSizeNative(byte[] stream, int startPosition) {
-		return BINARY_CONVERTER.getInt(stream, startPosition, 0);
-	}
+  public int getObjectSizeNative(byte[] stream, int startPosition) {
+    return BINARY_CONVERTER.getInt(stream, startPosition, 0) + OIntegerSerializer.INT_SIZE;
+  }
 
-	public void serializeNative(byte[] object, byte[] stream, int startPosition) {
-		int len = object.length;
-		BINARY_CONVERTER.putInt(stream, startPosition, 0, len);
-		System.arraycopy(object, 0, stream, startPosition + OIntegerSerializer.INT_SIZE, len);
-	}
+  public void serializeNative(byte[] object, byte[] stream, int startPosition) {
+    int len = object.length;
+    BINARY_CONVERTER.putInt(stream, startPosition, 0, len);
+    System.arraycopy(object, 0, stream, startPosition + OIntegerSerializer.INT_SIZE, len);
+  }
 
-	public byte[] deserializeNative(byte[] stream, int startPosition) {
-		int len = BINARY_CONVERTER.getInt(stream, startPosition, 0);
-		return Arrays.copyOfRange(stream, startPosition + OIntegerSerializer.INT_SIZE,
-						startPosition + OIntegerSerializer.INT_SIZE + len);
-	}
+  public byte[] deserializeNative(byte[] stream, int startPosition) {
+    int len = BINARY_CONVERTER.getInt(stream, startPosition, 0);
+    return Arrays.copyOfRange(stream, startPosition + OIntegerSerializer.INT_SIZE, startPosition + OIntegerSerializer.INT_SIZE
+        + len);
+  }
 
-	public byte getId() {
-		return ID;
-	}
+  public byte getId() {
+    return ID;
+  }
 }
-
-

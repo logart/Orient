@@ -50,6 +50,7 @@
         <classes>
             <class name="com.orientechnologies.orient.test.database.auto.IndexTest"/>
             <class name="com.orientechnologies.orient.test.database.auto.IndexCustomKeyTest"/>
+            <class name="com.orientechnologies.orient.test.database.auto.ByteArrayKeyTest"/>
             <class name="com.orientechnologies.orient.test.database.auto.FullTextIndexTest"/>
             <class name="com.orientechnologies.orient.test.database.auto.ClassIndexManagerTest"/>
             <class name="com.orientechnologies.orient.test.database.auto.SQLSelectIndexReuseTest"/>
@@ -72,6 +73,7 @@
             <class name="com.orientechnologies.orient.test.database.auto.IndexTxAwareOneValueGetEntriesTest"/>
             <class name="com.orientechnologies.orient.test.database.auto.LinkListIndexTest"/>
             <class name="com.orientechnologies.orient.test.database.auto.LinkMapIndexTest"/>
+            <class name="com.orientechnologies.orient.test.database.auto.SQLIndexWithoutSchemaTest"/>
         </classes>
     </test>
     <test name="Dictionary">

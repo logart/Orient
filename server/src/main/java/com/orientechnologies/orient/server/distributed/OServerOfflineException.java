@@ -26,16 +26,4 @@ public class OServerOfflineException extends ODistributedException {
 
   public OServerOfflineException() {
   }
-
-  public OServerOfflineException(String message, Throwable cause) {
-    super(message, cause);
-  }
-
-  public OServerOfflineException(String message) {
-    super(message);
-  }
-
-  public OServerOfflineException(Throwable cause) {
-    super(cause);
-  }
 }

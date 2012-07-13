@@ -16,14 +16,29 @@
 
 package com.orientechnologies.orient.core.index;
 
-import com.orientechnologies.orient.core.db.record.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
+
+import com.orientechnologies.orient.core.db.record.OIdentifiable;
+import com.orientechnologies.orient.core.db.record.OMultiValueChangeEvent;
+import com.orientechnologies.orient.core.db.record.OMultiValueChangeTimeLine;
+import com.orientechnologies.orient.core.db.record.ORecordElement;
+import com.orientechnologies.orient.core.db.record.OTrackedMultiValue;
 import com.orientechnologies.orient.core.exception.OConcurrentModificationException;
 import com.orientechnologies.orient.core.exception.ORecordNotFoundException;
 import com.orientechnologies.orient.core.hook.ODocumentHookAbstract;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.record.impl.ODocument;
-
-import java.util.*;
 
 /**
  * Handles indexing when records change.
@@ -36,6 +51,8 @@ public class OClassIndexManager extends ODocumentHookAbstract {
     iRecord = checkForLoading(iRecord);
 
     checkIndexedPropertiesOnCreation(iRecord);
+
+    acquireModificationLock(iRecord);
     return false;
   }
 
@@ -59,7 +76,14 @@ public class OClassIndexManager extends ODocumentHookAbstract {
         } else if (key != null)
           index.put(key, rid);
       }
+
+      releaseModificationLock(iRecord);
     }
+  }
+
+  @Override
+  public void onRecordCreateFailed(ODocument iDocument) {
+    releaseModificationLock(iDocument);
   }
 
   @Override
@@ -67,6 +91,8 @@ public class OClassIndexManager extends ODocumentHookAbstract {
     iRecord = checkForLoading(iRecord);
 
     checkIndexedPropertiesOnUpdate(iRecord);
+
+    acquireModificationLock(iRecord);
     return false;
   }
 
@@ -93,10 +119,17 @@ public class OClassIndexManager extends ODocumentHookAbstract {
       }
     }
 
+    releaseModificationLock(iRecord);
+
     if (iRecord.isTrackingChanges()) {
       iRecord.setTrackingChanges(false);
       iRecord.setTrackingChanges(true);
     }
+  }
+
+  @Override
+  public void onRecordUpdateFailed(ODocument iDocument) {
+    releaseModificationLock(iDocument);
   }
 
   @Override
@@ -113,6 +146,7 @@ public class OClassIndexManager extends ODocumentHookAbstract {
                 + iDocument.getVersion() + " your=v" + version + ")", iDocument.getIdentity(), iDocument.getVersion(), version);
     }
 
+    acquireModificationLock(iDocument);
     return false;
   }
 
@@ -157,10 +191,17 @@ public class OClassIndexManager extends ODocumentHookAbstract {
       }
     }
 
+    releaseModificationLock(iRecord);
+
     if (iRecord.isTrackingChanges()) {
       iRecord.setTrackingChanges(false);
       iRecord.setTrackingChanges(true);
     }
+  }
+
+  @Override
+  public void onRecordDeleteFailed(ODocument iDocument) {
+    releaseModificationLock(iDocument);
   }
 
   private void processCompositeIndexUpdate(final OIndex<?> index, final Set<String> dirtyFields, final ODocument iRecord) {
@@ -343,7 +384,37 @@ public class OClassIndexManager extends ODocumentHookAbstract {
           index.checkEntry(iRecord, key);
       }
     }
+  }
 
+  private void acquireModificationLock(final ODocument iRecord) {
+    final OClass cls = iRecord.getSchemaClass();
+    if (cls == null)
+      return;
+
+    final Collection<OIndex<?>> indexes = cls.getIndexes();
+
+    final SortedSet<OIndex<?>> indexesToLock = new TreeSet<OIndex<?>>(new Comparator<OIndex<?>>() {
+      public int compare(OIndex<?> indexOne, OIndex<?> indexTwo) {
+        return indexOne.getName().compareTo(indexTwo.getName());
+      }
+    });
+
+    indexesToLock.addAll(indexes);
+
+    for (final OIndex<?> index : indexesToLock) {
+      index.getInternal().acquireModificationLock();
+    }
+  }
+
+  private void releaseModificationLock(final ODocument iRecord) {
+    final OClass cls = iRecord.getSchemaClass();
+    if (cls == null)
+      return;
+
+    final Collection<OIndex<?>> indexes = cls.getIndexes();
+    for (final OIndex<?> index : indexes) {
+      index.getInternal().releaseModificationLock();
+    }
   }
 
   private void checkIndexedPropertiesOnUpdate(final ODocument iRecord) {

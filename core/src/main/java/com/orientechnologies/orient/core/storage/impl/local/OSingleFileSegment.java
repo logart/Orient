@@ -23,7 +23,6 @@ import com.orientechnologies.common.parser.OSystemVariableResolver;
 import com.orientechnologies.orient.core.config.OStorageFileConfiguration;
 import com.orientechnologies.orient.core.storage.fs.OFile;
 import com.orientechnologies.orient.core.storage.fs.OFileFactory;
-import com.orientechnologies.orient.core.storage.fs.OMMapManager;
 
 public class OSingleFileSegment {
   protected OStorageLocal             storage;
@@ -51,8 +50,7 @@ public class OSingleFileSegment {
     boolean softClosed = file.open();
     if (!softClosed) {
       // LAST TIME THE FILE WAS NOT CLOSED IN SOFT WAY
-      OLogManager.instance().warn(this,
-          "file " + file.getAbsolutePath() + " was not closed correctly last time. Checking segments...");
+      OLogManager.instance().warn(this, "segment file '%s' was not closed correctly last time", OFileUtils.getPath(file.getName()));
     }
 
     return softClosed;
@@ -95,5 +93,13 @@ public class OSingleFileSegment {
 
   public OFile getFile() {
     return file;
+  }
+
+  public void synch() throws IOException {
+    file.synch();
+  }
+
+  public void setSoftlyClosed(boolean softlyClosed) throws IOException {
+    file.setSoftlyClosed(softlyClosed);
   }
 }

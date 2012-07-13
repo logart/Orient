@@ -26,38 +26,44 @@ import com.orientechnologies.orient.core.metadata.schema.OClass;
  * 
  */
 public class OIndexDictionary extends OIndexOneValue {
-    
-    public static final String TYPE_ID = OClass.INDEX_TYPE.DICTIONARY.toString();
-    
-	public OIndexDictionary() {
-		super(TYPE_ID);
-	}
 
-	public OIndexOneValue put(final Object iKey, final OIdentifiable iSingleValue) {
-		acquireExclusiveLock();
-		try {
-			checkForKeyType(iKey);
+  public static final String TYPE_ID = OClass.INDEX_TYPE.DICTIONARY.toString();
 
-			final OIdentifiable value = map.get(iKey);
+  public OIndexDictionary() {
+    super(TYPE_ID);
+  }
 
-			if (value == null || !value.equals(iSingleValue))
-				map.put(iKey, iSingleValue);
+  public OIndexOneValue put(final Object iKey, final OIdentifiable iSingleValue) {
+    modificationLock.requestModificationLock();
 
-			return this;
+    try {
+      acquireExclusiveLock();
+      try {
+        checkForKeyType(iKey);
 
-		} finally {
-			releaseExclusiveLock();
-		}
-	}
+        final OIdentifiable value = map.get(iKey);
 
-	/**
-	 * Disables check of entries.
-	 */
-	@Override
-	public void checkEntry(final OIdentifiable iRecord, final Object iKey) {
-	}
+        if (value == null || !value.equals(iSingleValue))
+          map.put(iKey, iSingleValue);
 
-	public boolean canBeUsedInEqualityOperators() {
-		return true;
-	}
+        return this;
+
+      } finally {
+        releaseExclusiveLock();
+      }
+    } finally {
+      modificationLock.releaseModificationLock();
+    }
+  }
+
+  /**
+   * Disables check of entries.
+   */
+  @Override
+  public void checkEntry(final OIdentifiable iRecord, final Object iKey) {
+  }
+
+  public boolean canBeUsedInEqualityOperators() {
+    return true;
+  }
 }

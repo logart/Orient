@@ -15,20 +15,26 @@
  */
 package com.orientechnologies.orient.core.engine.local;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.orientechnologies.common.log.OLogManager;
+import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.engine.OEngineAbstract;
 import com.orientechnologies.orient.core.exception.ODatabaseException;
+import com.orientechnologies.orient.core.exception.OMemoryLockException;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.impl.local.OStorageLocal;
 import com.orientechnologies.orient.core.type.tree.OBuddyMemory;
 import com.orientechnologies.orient.core.type.tree.OMemory;
 
 public class OEngineLocal extends OEngineAbstract {
-  public static final String   NAME = "local";
+  public static final String         NAME         = "local";
+  private static final AtomicBoolean memoryLocked = new AtomicBoolean(false);
 
-  private static final OMemory MEMORY;
+  private static final OMemory       MEMORY;
 
   static {
     final long maxMemory = Runtime.getRuntime().maxMemory();
@@ -42,6 +48,11 @@ public class OEngineLocal extends OEngineAbstract {
   }
 
   public OStorage createStorage(final String iDbName, final Map<String, String> iConfiguration) {
+
+    if (memoryLocked.compareAndSet(false, true)) {
+      lockMemory();
+    }
+
     try {
       // GET THE STORAGE
       return new OStorageLocal(iDbName, iDbName, getMode(iConfiguration), MEMORY);
@@ -52,6 +63,31 @@ public class OEngineLocal extends OEngineAbstract {
           ODatabaseException.class);
     }
     return null;
+  }
+
+  private void lockMemory() {
+    if (!OGlobalConfiguration.FILE_MMAP_USE_OLD_MANAGER.getValueAsBoolean()
+        && OGlobalConfiguration.FILE_MMAP_LOCK_MEMORY.getValueAsBoolean()) {
+      // lock memory
+      try {
+        Class<?> MemoryLocker = ClassLoader.getSystemClassLoader().loadClass("com.orientechnologies.nio.MemoryLocker");
+        Method lockMemory = MemoryLocker.getMethod("lockMemory", boolean.class);
+        lockMemory.invoke(null, OGlobalConfiguration.JNA_DISABLE_USE_SYSTEM_LIBRARY.getValueAsBoolean());
+      } catch (ClassNotFoundException e) {
+        OLogManager
+            .instance()
+            .config(
+                null,
+                "[OEngineLocal.createStorage] Cannot lock virtual memory, the orientdb-nativeos.jar is not in classpath or there is not a native implementation for the current OS: "
+                    + System.getProperty("os.name") + " v." + System.getProperty("os.name"));
+      } catch (NoSuchMethodException e) {
+        throw new OMemoryLockException("Error while locking memory", e);
+      } catch (InvocationTargetException e) {
+        throw new OMemoryLockException("Error while locking memory", e);
+      } catch (IllegalAccessException e) {
+        throw new OMemoryLockException("Error while locking memory", e);
+      }
+    }
   }
 
   public String getName() {

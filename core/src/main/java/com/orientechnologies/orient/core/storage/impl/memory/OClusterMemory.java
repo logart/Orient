@@ -291,6 +291,9 @@ public class OClusterMemory extends OSharedResourceAdaptive implements OCluster 
   public void synch() {
   }
 
+  public void setSoftlyClosed(boolean softlyClosed) throws IOException {
+  }
+
   public void lock() {
     acquireSharedLock();
   }

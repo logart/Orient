@@ -22,102 +22,140 @@ import org.testng.annotations.Parameters;
 import org.testng.annotations.Test;
 
 import com.orientechnologies.orient.core.db.record.ODatabaseFlat;
+import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.record.impl.ORecordFlat;
+import com.orientechnologies.orient.object.db.OObjectDatabaseTx;
 
 @Test(groups = "dictionary")
 public class DictionaryTest {
-	private ODatabaseFlat	database;
-	private ORecordFlat		record;
+  private String url;
 
-	@Parameters(value = "url")
-	public DictionaryTest(String iURL) {
-		database = new ODatabaseFlat(iURL);
-		record = database.newInstance();
-	}
+  public DictionaryTest() {
+  }
 
-	public void testDictionaryCreate() throws IOException {
-		database.open("admin", "admin");
+  @Parameters(value = "url")
+  public DictionaryTest(String iURL) {
+    url = iURL;
+  }
 
-		database.getDictionary().put("key1", record.value("Dictionary test!"));
+  public void testDictionaryCreate() throws IOException {
+    ODatabaseFlat database = new ODatabaseFlat(url);
+    database.open("admin", "admin");
+    ORecordFlat record = database.newInstance();
 
-		database.close();
-	}
+    database.getDictionary().put("key1", record.value("Dictionary test!"));
 
-	@Test(dependsOnMethods = "testDictionaryCreate")
-	public void testDictionaryLookup() throws IOException {
-		database.open("admin", "admin");
+    database.close();
+  }
 
-		Assert.assertNotNull(database.getDictionary().get("key1"));
-		Assert.assertTrue(((ORecordFlat) database.getDictionary().get("key1")).value().equals("Dictionary test!"));
+  @Test(dependsOnMethods = "testDictionaryCreate")
+  public void testDictionaryLookup() throws IOException {
+    ODatabaseFlat database = new ODatabaseFlat(url);
+    database.open("admin", "admin");
 
-		database.close();
-	}
+    Assert.assertNotNull(database.getDictionary().get("key1"));
+    Assert.assertTrue(((ORecordFlat) database.getDictionary().get("key1")).value().equals("Dictionary test!"));
 
-	@Test(dependsOnMethods = "testDictionaryLookup")
-	public void testDictionaryUpdate() throws IOException {
-		database.open("admin", "admin");
+    database.close();
+  }
 
-		final long originalSize = database.getDictionary().size();
+  @Test(dependsOnMethods = "testDictionaryLookup")
+  public void testDictionaryUpdate() throws IOException {
+    ODatabaseFlat database = new ODatabaseFlat(url);
+    database.open("admin", "admin");
 
-		database.getDictionary().put("key1", database.newInstance().value("Text changed"));
+    final long originalSize = database.getDictionary().size();
 
-		database.close();
-		database.open("admin", "admin");
+    database.getDictionary().put("key1", database.newInstance().value("Text changed"));
 
-		Assert.assertEquals(((ORecordFlat) database.getDictionary().get("key1")).value(), "Text changed");
-		Assert.assertEquals(database.getDictionary().size(), originalSize);
+    database.close();
+    database.open("admin", "admin");
 
-		database.close();
-	}
+    Assert.assertEquals(((ORecordFlat) database.getDictionary().get("key1")).value(), "Text changed");
+    Assert.assertEquals(database.getDictionary().size(), originalSize);
 
-	@Test(dependsOnMethods = "testDictionaryUpdate")
-	public void testDictionaryDelete() throws IOException {
-		database.open("admin", "admin");
+    database.close();
+  }
 
-		final long originalSize = database.getDictionary().size();
-		Assert.assertNotNull(database.getDictionary().remove("key1"));
+  @Test(dependsOnMethods = "testDictionaryUpdate")
+  public void testDictionaryDelete() throws IOException {
+    ODatabaseFlat database = new ODatabaseFlat(url);
+    database.open("admin", "admin");
 
-		database.close();
-		database.open("admin", "admin");
+    final long originalSize = database.getDictionary().size();
+    Assert.assertNotNull(database.getDictionary().remove("key1"));
 
-		Assert.assertEquals(database.getDictionary().size(), originalSize - 1);
+    database.close();
+    database.open("admin", "admin");
 
-		database.close();
-	}
+    Assert.assertEquals(database.getDictionary().size(), originalSize - 1);
 
-	@Test(dependsOnMethods = "testDictionaryDelete")
-	public void testDictionaryMassiveCreate() throws IOException {
-		database.open("admin", "admin");
+    database.close();
+  }
 
-		final long originalSize = database.getDictionary().size();
+  @Test(dependsOnMethods = "testDictionaryDelete")
+  public void testDictionaryMassiveCreate() throws IOException {
+    ODatabaseFlat database = new ODatabaseFlat(url);
+    database.open("admin", "admin");
 
-		// ASSURE TO STORE THE PAGE-SIZE + 3 FORCING THE CREATION OF LEFT AND RIGHT
-		final int total = 1000;
+    final long originalSize = database.getDictionary().size();
 
-		for (int i = total; i > 0; --i) {
-			database.getDictionary().put("key-" + (originalSize + i), database.newInstance().value("test-dictionary-" + i));
-		}
+    // ASSURE TO STORE THE PAGE-SIZE + 3 FORCING THE CREATION OF LEFT AND RIGHT
+    final int total = 1000;
 
-		for (int i = total; i > 0; --i) {
-			record = database.getDictionary().get("key-" + (originalSize + i));
-			record.toString().equals("test-dictionary-" + i);
-		}
+    for (int i = total; i > 0; --i) {
+      database.getDictionary().put("key-" + (originalSize + i), database.newInstance().value("test-dictionary-" + i));
+    }
 
-		Assert.assertEquals(database.getDictionary().size(), originalSize + total);
+    for (int i = total; i > 0; --i) {
+      ORecord<?> record = database.getDictionary().get("key-" + (originalSize + i));
+      record.toString().equals("test-dictionary-" + i);
+    }
 
-		database.close();
-	}
+    Assert.assertEquals(database.getDictionary().size(), originalSize + total);
 
-	@Test(dependsOnMethods = "testDictionaryMassiveCreate")
-	public void testDictionaryInTx() throws IOException {
-		database.open("admin", "admin");
+    database.close();
+  }
 
-		database.begin();
-		database.getDictionary().put("tx-key", database.newInstance().value("tx-test-dictionary"));
-		database.commit();
+  @Test(dependsOnMethods = "testDictionaryMassiveCreate")
+  public void testDictionaryInTx() throws IOException {
+    ODatabaseFlat database = new ODatabaseFlat(url);
+    database.open("admin", "admin");
 
-		Assert.assertNotNull(database.getDictionary().get("tx-key"));
+    database.begin();
+    database.getDictionary().put("tx-key", database.newInstance().value("tx-test-dictionary"));
+    database.commit();
 
-		database.close();
-	}
+    Assert.assertNotNull(database.getDictionary().get("tx-key"));
+
+    database.close();
+  }
+
+  public class ObjectDictionaryTest {
+    private String name;
+
+    public ObjectDictionaryTest() {
+    }
+
+    public String getName() {
+      return name;
+    }
+
+    public void setName(String name) {
+      this.name = name;
+    }
+  }
+
+  @Test(dependsOnMethods = "testDictionaryMassiveCreate")
+  public void testDictionaryWithPOJOs() throws IOException {
+    OObjectDatabaseTx database = new OObjectDatabaseTx(url);
+    database.open("admin", "admin");
+    database.getEntityManager().registerEntityClass(ObjectDictionaryTest.class);
+
+    Assert.assertNull(database.getDictionary().get("testKey"));
+    database.getDictionary().put("testKey", new ObjectDictionaryTest());
+    Assert.assertNotNull(database.getDictionary().get("testKey"));
+
+    database.close();
+  }
 }

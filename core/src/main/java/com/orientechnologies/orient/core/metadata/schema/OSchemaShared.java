@@ -49,7 +49,6 @@ import com.orientechnologies.orient.core.type.ODocumentWrapperNoClass;
  * Shared schema class. It's shared by all the database instances that point to the same storage.
  * 
  * @author Luca Garulli (l.garulli--at--orientechnologies.com)
- * 
  */
 @SuppressWarnings("unchecked")
 public class OSchemaShared extends ODocumentWrapperNoClass implements OSchema, OCloseable {
@@ -354,6 +353,11 @@ public class OSchemaShared extends ODocumentWrapperNoClass implements OSchema, O
       dropClassIndexes(cls);
 
       classes.remove(key);
+
+      if (cls.getShortName() != null)
+        // REMOVE THE ALIAS TOO
+        classes.remove(cls.getShortName().toLowerCase());
+
     } finally {
       lock.releaseExclusiveLock();
     }
@@ -506,9 +510,9 @@ public class OSchemaShared extends ODocumentWrapperNoClass implements OSchema, O
       document.field("schemaVersion", CURRENT_VERSION_NUMBER);
 
       Set<ODocument> cc = new HashSet<ODocument>();
-      for (OClass c : classes.values()) {
+      for (OClass c : classes.values())
         cc.add(((OClassImpl) c).toStream());
-      }
+
       document.field("classes", cc, OType.EMBEDDEDSET);
 
     } finally {

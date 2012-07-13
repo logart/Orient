@@ -15,15 +15,21 @@
  */
 package com.orientechnologies.orient.core.sql;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
+import com.orientechnologies.common.collection.OCompositeKey;
+import com.orientechnologies.orient.core.command.OCommandDistributedConditionalReplicateRequest;
 import com.orientechnologies.orient.core.command.OCommandRequest;
 import com.orientechnologies.orient.core.command.OCommandRequestText;
 import com.orientechnologies.orient.core.command.OCommandResultListener;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.exception.OCommandExecutionException;
+import com.orientechnologies.orient.core.index.OCompositeIndexDefinition;
 import com.orientechnologies.orient.core.index.OIndex;
+import com.orientechnologies.orient.core.index.OIndexDefinition;
 import com.orientechnologies.orient.core.metadata.security.ODatabaseSecurityResources;
 import com.orientechnologies.orient.core.metadata.security.ORole;
 import com.orientechnologies.orient.core.record.ORecordAbstract;
@@ -39,7 +45,8 @@ import com.orientechnologies.orient.core.sql.query.OSQLQuery;
  * @author Luca Garulli
  * 
  */
-public class OCommandExecutorSQLDelete extends OCommandExecutorSQLAbstract implements OCommandResultListener {
+public class OCommandExecutorSQLDelete extends OCommandExecutorSQLAbstract implements
+    OCommandDistributedConditionalReplicateRequest, OCommandResultListener {
   public static final String   KEYWORD_DELETE  = "DELETE";
   private static final String  VALUE_NOT_FOUND = "_not_found_";
 
@@ -103,6 +110,9 @@ public class OCommandExecutorSQLDelete extends OCommandExecutorSQLAbstract imple
       return recordCount;
     } else {
       // AGAINST INDEXES
+
+      compiledFilter.bindParameters(iArgs);
+
       final OIndex<?> index = getDatabase().getMetadata().getIndexManager().getIndex(indexName);
       if (index == null)
         throw new OCommandExecutionException("Target index '" + indexName + "' not found");
@@ -117,21 +127,21 @@ public class OCommandExecutorSQLDelete extends OCommandExecutorSQLAbstract imple
       } else {
         if (KEYWORD_KEY.equalsIgnoreCase(compiledFilter.getRootCondition().getLeft().toString()))
           // FOUND KEY ONLY
-          key = compiledFilter.getRootCondition().getRight();
+          key = getIndexKey(index.getDefinition(), compiledFilter.getRootCondition().getRight());
 
         else if (KEYWORD_RID.equalsIgnoreCase(compiledFilter.getRootCondition().getLeft().toString())) {
           // BY RID
-          value = compiledFilter.getRootCondition().getRight();
+          value = OSQLHelper.getValue(compiledFilter.getRootCondition().getRight());
 
         } else if (compiledFilter.getRootCondition().getLeft() instanceof OSQLFilterCondition) {
           // KEY AND VALUE
           final OSQLFilterCondition leftCondition = (OSQLFilterCondition) compiledFilter.getRootCondition().getLeft();
           if (KEYWORD_KEY.equalsIgnoreCase(leftCondition.getLeft().toString()))
-            key = leftCondition.getRight();
+            key = getIndexKey(index.getDefinition(), leftCondition.getRight());
 
           final OSQLFilterCondition rightCondition = (OSQLFilterCondition) compiledFilter.getRootCondition().getRight();
           if (KEYWORD_RID.equalsIgnoreCase(rightCondition.getLeft().toString()))
-            value = rightCondition.getRight();
+            value = OSQLHelper.getValue(rightCondition.getRight());
 
         }
 
@@ -164,7 +174,34 @@ public class OCommandExecutorSQLDelete extends OCommandExecutorSQLAbstract imple
     return false;
   }
 
+  public boolean isReplicated() {
+    return indexName != null;
+  }
+
   public String getSyntax() {
     return "DELETE FROM <Class>|cluster:<cluster [WHERE <condition>*]";
+  }
+
+  private Object getIndexKey(final OIndexDefinition indexDefinition, Object value) {
+    if (indexDefinition instanceof OCompositeIndexDefinition) {
+      if (value instanceof List) {
+        final List<?> values = (List<?>) value;
+        List<Object> keyParams = new ArrayList<Object>(values.size());
+
+        for (Object o : values) {
+          keyParams.add(OSQLHelper.getValue(o));
+        }
+        return indexDefinition.createValue(keyParams);
+      } else {
+        value = OSQLHelper.getValue(value);
+        if (value instanceof OCompositeKey) {
+          return value;
+        } else {
+          return indexDefinition.createValue(value);
+        }
+      }
+    } else {
+      return OSQLHelper.getValue(value);
+    }
   }
 }

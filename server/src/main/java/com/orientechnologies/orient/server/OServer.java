@@ -535,7 +535,10 @@ public class OServer {
     if (iPermissions == null || iPermissions.length() == 0)
       throw new IllegalArgumentException("User permissions null or empty");
 
-    configuration.users = Arrays.copyOf(configuration.users, configuration.users.length + 1);
+    if (configuration.users == null)
+      configuration.users = new OServerUserConfiguration[1];
+    else
+      configuration.users = Arrays.copyOf(configuration.users, configuration.users.length + 1);
 
     if (iPassword == null)
       // AUTO GENERATE PASSWORD
@@ -581,7 +584,7 @@ public class OServer {
     // OGlobalConfiguration.CACHE_LEVEL2_SIZE.setValue(0);
     // OGlobalConfiguration.CACHE_LEVEL1_ENABLED.setValue(Boolean.FALSE);
     // OGlobalConfiguration.CACHE_LEVEL1_SIZE.setValue(0);
-    OGlobalConfiguration.FILE_LOCK.setValue(true);
+    // OGlobalConfiguration.FILE_LOCK.setValue(true);
     // OGlobalConfiguration.MVRBTREE_LAZY_UPDATES.setValue(1);
     // OGlobalConfiguration.LAZYSET_WORK_ON_STREAM.setValue(false);
     OGlobalConfiguration.TX_USE_LOG.setValue(true);

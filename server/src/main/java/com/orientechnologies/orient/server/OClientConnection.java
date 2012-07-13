@@ -21,16 +21,19 @@ import java.net.InetSocketAddress;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.db.raw.ODatabaseRaw;
 import com.orientechnologies.orient.enterprise.channel.binary.OChannelBinary;
+import com.orientechnologies.orient.server.config.OServerUserConfiguration;
 import com.orientechnologies.orient.server.network.protocol.ONetworkProtocol;
 import com.orientechnologies.orient.server.network.protocol.ONetworkProtocolData;
 
 public class OClientConnection {
-  public int                  id;
-  public ONetworkProtocol     protocol;
-  public long                 since;
-  public ODatabaseDocumentTx  database;
-  public ODatabaseRaw         rawDatabase;
-  public ONetworkProtocolData data = new ONetworkProtocolData();
+  public int                      id;
+  public ONetworkProtocol         protocol;
+  public long                     since;
+  public ODatabaseDocumentTx      database;
+  public ODatabaseRaw             rawDatabase;
+  public OServerUserConfiguration serverUser;
+
+  public ONetworkProtocolData     data = new ONetworkProtocolData();
 
   public OClientConnection(final int iId, final ONetworkProtocol iProtocol) throws IOException {
     this.id = iId;

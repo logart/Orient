@@ -16,7 +16,9 @@
 package com.orientechnologies.orient.object.dictionary;
 
 import com.orientechnologies.orient.core.db.object.ODatabaseObject;
+import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.dictionary.ODictionary;
+import com.orientechnologies.orient.core.index.OIndex;
 import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 
@@ -24,21 +26,21 @@ import com.orientechnologies.orient.core.record.impl.ODocument;
  * Wrapper of dictionary instance that convert values in records.
  */
 public class ODictionaryWrapper extends ODictionary<Object> {
-	private ODatabaseObject	database;
+  private ODatabaseObject database;
 
-	public ODictionaryWrapper(final ODatabaseObject iDatabase) {
-		super(iDatabase.getDictionary().getIndex());
-		this.database = iDatabase;
-	}
+  public ODictionaryWrapper(final ODatabaseObject iDatabase, OIndex<OIdentifiable> index) {
+    super(index);
+    this.database = iDatabase;
+  }
 
-	@SuppressWarnings("unchecked")
-	public <RET extends Object> RET get(final String iKey, final String iFetchPlan) {
-		final ORecordInternal<?> record = super.get(iKey);
-		return (RET) database.getUserObjectByRecord(record, iFetchPlan);
-	}
+  @SuppressWarnings("unchecked")
+  public <RET extends Object> RET get(final String iKey, final String iFetchPlan) {
+    final ORecordInternal<?> record = super.get(iKey);
+    return (RET) database.getUserObjectByRecord(record, iFetchPlan);
+  }
 
-	public void put(final String iKey, final Object iValue) {
-		final ODocument record = (ODocument) database.getRecordByUserObject(iValue, false);
-		super.put(iKey, record);
-	}
+  public void put(final String iKey, final Object iValue) {
+    final ODocument record = (ODocument) database.getRecordByUserObject(iValue, false);
+    super.put(iKey, record);
+  }
 }

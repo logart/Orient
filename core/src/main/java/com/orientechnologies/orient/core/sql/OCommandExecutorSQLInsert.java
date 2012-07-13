@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.orientechnologies.orient.core.command.OCommandDistributedConditionalReplicateRequest;
 import com.orientechnologies.orient.core.command.OCommandRequest;
 import com.orientechnologies.orient.core.command.OCommandRequestText;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
@@ -31,6 +32,7 @@ import com.orientechnologies.orient.core.metadata.security.ODatabaseSecurityReso
 import com.orientechnologies.orient.core.metadata.security.ORole;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.serialization.serializer.OStringSerializerHelper;
+import com.orientechnologies.orient.core.sql.filter.OSQLFilterItemField;
 
 /**
  * SQL INSERT command.
@@ -38,10 +40,10 @@ import com.orientechnologies.orient.core.serialization.serializer.OStringSeriali
  * @author Luca Garulli
  * @author Johann Sorel (Geomatys)
  */
-public class OCommandExecutorSQLInsert extends OCommandExecutorSQLSetAware {
+public class OCommandExecutorSQLInsert extends OCommandExecutorSQLSetAware implements
+    OCommandDistributedConditionalReplicateRequest {
   public static final String        KEYWORD_INSERT = "INSERT";
   private static final String       KEYWORD_VALUES = "VALUES";
-  private static final String       KEYWORD_SET    = "SET";
   private String                    className      = null;
   private String                    clusterName    = null;
   private String                    indexName      = null;
@@ -84,6 +86,16 @@ public class OCommandExecutorSQLInsert extends OCommandExecutorSQLSetAware {
     parserSkipWhiteSpaces();
     if (parserIsEnded())
       throwSyntaxErrorException("Set of fields is missed. Example: (name, surname) or SET name = 'Bill'");
+
+    final String temp = parseOptionalWord(true);
+    if (temp.equals("CLUSTER")) {
+      clusterName = parseRequiredWord(false);
+
+      parserSkipWhiteSpaces();
+      if (parserIsEnded())
+        throwSyntaxErrorException("Set of fields is missed. Example: (name, surname) or SET name = 'Bill'");
+    } else
+      parserGoBack();
 
     newRecords = new ArrayList<Map<String, Object>>();
     if (parserGetCurrentChar() == '(') {
@@ -165,6 +177,7 @@ public class OCommandExecutorSQLInsert extends OCommandExecutorSQLSetAware {
     if (newRecords == null)
       throw new OCommandExecutionException("Cannot execute the command because it has not been parsed yet");
 
+    final OCommandParameters commandParameters = new OCommandParameters(iArgs);
     if (indexName != null) {
       final OIndex<?> index = getDatabase().getMetadata().getIndexManager().getIndex(indexName);
       if (index == null)
@@ -172,8 +185,9 @@ public class OCommandExecutorSQLInsert extends OCommandExecutorSQLSetAware {
 
       // BIND VALUES
       Map<String, Object> result = null;
+
       for (Map<String, Object> candidate : newRecords) {
-        index.put(candidate.get(KEYWORD_KEY), (OIdentifiable) candidate.get(KEYWORD_RID));
+        index.put(getIndexKeyValue(commandParameters, candidate), getIndexValue(commandParameters, candidate));
         result = candidate;
       }
 
@@ -185,7 +199,7 @@ public class OCommandExecutorSQLInsert extends OCommandExecutorSQLSetAware {
       final List<ODocument> docs = new ArrayList<ODocument>();
       for (Map<String, Object> candidate : newRecords) {
         final ODocument doc = className != null ? new ODocument(className) : new ODocument();
-        OSQLHelper.bindParameters(doc, candidate, new OCommandParameters(iArgs));
+        OSQLHelper.bindParameters(doc, candidate, commandParameters);
 
         if (clusterName != null) {
           doc.save(clusterName);
@@ -203,9 +217,40 @@ public class OCommandExecutorSQLInsert extends OCommandExecutorSQLSetAware {
     }
   }
 
-  @Override
-  public String getSyntax() {
-    return "INSERT INTO <Class>|cluster:<cluster>|index:<index> [(<field>[,]*) VALUES (<expression>[,]*)[,]*]|[SET <field> = <expression>[,]*]";
+  private Object getIndexKeyValue(OCommandParameters commandParameters, Map<String, Object> candidate) {
+    final Object parsedKey = candidate.get(KEYWORD_KEY);
+    if (parsedKey instanceof OSQLFilterItemField) {
+      final OSQLFilterItemField f = (OSQLFilterItemField) parsedKey;
+      if (f.getRoot().equals("?"))
+        // POSITIONAL PARAMETER
+        return commandParameters.getNext();
+      else if (f.getRoot().startsWith(":"))
+        // NAMED PARAMETER
+        return commandParameters.getByName(f.getRoot().substring(1));
+    }
+    return parsedKey;
   }
 
+  private OIdentifiable getIndexValue(OCommandParameters commandParameters, Map<String, Object> candidate) {
+    final Object parsedRid = candidate.get(KEYWORD_RID);
+    if (parsedRid instanceof OSQLFilterItemField) {
+      final OSQLFilterItemField f = (OSQLFilterItemField) parsedRid;
+      if (f.getRoot().equals("?"))
+        // POSITIONAL PARAMETER
+        return (OIdentifiable) commandParameters.getNext();
+      else if (f.getRoot().startsWith(":"))
+        // NAMED PARAMETER
+        return (OIdentifiable) commandParameters.getByName(f.getRoot().substring(1));
+    }
+    return (OIdentifiable) parsedRid;
+  }
+
+  public boolean isReplicated() {
+    return indexName != null;
+  }
+
+  @Override
+  public String getSyntax() {
+    return "INSERT INTO [class:]<class>|cluster:<cluster>|index:<index> [(<field>[,]*) VALUES (<expression>[,]*)[,]*]|[SET <field> = <expression>[,]*]";
+  }
 }

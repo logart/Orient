@@ -23,7 +23,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,14 +37,11 @@ import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.db.record.ORecordElement;
 import com.orientechnologies.orient.core.exception.OSchemaException;
-import com.orientechnologies.orient.core.index.OCompositeIndexDefinition;
 import com.orientechnologies.orient.core.index.OIndex;
 import com.orientechnologies.orient.core.index.OIndexDefinition;
+import com.orientechnologies.orient.core.index.OIndexDefinitionFactory;
 import com.orientechnologies.orient.core.index.OIndexException;
 import com.orientechnologies.orient.core.index.OIndexManager;
-import com.orientechnologies.orient.core.index.OPropertyIndexDefinition;
-import com.orientechnologies.orient.core.index.OPropertyListIndexDefinition;
-import com.orientechnologies.orient.core.index.OPropertyMapIndexDefinition;
 import com.orientechnologies.orient.core.metadata.security.ODatabaseSecurityResources;
 import com.orientechnologies.orient.core.metadata.security.ORole;
 import com.orientechnologies.orient.core.record.impl.ODocument;
@@ -192,16 +188,16 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
     return this;
   }
 
-  public void setShortNameInternal(final String shortName) {
+  public void setShortNameInternal(final String iShortName) {
     getDatabase().checkSecurity(ODatabaseSecurityResources.SCHEMA, ORole.PERMISSION_UPDATE);
     if (this.shortName != null)
       // UNREGISTER ANY PREVIOUS SHORT NAME
-      owner.classes.remove(shortName);
+      owner.classes.remove(this.shortName);
 
-    this.shortName = shortName;
+    this.shortName = iShortName;
 
     // REGISTER IT
-    owner.classes.put(shortName.toLowerCase(), this);
+    owner.classes.put(iShortName.toLowerCase(), this);
   }
 
   public String getStreamableName() {
@@ -453,18 +449,40 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
   }
 
   public OClass addClusterId(final int iId) {
+    getDatabase().checkSecurity(ODatabaseSecurityResources.SCHEMA, ORole.PERMISSION_UPDATE);
+    final String cmd = String.format("alter class %s addcluster %d", name, iId);
+    getDatabase().command(new OCommandSQL(cmd)).execute();
+    addClusterIdInternal(iId);
+    return this;
+  }
+
+  public OClass addClusterIdInternal(final int iId) {
     for (int currId : clusterIds)
       if (currId == iId)
+        // ALREADY ADDED
         return this;
 
     clusterIds = OArrays.copyOf(clusterIds, clusterIds.length + 1);
     clusterIds[clusterIds.length - 1] = iId;
     Arrays.sort(clusterIds);
+
+    polymorphicClusterIds = OArrays.copyOf(polymorphicClusterIds, polymorphicClusterIds.length + 1);
+    polymorphicClusterIds[polymorphicClusterIds.length - 1] = iId;
+    Arrays.sort(polymorphicClusterIds);
+
     setDirty();
     return this;
   }
 
   public OClass removeClusterId(final int iId) {
+    getDatabase().checkSecurity(ODatabaseSecurityResources.SCHEMA, ORole.PERMISSION_UPDATE);
+    final String cmd = String.format("alter class %s removecluster %d", name, iId);
+    getDatabase().command(new OCommandSQL(cmd)).execute();
+    removeClusterIdInternal(iId);
+    return this;
+  }
+
+  public OClass removeClusterIdInternal(final int iId) {
     boolean found = false;
     for (int clusterId : clusterIds) {
       if (clusterId == iId) {
@@ -483,6 +501,7 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
         newClusterIds[k] = clusterIds[i];
         k++;
       }
+      clusterIds = newClusterIds;
     }
     return this;
   }
@@ -764,9 +783,33 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
     case STRICTMODE:
       setStrictModeInternal(Boolean.parseBoolean(stringValue));
       break;
+    case ADDCLUSTER: {
+      int clId = getClusterId(stringValue);
+      if (clId == -1)
+        throw new IllegalArgumentException("Cluster id '" + stringValue + "' cannot be added");
+      addClusterIdInternal(clId);
+      break;
+    }
+    case REMOVECLUSTER: {
+      int clId = getClusterId(stringValue);
+      if (clId == -1)
+        throw new IllegalArgumentException("Cluster id '" + stringValue + "' cannot be removed");
+      removeClusterIdInternal(clId);
+      break;
+    }
     }
 
     saveInternal();
+  }
+
+  protected int getClusterId(final String stringValue) {
+    int clId;
+    try {
+      clId = Integer.parseInt(stringValue);
+    } catch (NumberFormatException e) {
+      clId = getDatabase().getClusterIdByName(stringValue);
+    }
+    return clId;
   }
 
   public OClass set(final ATTRIBUTES attribute, final Object iValue) {
@@ -791,12 +834,25 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
     case STRICTMODE:
       setStrictMode(Boolean.parseBoolean(stringValue));
       break;
+    case ADDCLUSTER: {
+      int clId = getClusterId(stringValue);
+      if (clId == -1)
+        throw new IllegalArgumentException("Cluster id '" + stringValue + "' cannot be added");
+      addClusterId(clId);
+      break;
+    }
+    case REMOVECLUSTER:
+      int clId = getClusterId(stringValue);
+      if (clId == -1)
+        throw new IllegalArgumentException("Cluster id '" + stringValue + "' cannot be added");
+      removeClusterId(clId);
+      break;
     }
     return this;
   }
 
   /**
-   * Add different cluster ids to the "polymorphic cluster ids" array.
+   * Add different cluster id to the "polymorphic cluster ids" array.
    */
   private void addPolymorphicClusterIds(final OClassImpl iBaseClass) {
     boolean found;
@@ -867,95 +923,28 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
     }
 
     final Set<String> existingFieldNames = properties.keySet();
-    final List<String> fieldsToIndex = new LinkedList<String>();
 
     for (final String fieldToIndex : fields) {
-      final String fieldName = extractFieldName(fieldToIndex);
+      final String fieldName = OIndexDefinitionFactory.extractFieldName(fieldToIndex);
       if (!existingFieldNames.contains(fieldName.toLowerCase()))
         throw new OIndexException("Index with name : '" + iName + "' cannot be created on class : '" + name + "' because field: '"
             + fieldName + "' is absent in class definition.");
-
-      fieldsToIndex.add(fieldName);
     }
 
-    final OIndexDefinition indexDefinition;
-    if (fieldsToIndex.size() == 1) {
-      indexDefinition = createSingleFieldIndexDefinition(fields[0]);
-    } else {
-      indexDefinition = createMultipleFieldIndexDefinition(fieldsToIndex);
-    }
+    final OIndexDefinition indexDefinition = OIndexDefinitionFactory.createIndexDefinition(this, Arrays.asList(fields),
+        extractFieldTypes(fields));
 
-    final OIndex<?> index = getDatabase().getMetadata().getIndexManager()
-        .createIndex(iName, iType.toString(), indexDefinition, polymorphicClusterIds, iProgressListener);
-    return index;
+    return getDatabase().getMetadata().getIndexManager()
+        .createIndex(iName, iType, indexDefinition, polymorphicClusterIds, iProgressListener);
   }
 
-  private OIndexDefinition createMultipleFieldIndexDefinition(final List<String> fieldsToIndex) {
-    final OIndexDefinition indexDefinition;
-    final OCompositeIndexDefinition compositeIndex = new OCompositeIndexDefinition(name);
+  private List<OType> extractFieldTypes(String[] fieldNames) {
+    final List<OType> types = new ArrayList<OType>(fieldNames.length);
 
-    for (final String fieldName : fieldsToIndex) {
-      final OProperty propertyToIndex = properties.get(fieldName.toLowerCase());
-      final OType propertyType = propertyToIndex.getType();
-      if (propertyType.equals(OType.EMBEDDEDLIST) || propertyType.equals(OType.EMBEDDEDSET) || propertyType.equals(OType.LINKSET)
-          || propertyType.equals(OType.LINKLIST) || propertyType.equals(OType.EMBEDDEDMAP) || propertyType.equals(OType.LINKMAP))
-        throw new OIndexException("Collections are not supported in composite indexes");
-
-      final OPropertyIndexDefinition propertyIndex = new OPropertyIndexDefinition(name, propertyToIndex.getName(), propertyType);
-      compositeIndex.addIndex(propertyIndex);
+    for (String fieldName : fieldNames) {
+      types.add(properties.get(OIndexDefinitionFactory.extractFieldName(fieldName).toLowerCase()).getType());
     }
-
-    indexDefinition = compositeIndex;
-    return indexDefinition;
-  }
-
-  private OIndexDefinition createSingleFieldIndexDefinition(final String field) {
-    final String fieldName = extractFieldName(field);
-    final OIndexDefinition indexDefinition;
-
-    final OProperty propertyToIndex = properties.get(fieldName.toLowerCase());
-    final OType propertyToIndexType = propertyToIndex.getType();
-    final OType indexType;
-
-    if (propertyToIndexType == OType.EMBEDDEDMAP || propertyToIndexType == OType.LINKMAP) {
-      final OPropertyMapIndexDefinition.INDEX_BY indexBy = extractMapIndexSpecifier(field);
-
-      if (indexBy.equals(OPropertyMapIndexDefinition.INDEX_BY.KEY))
-        indexType = OType.STRING;
-      else {
-        if (propertyToIndexType == OType.LINKMAP)
-          indexType = OType.LINK;
-        else {
-          indexType = propertyToIndex.getLinkedType();
-          if (indexType == null)
-            throw new OIndexException("Linked type was not provided."
-                + " You should provide linked type for embedded collections that are going to be indexed.");
-        }
-
-      }
-
-      indexDefinition = new OPropertyMapIndexDefinition(name, propertyToIndex.getName(), indexType, indexBy);
-    } else if (propertyToIndexType.equals(OType.EMBEDDEDLIST) || propertyToIndexType.equals(OType.EMBEDDEDSET)
-        || propertyToIndexType.equals(OType.LINKLIST) || propertyToIndexType.equals(OType.LINKSET)) {
-      if (propertyToIndexType.equals(OType.LINKSET))
-        throw new OIndexException("LINKSET indexing is not supported.");
-      else if (propertyToIndexType.equals(OType.LINKLIST)) {
-        indexType = OType.LINK;
-      } else {
-        indexType = propertyToIndex.getLinkedType();
-        if (indexType == null)
-          throw new OIndexException("Linked type was not provided."
-              + " You should provide linked type for embedded collections that are going to be indexed.");
-      }
-
-      indexDefinition = new OPropertyListIndexDefinition(name, propertyToIndex.getName(), indexType);
-    } else if (propertyToIndexType == OType.BINARY) {
-      
-      throw new IllegalArgumentException("Cannot create index against type: " + propertyToIndexType);
-      
-    } else
-      indexDefinition = new OPropertyIndexDefinition(name, propertyToIndex.getName(), propertyToIndexType);
-    return indexDefinition;
+    return types;
   }
 
   public boolean areIndexed(final String... fields) {
@@ -1016,36 +1005,6 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
     result.addAll(superClass.getIndexes());
 
     return result;
-  }
-
-  private String extractFieldName(final String fieldName) {
-    String[] fieldNameParts = fieldName.split("\\s+");
-    if (fieldNameParts.length == 1)
-      return fieldName;
-    if (fieldNameParts.length == 3)
-      return fieldNameParts[0];
-
-    throw new IllegalArgumentException("Illegal field name format, should be '<property> [by key|value]' but was '" + fieldName
-        + "'");
-  }
-
-  private OPropertyMapIndexDefinition.INDEX_BY extractMapIndexSpecifier(final String fieldName) {
-    String[] fieldNameParts = fieldName.split("\\s+");
-    if (fieldNameParts.length == 1)
-      return OPropertyMapIndexDefinition.INDEX_BY.KEY;
-
-    if (fieldNameParts.length == 3) {
-      if ("by".equals(fieldNameParts[1].toLowerCase()))
-        try {
-          return OPropertyMapIndexDefinition.INDEX_BY.valueOf(fieldNameParts[2].toUpperCase());
-        } catch (IllegalArgumentException iae) {
-          throw new IllegalArgumentException("Illegal field name format, should be '<property> [by key|value]' but was '"
-              + fieldName + "'");
-        }
-    }
-
-    throw new IllegalArgumentException("Illegal field name format, should be '<property> [by key|value]' but was '" + fieldName
-        + "'");
   }
 
   private void setPolymorphicClusterIds(final int[] iClusterIds) {

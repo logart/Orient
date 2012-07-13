@@ -106,10 +106,6 @@ public abstract class OAbstractFile implements OFile {
 
   public abstract void write(long iOffset, byte[] iSourceBuffer) throws IOException;
 
-  protected abstract void setSoftlyClosed(boolean b) throws IOException;
-
-  protected abstract boolean isSoftlyClosed() throws IOException;
-
   protected abstract void init() throws IOException;
 
   protected abstract void setFilledUpTo(int iHow) throws IOException;
@@ -205,7 +201,6 @@ public abstract class OAbstractFile implements OFile {
    * @see com.orientechnologies.orient.core.storage.fs.OFileAAA#delete()
    */
   public void delete() throws IOException {
-    OMMapManager.removeFile(this);
     close();
     if (osFile != null) {
       boolean deleted = osFile.delete();

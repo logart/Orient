@@ -15,7 +15,20 @@
  */
 package com.orientechnologies.orient.core.index;
 
+import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map.Entry;
+import java.util.NoSuchElementException;
+import java.util.Set;
+
 import com.orientechnologies.common.collection.OCompositeKey;
+import com.orientechnologies.common.concur.lock.OModificationLock;
 import com.orientechnologies.common.concur.resource.OSharedResourceAdaptiveExternal;
 import com.orientechnologies.common.listener.OProgressListener;
 import com.orientechnologies.common.log.OLogManager;
@@ -30,6 +43,7 @@ import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.db.record.ORecordElement;
 import com.orientechnologies.orient.core.exception.OConfigurationException;
+import com.orientechnologies.orient.core.exception.OTransactionException;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.intent.OIntentMassiveInsert;
 import com.orientechnologies.orient.core.memory.OMemoryWatchDog.Listener;
@@ -41,22 +55,11 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.OBinary
 import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializerFactory;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.index.OCompositeKeySerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.index.OSimpleKeySerializer;
-import com.orientechnologies.orient.core.serialization.serializer.record.string.ORecordSerializerStringAbstract;
 import com.orientechnologies.orient.core.serialization.serializer.stream.OStreamSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.stream.OStreamSerializerAnyStreamable;
 import com.orientechnologies.orient.core.tx.OTransactionIndexChanges.OPERATION;
 import com.orientechnologies.orient.core.type.tree.OMVRBTreeDatabaseLazySave;
 import com.orientechnologies.orient.core.type.tree.provider.OMVRBTreeProviderAbstract;
-
-import java.lang.reflect.InvocationTargetException;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map.Entry;
-import java.util.NoSuchElementException;
-import java.util.Set;
 
 /**
  * Handles indexing when records change.
@@ -65,12 +68,14 @@ import java.util.Set;
  * 
  */
 public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveExternal implements OIndexInternal<T> {
-  protected static final String                  CONFIG_MAP_RID  = "mapRid";
-  protected static final String                  CONFIG_CLUSTERS = "clusters";
+  protected final OModificationLock              modificationLock = new OModificationLock();
+
+  protected static final String                  CONFIG_MAP_RID   = "mapRid";
+  protected static final String                  CONFIG_CLUSTERS  = "clusters";
   protected String                               name;
   protected String                               type;
   protected OMVRBTreeDatabaseLazySave<Object, T> map;
-  protected Set<String>                          clustersToIndex = new LinkedHashSet<String>();
+  protected Set<String>                          clustersToIndex  = new LinkedHashSet<String>();
   protected OIndexDefinition                     indexDefinition;
 
   @ODocumentInstance
@@ -425,44 +430,65 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
   }
 
   public boolean remove(final Object iKey, final OIdentifiable iValue) {
-    return remove(iKey);
+    modificationLock.requestModificationLock();
+    try {
+      return remove(iKey);
+    } finally {
+      modificationLock.releaseModificationLock();
+    }
+
   }
 
   public boolean remove(final Object key) {
+    modificationLock.requestModificationLock();
 
-    acquireExclusiveLock();
     try {
+      acquireExclusiveLock();
+      try {
 
-      return map.remove(key) != null;
+        return map.remove(key) != null;
 
+      } finally {
+        releaseExclusiveLock();
+      }
     } finally {
-      releaseExclusiveLock();
+      modificationLock.releaseModificationLock();
     }
   }
 
   public OIndex<T> clear() {
+    modificationLock.requestModificationLock();
 
-    acquireExclusiveLock();
     try {
+      acquireExclusiveLock();
+      try {
 
-      map.clear();
-      return this;
+        map.clear();
+        return this;
 
+      } finally {
+        releaseExclusiveLock();
+      }
     } finally {
-      releaseExclusiveLock();
+      modificationLock.releaseModificationLock();
     }
   }
 
   public OIndexInternal<T> delete() {
-
-    acquireExclusiveLock();
+    modificationLock.requestModificationLock();
 
     try {
-      map.delete();
-      return this;
+      acquireExclusiveLock();
 
+      try {
+        map.delete();
+        return this;
+
+      } finally {
+        releaseExclusiveLock();
+      }
     } finally {
-      releaseExclusiveLock();
+      modificationLock.releaseModificationLock();
     }
   }
 
@@ -628,11 +654,27 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
         final String serializedKey = OStringSerializerHelper.decode((String) entry.field("k"));
 
         final Object key;
-        if (serializedKey.startsWith("["))
-          key = new OCompositeKey((List<? extends Comparable<?>>) ORecordSerializerStringAbstract.fieldTypeFromStream(iDocument,
-              OType.EMBEDDEDLIST, OStringSerializerHelper.decode(serializedKey)));
-        else
-          key = ORecordSerializerStringAbstract.getTypeValue(serializedKey);
+
+        try {
+          if (serializedKey.equals("*"))
+            key = "*";
+          else {
+            final ODocument keyContainer = new ODocument();
+            keyContainer.setLazyLoad(false);
+
+            keyContainer.fromString(serializedKey);
+
+            final Object storedKey = keyContainer.field("key");
+            if (storedKey instanceof List)
+              key = new OCompositeKey((List<? extends Comparable<?>>) storedKey);
+            else if (Boolean.TRUE.equals(keyContainer.field("binary"))) {
+              key = OStreamSerializerAnyStreamable.INSTANCE.fromStream((byte[]) storedKey);
+            } else
+              key = storedKey;
+          }
+        } catch (IOException ioe) {
+          throw new OTransactionException("Error during index changes deserialization. ", ioe);
+        }
 
         final List<ODocument> operations = (List<ODocument>) entry.field("ops");
         if (operations != null) {
@@ -827,6 +869,22 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
 
   public OIndexDefinition getDefinition() {
     return indexDefinition;
+  }
+
+  public void freeze(boolean throwException) {
+    modificationLock.prohibitModifications(throwException);
+  }
+
+  public void release() {
+    modificationLock.allowModifications();
+  }
+
+  public void acquireModificationLock() {
+    modificationLock.requestModificationLock();
+  }
+
+  public void releaseModificationLock() {
+    modificationLock.releaseModificationLock();
   }
 
   @Override

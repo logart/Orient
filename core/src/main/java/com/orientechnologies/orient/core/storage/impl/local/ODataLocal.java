@@ -68,6 +68,8 @@ public class ODataLocal extends OMultiFileSegment implements ODataSegment {
     super(iStorage, iConfig, DEF_EXTENSION, 0);
     id = iId;
 
+    OFileUtils.checkValidName(iConfig.name);
+
     iConfig.holeFile = new OStorageDataHoleConfiguration(iConfig, iConfig.getLocation() + "/" + name, iConfig.fileType,
         iConfig.maxSize);
     holeSegment = new ODataLocalHole(iStorage, iConfig.holeFile);
@@ -141,10 +143,24 @@ public class ODataLocal extends OMultiFileSegment implements ODataSegment {
     acquireSharedLock();
     try {
 
+      holeSegment.synch();
       super.synch();
 
     } finally {
       releaseSharedLock();
+    }
+  }
+
+  @Override
+  public void setSoftlyClosed(boolean softlyClosed) throws IOException {
+    acquireExclusiveLock();
+    try {
+
+      holeSegment.setSoftlyClosed(softlyClosed);
+      super.setSoftlyClosed(softlyClosed);
+
+    } finally {
+      releaseExclusiveLock();
     }
   }
 

@@ -34,7 +34,9 @@ import com.orientechnologies.orient.core.db.ODatabase;
 import com.orientechnologies.orient.core.db.ODatabaseLifecycleListener;
 import com.orientechnologies.orient.core.db.ODatabaseListener;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
+import com.orientechnologies.orient.core.db.graph.OGraphDatabase;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
+import com.orientechnologies.orient.core.db.record.ODatabaseRecordTx;
 import com.orientechnologies.orient.core.exception.ODatabaseException;
 import com.orientechnologies.orient.core.exception.ORecordNotFoundException;
 import com.orientechnologies.orient.core.fetch.OFetchHelper;
@@ -44,12 +46,12 @@ import com.orientechnologies.orient.core.storage.ORawBuffer;
 import com.orientechnologies.orient.core.storage.ORecordCallback;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.OStorage.CLUSTER_TYPE;
+import com.orientechnologies.orient.core.storage.impl.local.OStorageLocal;
 
 /**
  * Lower level ODatabase implementation. It's extended or wrapped by all the others.
  * 
  * @author Luca Garulli (l.garulli--at--orientechnologies.com)
- * 
  */
 @SuppressWarnings("unchecked")
 public class ODatabaseRaw implements ODatabase {
@@ -490,6 +492,16 @@ public class ODatabaseRaw implements ODatabase {
     switch (iAttribute) {
     case STATUS:
       return getStatus();
+    case DEFAULTCLUSTERID:
+      return getDefaultClusterId();
+    case TYPE:
+      ODatabaseRecord db;
+      if (getDatabaseOwner() instanceof ODatabaseRecord)
+        db = ((ODatabaseRecord) getDatabaseOwner());
+      else
+        db = new OGraphDatabase(url);
+
+      return db.getMetadata().getSchema().existsClass("OGraphVertex");
     }
 
     return null;
@@ -513,6 +525,22 @@ public class ODatabaseRaw implements ODatabase {
           storage.setDefaultClusterId(storage.getClusterIdByName(iValue.toString()));
       }
       break;
+    case TYPE:
+      if (stringValue.equalsIgnoreCase("graph")) {
+        if (getDatabaseOwner() instanceof OGraphDatabase)
+          ((OGraphDatabase) getDatabaseOwner()).checkForGraphSchema();
+        else if (getDatabaseOwner() instanceof ODatabaseRecordTx)
+          new OGraphDatabase((ODatabaseRecordTx) getDatabaseOwner()).checkForGraphSchema();
+        else
+          new OGraphDatabase(url).checkForGraphSchema();
+      } else
+        throw new IllegalArgumentException("Database type '" + stringValue + "' is not supported");
+
+      break;
+
+    default:
+      throw new IllegalArgumentException("Option '" + iAttribute + "' not supported on alter database");
+
     }
 
     return (DB) this;
@@ -542,5 +570,41 @@ public class ODatabaseRaw implements ODatabase {
 
   public long getSize() {
     return storage.getSize();
+  }
+
+  public void freeze() {
+    final OStorageLocal storage;
+    if (getStorage() instanceof OStorageLocal)
+      storage = ((OStorageLocal) getStorage());
+    else {
+      OLogManager.instance().error(this, "We can not freeze non local storage.");
+      return;
+    }
+
+    storage.freeze(false);
+  }
+
+  public void freeze(boolean throwException) {
+    final OStorageLocal storage;
+    if (getStorage() instanceof OStorageLocal)
+      storage = ((OStorageLocal) getStorage());
+    else {
+      OLogManager.instance().error(this, "We can not freeze non local storage.");
+      return;
+    }
+
+    storage.freeze(throwException);
+  }
+
+  public void release() {
+    final OStorageLocal storage;
+    if (getStorage() instanceof OStorageLocal)
+      storage = ((OStorageLocal) getStorage());
+    else {
+      OLogManager.instance().error(this, "We can not freeze non local storage.");
+      return;
+    }
+
+    storage.release();
   }
 }

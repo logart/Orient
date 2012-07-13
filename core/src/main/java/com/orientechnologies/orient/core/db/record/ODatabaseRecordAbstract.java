@@ -36,6 +36,7 @@ import com.orientechnologies.orient.core.db.ODatabaseListener;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.ODatabaseWrapperAbstract;
 import com.orientechnologies.orient.core.db.ODefaultDataSegmentStrategy;
+import com.orientechnologies.orient.core.db.graph.OGraphDatabase;
 import com.orientechnologies.orient.core.db.raw.ODatabaseRaw;
 import com.orientechnologies.orient.core.dictionary.ODictionary;
 import com.orientechnologies.orient.core.exception.ODatabaseException;
@@ -61,8 +62,9 @@ import com.orientechnologies.orient.core.serialization.serializer.record.ORecord
 import com.orientechnologies.orient.core.sql.OCommandSQL;
 import com.orientechnologies.orient.core.storage.ORawBuffer;
 import com.orientechnologies.orient.core.storage.ORecordCallback;
-import com.orientechnologies.orient.core.storage.OStorageEmbedded;
+import com.orientechnologies.orient.core.storage.OStorageProxy;
 import com.orientechnologies.orient.core.tx.OTransactionRealAbstract;
+import com.orientechnologies.orient.core.type.tree.provider.OMVRBTreeRIDProvider;
 
 @SuppressWarnings("unchecked")
 public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<ODatabaseRaw> implements ODatabaseRecord {
@@ -111,7 +113,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 
       recordFormat = DEF_RECORD_FORMAT;
 
-      if (getStorage() instanceof OStorageEmbedded) {
+      if (!(getStorage() instanceof OStorageProxy)) {
         user = getMetadata().getSecurity().authenticate(iUserName, iUserPassword);
         if (user != null) {
           final Set<ORole> roles = user.getRoles();
@@ -131,15 +133,15 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
         registerHook(new OUserTrigger());
         registerHook(new OClassIndexManager());
       } else
-        // CREATE DUMMY USER
+        // REMOTE CREATE DUMMY USER
         user = new OUser(iUserName, OUser.encryptPassword(iUserPassword)).addRole(new ORole("passthrough", null,
             ORole.ALLOW_MODES.ALLOW_ALL_BUT));
 
       checkSecurity(ODatabaseSecurityResources.DATABASE, ORole.PERMISSION_READ);
 
-      if (!metadata.getSchema().existsClass("ORIDs"))
+      if (!metadata.getSchema().existsClass(OMVRBTreeRIDProvider.PERSISTENT_CLASS_NAME))
         // @COMPATIBILITY 1.0RC9
-        metadata.getSchema().createClass("ORIDs");
+        metadata.getSchema().createClass(OMVRBTreeRIDProvider.PERSISTENT_CLASS_NAME);
     } catch (OException e) {
       close();
       throw e;
@@ -161,7 +163,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 
       getStorage().getConfiguration().update();
 
-      if (getStorage() instanceof OStorageEmbedded) {
+      if (!(getStorage() instanceof OStorageProxy)) {
         registerHook(new OUserTrigger());
         registerHook(new OClassIndexManager());
       }
@@ -172,9 +174,9 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 
       user = getMetadata().getSecurity().getUser(OUser.ADMIN);
 
-      if (!metadata.getSchema().existsClass("ORIDs"))
+      if (!metadata.getSchema().existsClass(OMVRBTreeRIDProvider.PERSISTENT_CLASS_NAME))
         // @COMPATIBILITY 1.0RC9
-        metadata.getSchema().createClass("ORIDs");
+        metadata.getSchema().createClass(OMVRBTreeRIDProvider.PERSISTENT_CLASS_NAME);
 
     } catch (Exception e) {
       throw new ODatabaseException("Cannot create database", e);
@@ -611,6 +613,9 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 
     try {
       final boolean wasNew = rid.isNew();
+      if (wasNew && rid.clusterId == -1 && iClusterName != null)
+        // ASSIGN THE CLUSTER ID
+        rid.clusterId = getClusterIdByName(iClusterName);
 
       // STREAM.LENGTH == 0 -> RECORD IN STACK: WILL BE SAVED AFTER
       byte[] stream = iRecord.toStream();
@@ -658,29 +663,34 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 
       final int dataSegmentId = dataSegmentStrategy.assignDataSegmentId(this, iRecord);
 
-      // SAVE IT
-      final int version = underlying.save(dataSegmentId, rid, stream == null ? new byte[0] : stream, realVersion,
-          iRecord.getRecordType(), iMode.ordinal(), iCallback);
+      try {
+        // SAVE IT
+        final int version = underlying.save(dataSegmentId, rid, stream == null ? new byte[0] : stream, realVersion,
+            iRecord.getRecordType(), iMode.ordinal(), iCallback);
 
-      if (isNew) {
-        // UPDATE INFORMATION: CLUSTER ID+POSITION
-        ((ORecordId) iRecord.getIdentity()).copyFrom(rid);
-        // NOTIFY IDENTITY HAS CHANGED
-        iRecord.onAfterIdentityChanged(iRecord);
-        // UPDATE INFORMATION: CLUSTER ID+POSITION
-        iRecord.fill(rid, version, stream, stream == null || stream.length == 0);
-      } else {
-        // UPDATE INFORMATION: VERSION
-        iRecord.fill(rid, version, stream, stream == null || stream.length == 0);
+        if (isNew) {
+          // UPDATE INFORMATION: CLUSTER ID+POSITION
+          ((ORecordId) iRecord.getIdentity()).copyFrom(rid);
+          // NOTIFY IDENTITY HAS CHANGED
+          iRecord.onAfterIdentityChanged(iRecord);
+          // UPDATE INFORMATION: CLUSTER ID+POSITION
+          iRecord.fill(rid, version, stream, stream == null || stream.length == 0);
+        } else {
+          // UPDATE INFORMATION: VERSION
+          iRecord.fill(rid, version, stream, stream == null || stream.length == 0);
+        }
+
+        if (iCallTriggers && stream != null && stream.length > 0)
+          callbackHooks(wasNew ? TYPE.AFTER_CREATE : TYPE.AFTER_UPDATE, iRecord);
+
+        if (stream != null && stream.length > 0)
+          // ADD/UPDATE IT IN CACHE IF IT'S ACTIVE
+          getLevel1Cache().updateRecord(iRecord);
+      } catch (Throwable t) {
+        if (iCallTriggers && stream != null && stream.length > 0)
+          callbackHooks(wasNew ? TYPE.CREATE_FAILED : TYPE.UPDATE_FAILED, iRecord);
+        throw t;
       }
-
-      if (iCallTriggers)
-        callbackHooks(wasNew ? TYPE.AFTER_CREATE : TYPE.AFTER_UPDATE, iRecord);
-
-      if (stream != null && stream.length > 0)
-        // ADD/UPDATE IT IN CACHE IF IT'S ACTIVE
-        getLevel1Cache().updateRecord(iRecord);
-
     } catch (OException e) {
       // RE-THROW THE EXCEPTION
       throw e;
@@ -717,7 +727,12 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
       // CHECK IF ENABLE THE MVCC OR BYPASS IT
       final int realVersion = mvcc ? iVersion : -1;
 
-      underlying.delete(rid, realVersion, iRequired, (byte) iMode.ordinal());
+      try {
+        underlying.delete(rid, realVersion, iRequired, (byte) iMode.ordinal());
+      } catch (Throwable t) {
+        if (iCallTriggers)
+          callbackHooks(TYPE.DELETE_FAILED, rec);
+      }
 
       if (iCallTriggers)
         callbackHooks(TYPE.AFTER_DELETE, rec);
@@ -792,6 +807,22 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
           getStorage().setDefaultClusterId(getStorage().getClusterIdByName(iValue.toString()));
       }
       break;
+    case TYPE:
+      if (stringValue.equalsIgnoreCase("graph")) {
+        if (getDatabaseOwner() instanceof OGraphDatabase)
+          ((OGraphDatabase) getDatabaseOwner()).checkForGraphSchema();
+        else if (this instanceof ODatabaseRecordTx)
+          new OGraphDatabase((ODatabaseRecordTx) this).checkForGraphSchema();
+        else if (getDatabaseOwner() instanceof ODatabaseRecordTx)
+          new OGraphDatabase((ODatabaseRecordTx) getDatabaseOwner()).checkForGraphSchema();
+        else
+          new OGraphDatabase(getURL()).checkForGraphSchema();
+      } else
+        throw new IllegalArgumentException("Database type '" + stringValue + "' is not supported");
+
+      break;
+    default:
+      throw new IllegalArgumentException("Option '" + iAttribute + "' not supported on alter database");
     }
   }
 

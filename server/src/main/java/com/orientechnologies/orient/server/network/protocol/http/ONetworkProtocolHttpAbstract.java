@@ -65,6 +65,7 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
   private final Map<String, OServerCommand> exactCommands     = new HashMap<String, OServerCommand>();
   private final Map<String, OServerCommand> wildcardCommands  = new HashMap<String, OServerCommand>();
   private String                            responseCharSet;
+  private String[]                          additionalResponseHeaders;
 
   public ONetworkProtocolHttpAbstract() {
     super(Orient.getThreadGroup(), "IO-HTTP");
@@ -72,6 +73,10 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
 
   @Override
   public void config(final OServer iServer, final Socket iSocket, final OContextConfiguration iConfiguration) throws IOException {
+    final String addHeaders = iConfiguration.getValueAsString("network.http.additionalResponseHeaders", null);
+    if (addHeaders != null)
+      additionalResponseHeaders = addHeaders.split(";");
+
     // CREATE THE CLIENT CONNECTION
     connection = OClientConnectionManager.instance().connect(iSocket, this);
 
@@ -158,7 +163,7 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
     connection.data.totalCommandExecutionTime += connection.data.lastCommandExecutionTime;
   }
 
-  protected void handleError(Exception e) {
+  protected void handleError(Throwable e) {
     if (OLogManager.instance().isDebugEnabled())
       OLogManager.instance().debug(this, "Caught exception", e);
 
@@ -209,12 +214,9 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
         }
 
         if (cause != null)
-          e = (Exception) cause;
+          e = cause;
       } while (cause != null);
     }
-
-    if (errorReason == null)
-      errorReason = OHttpUtils.STATUS_INTERNALERROR_DESCRIPTION;
 
     if (errorMessage == null) {
       // FORMAT GENERIC MESSAGE BY READING THE EXCEPTION STACK
@@ -227,6 +229,11 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
         cause = cause.getCause();
       }
       errorMessage = buffer.toString();
+    }
+
+    if (errorReason == null) {
+      errorReason = OHttpUtils.STATUS_INTERNALERROR_DESCRIPTION;
+      OLogManager.instance().error(this, "Internal server error", e);
     }
 
     try {
@@ -288,6 +295,9 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
     writeLine("Content-Type: " + iContentType + "; charset=" + responseCharSet);
     writeLine("Server: " + connection.data.serverInfo);
     writeLine("Connection: Keep-Alive");
+    if (getAdditionalResponseHeaders() != null)
+      for (String h : getAdditionalResponseHeaders())
+        writeLine(h);
   }
 
   protected void readAllContent(final OHttpRequest iRequest) throws IOException {
@@ -566,5 +576,9 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
 
   public void setResponseCharSet(String responseCharSet) {
     this.responseCharSet = responseCharSet;
+  }
+
+  public String[] getAdditionalResponseHeaders() {
+    return additionalResponseHeaders;
   }
 }

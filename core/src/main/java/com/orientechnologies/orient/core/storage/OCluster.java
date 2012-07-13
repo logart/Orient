@@ -113,6 +113,8 @@ public interface OCluster {
 
   public void synch() throws IOException;
 
+  public void setSoftlyClosed(boolean softlyClosed) throws IOException;
+
   public String getName();
 
   /**

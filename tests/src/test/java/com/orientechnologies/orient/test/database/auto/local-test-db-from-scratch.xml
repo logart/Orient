@@ -1,6 +1,5 @@
 <!DOCTYPE suite SYSTEM "http://beust.com/testng/testng-1.0.dtd">
 <suite name="Test Suite Example" verbose="2" parallel="false">
-
     <parameter name="path" value="@PATH@"/>
     <parameter name="url" value="@URL@"/>
     <parameter name="testPath" value="tests"/>
@@ -59,6 +58,7 @@
         <classes>
             <class name="com.orientechnologies.orient.test.database.auto.IndexTest"/>
             <class name="com.orientechnologies.orient.test.database.auto.IndexCustomKeyTest"/>
+            <class name="com.orientechnologies.orient.test.database.auto.ByteArrayKeyTest"/>
             <class name="com.orientechnologies.orient.test.database.auto.FullTextIndexTest"/>
             <class name="com.orientechnologies.orient.test.database.auto.ClassIndexManagerTest"/>
             <class name="com.orientechnologies.orient.test.database.auto.SQLSelectIndexReuseTest"/>
@@ -81,6 +81,7 @@
             <class name="com.orientechnologies.orient.test.database.auto.SQLSelectByLinkedPropertyIndexReuseTest"/>
             <class name="com.orientechnologies.orient.test.database.auto.LinkListIndexTest"/>
             <class name="com.orientechnologies.orient.test.database.auto.LinkMapIndexTest"/>
+            <class name="com.orientechnologies.orient.test.database.auto.SQLIndexWithoutSchemaTest"/>
         </classes>
     </test>
     <test name="Dictionary">
