@@ -1,6 +1,7 @@
 package com.orientechnologies.orient.core.type.tree;
 
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Random;
 
 import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
@@ -10,24 +11,31 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OI
  * @author LomakiA <a href="mailto:Andrey.Lomakin@exigenservices.com">Andrey Lomakin</a>
  * @since 17.06.12
  */
-public class OMemorySkipList<K extends Comparable<K>> {
-  private static final int           MAX_LEVEL = 31;
+public class OMemorySkipList<K> {
+  private static final int            MAX_LEVEL = 31;
 
-  private final OBinarySerializer<K> keySerializer;
-  private final OMemory              memory;
+  private final OBinarySerializer<K>  keySerializer;
+  private final OMemory               memory;
 
-  private static final Random        random    = new Random();
+  private static final Random         random    = new Random();
 
-  private int                        seed;
+  private int                         seed;
 
-  private int[]                      header;
+  private int[]                       header;
 
-  private long                       size      = 0;
+  private long                        size      = 0;
 
-  public OMemorySkipList(final OMemory memory, final OBinarySerializer<K> keySerializer) {
+  private final Comparator<? super K> comparator;
+
+  public OMemorySkipList(final OMemory memory, final OBinarySerializer<K> keySerializer, Comparator<? super K> comparator) {
     this.memory = memory;
 
     this.keySerializer = keySerializer;
+    if (comparator == null) {
+      this.comparator = new NativeComparator<K>();
+    } else {
+      this.comparator = comparator;
+    }
 
     header = new int[MAX_LEVEL + 1];
     Arrays.fill(header, OMemory.NULL_POINTER);
@@ -79,7 +87,7 @@ public class OMemorySkipList<K extends Comparable<K>> {
       if (oldForwardPointer == forwardPointer)
         compareResult = oldCompareResult;
       else
-        compareResult = key.compareTo(currentKey);
+        compareResult = comparator.compare(key, currentKey);
 
       if (compareResult == 0)
         return 0;
@@ -146,7 +154,7 @@ public class OMemorySkipList<K extends Comparable<K>> {
       if (oldForwardPointer == forwardPointer)
         compareResult = oldCompareResult;
       else
-        compareResult = key.compareTo(currentKey);
+        compareResult = comparator.compare(key, currentKey);
 
       if (compareResult == 0)
         return getDataPointer(forwardPointer);
@@ -195,7 +203,7 @@ public class OMemorySkipList<K extends Comparable<K>> {
       if (oldForwardPointer == forwardPointer)
         compareResult = oldCompareResult;
       else
-        compareResult = key.compareTo(currentKey);
+        compareResult = comparator.compare(key, currentKey);
 
       if (compareResult == 0)
         return getDataPointer(forwardPointer);
@@ -247,7 +255,7 @@ public class OMemorySkipList<K extends Comparable<K>> {
       if (oldForwardPointer == forwardPointer)
         compareResult = oldCompareResult;
       else
-        compareResult = key.compareTo(currentKey);
+        compareResult = comparator.compare(key, currentKey);
 
       if (compareResult == 0)
         return getDataPointer(forwardPointer);
@@ -260,6 +268,33 @@ public class OMemorySkipList<K extends Comparable<K>> {
       }
 
       pointer = forwardPointer;
+    }
+
+    if (pointer == OMemory.NULL_POINTER)
+      return OMemory.NULL_POINTER;
+
+    return getDataPointer(pointer);
+  }
+
+  public int getFirst() {
+    return getDataPointer(header[0]);
+  }
+
+  public int getLast() {
+    int level = getStartLevel();
+
+    int forwardPointer;
+    int pointer = OMemory.NULL_POINTER;
+    while (level >= 0) {
+      if (pointer == OMemory.NULL_POINTER)
+        forwardPointer = header[level];
+      else
+        forwardPointer = getNPointer(pointer, level);
+
+      if (forwardPointer == OMemory.NULL_POINTER)
+        level--;
+      else
+        pointer = forwardPointer;
     }
 
     if (pointer == OMemory.NULL_POINTER)
@@ -296,7 +331,7 @@ public class OMemorySkipList<K extends Comparable<K>> {
       if (oldForwardPointer == forwardPointer)
         compareResult = oldCompareResult;
       else
-        compareResult = key.compareTo(currentKey);
+        compareResult = comparator.compare(key, currentKey);
 
       if (compareResult <= 0) {
         update[level] = pointer;
@@ -449,5 +484,18 @@ public class OMemorySkipList<K extends Comparable<K>> {
     final int offset = (level + 1) * OIntegerSerializer.INT_SIZE;
 
     memory.setInt(pointersPointer, offset, dataPointer);
+  }
+
+  /**
+   * Comparator which supposes that K is Comparable.
+   * 
+   * @param <K>
+   *          the type of objects that may be compared by this comparator
+   */
+  private static class NativeComparator<K> implements Comparator<K> {
+    @SuppressWarnings("unchecked")
+    public int compare(K o1, K o2) {
+      return ((Comparable<K>) o1).compareTo(o2);
+    }
   }
 }

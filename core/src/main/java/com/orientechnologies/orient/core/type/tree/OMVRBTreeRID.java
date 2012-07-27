@@ -17,13 +17,17 @@ package com.orientechnologies.orient.core.type.tree;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 import com.orientechnologies.common.collection.OLazyIterator;
 import com.orientechnologies.common.collection.OMVRBTreeEntry;
+import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.common.profiler.OProfiler;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
@@ -70,6 +74,9 @@ public class OMVRBTreeRID extends OMVRBTreePersistent<OIdentifiable, OIdentifiab
 	public OMVRBTreeRID(final OMVRBTreeProvider<OIdentifiable, OIdentifiable> iProvider) {
 		super(iProvider);
 		((OMVRBTreeRIDProvider) dataProvider).setTree(this);
+
+    cacheStrategy = new OEntryPointsListCacheStrategy();
+    cacheStrategy.init();
 	}
 
 	/**
@@ -85,6 +92,9 @@ public class OMVRBTreeRID extends OMVRBTreePersistent<OIdentifiable, OIdentifiab
 			putAll(iSource.keySet());
 		else
 			load();
+
+		cacheStrategy = new OEntryPointsListCacheStrategy();
+		cacheStrategy.init();
 	}
 
 	@Override

@@ -99,8 +99,14 @@ public class OMVRBTreeEntryPersistent<K, V> extends OMVRBTreeEntry<K, V> impleme
 
     init();
     parent = iParent;
-    // setParent(iParent);
+
     pTree.addNodeInMemory(this);
+  }
+
+  public OMVRBTreeEntryPersistent(final OMVRBTreePersistent<K, V> iTree, final OMemoryFirstLevelCache.CacheEntry<K> cacheEntry) {
+    super(iTree);
+    tree = iTree;
+
   }
 
   /**
@@ -231,7 +237,7 @@ public class OMVRBTreeEntryPersistent<K, V> extends OMVRBTreeEntry<K, V> impleme
    * Disconnect the current node from others.
    * 
    * @param iForceDirty
-   *          Force disconnection also if the record it's dirty
+   *          Force disconnection also if the record is dirty
    * @param iLevel
    * @return count of nodes that has been disconnected
    */
@@ -301,8 +307,7 @@ public class OMVRBTreeEntryPersistent<K, V> extends OMVRBTreeEntry<K, V> impleme
     }
 
     if (disconnectedFromParent && disconnectedFromLeft && disconnectedFromRight)
-      if ((!dataProvider.isEntryDirty() && !dataProvider.getIdentity().isTemporary() || iForceDirty)
-          && !pTree.isNodeEntryPoint(this)) {
+      if ((!dataProvider.isEntryDirty() && !dataProvider.getIdentity().isTemporary() || iForceDirty) && pTree.isUnloadable(this)) {
         totalDisconnected++;
         pTree.removeNodeFromMemory(this);
         clear();
@@ -327,9 +332,8 @@ public class OMVRBTreeEntryPersistent<K, V> extends OMVRBTreeEntry<K, V> impleme
   /**
    * Clear links and current node only if it's not an entry point.
    * 
-   * @param iForceDirty
-   * 
-   * @param iSource
+   * @param iForce
+   *          Force disconnection also if the record it's dirty
    */
   protected int disconnectLinked(final boolean iForce) {
     return disconnect(iForce, 0);
@@ -667,5 +671,14 @@ public class OMVRBTreeEntryPersistent<K, V> extends OMVRBTreeEntry<K, V> impleme
       if (pTree.dataProvider.setRoot(rid))
         pTree.markDirty();
     }
+  }
+
+  public OMemoryFirstLevelCache.CacheEntry<K> createCacheEntry() {
+    final ORID thisNode = dataProvider.getIdentity();
+    final ORID parentNode = dataProvider.getParent();
+    final ORID leftNode = dataProvider.getLeft();
+    final ORID rightNode = dataProvider.getRight();
+
+    return new OMemoryFirstLevelCache.CacheEntry<K>(getFirstKey(), getLastKey(), thisNode, parentNode, leftNode, rightNode);
   }
 }

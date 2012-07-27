@@ -233,7 +233,6 @@ public class OBuddyMemory implements OMemory {
   }
 
   private int buddy(int pointer, int level) {
-    // TODO optimize
     return pointer ^ ((1 << level) * minChunkSize);
   }
 

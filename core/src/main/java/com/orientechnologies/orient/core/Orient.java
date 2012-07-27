@@ -46,6 +46,7 @@ import com.orientechnologies.orient.core.storage.OClusterFactory;
 import com.orientechnologies.orient.core.storage.ODefaultClusterFactory;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.fs.OMMapManagerLocator;
+import com.orientechnologies.orient.core.type.tree.OBuddyMemory;
 
 public class Orient extends OSharedResourceAbstract {
   /**
@@ -68,6 +69,7 @@ public class Orient extends OSharedResourceAbstract {
   protected static final ThreadGroup                    threadGroup          = new ThreadGroup("OrientDB");
   protected static Orient                               instance             = new Orient();
 
+  private final OBuddyMemory                            indexMemory;
   private final OMemoryWatchDog                         memoryWatchDog;
   private static AtomicInteger                          serialId             = new AtomicInteger();
 
@@ -84,6 +86,9 @@ public class Orient extends OSharedResourceAbstract {
       OProfiler.getInstance().startRecording();
 
     memoryWatchDog = new OMemoryWatchDog();
+
+    indexMemory = new OBuddyMemory(OGlobalConfiguration.INDEX_MEMORY_CAPACITY.getValueAsInteger(),
+        OGlobalConfiguration.INDEX_MEMORY_MIN_CHUNK_SIZE.getValueAsInteger());
 
     active = true;
   }
@@ -340,6 +345,10 @@ public class Orient extends OSharedResourceAbstract {
 
   public OMemoryWatchDog getMemoryWatchDog() {
     return memoryWatchDog;
+  }
+
+  public OBuddyMemory getMemoryForIndexes() {
+    return indexMemory;
   }
 
   public ORecordFactoryManager getRecordFactoryManager() {

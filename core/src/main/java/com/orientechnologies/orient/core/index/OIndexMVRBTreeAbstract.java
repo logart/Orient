@@ -722,23 +722,13 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
       }
     });
 
-    OProfiler.getInstance().registerHookValue("index." + name + ".entryPointSize", new OProfilerHookValue() {
-      public Object getValue() {
-        return map != null ? map.getEntryPointSize() : "-";
-      }
-    });
-
     OProfiler.getInstance().registerHookValue("index." + name + ".maxUpdateBeforeSave", new OProfilerHookValue() {
       public Object getValue() {
         return map != null ? map.getMaxUpdatesBeforeSave() : "-";
       }
     });
 
-    OProfiler.getInstance().registerHookValue("index." + name + ".optimizationThreshold", new OProfilerHookValue() {
-      public Object getValue() {
-        return map != null ? map.getOptimizeThreshold() : "-";
-      }
-    });
+    map.installHooks(name);
 
     Orient.instance().getMemoryWatchDog().addListener(watchDog);
     iDatabase.registerListener(this);
@@ -746,9 +736,9 @@ public abstract class OIndexMVRBTreeAbstract<T> extends OSharedResourceAdaptiveE
 
   protected void uninstallHooks(final ODatabaseRecord iDatabase) {
     OProfiler.getInstance().unregisterHookValue("index." + name + ".items");
-    OProfiler.getInstance().unregisterHookValue("index." + name + ".entryPointSize");
-    OProfiler.getInstance().unregisterHookValue("index." + name + ".maxUpdateBeforeSave");
-    OProfiler.getInstance().unregisterHookValue("index." + name + ".optimizationThreshold");
+
+    map.uninstallHooks(name);
+
     Orient.instance().getMemoryWatchDog().removeListener(watchDog);
     iDatabase.unregisterListener(this);
   }

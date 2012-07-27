@@ -153,6 +153,20 @@ public enum OGlobalConfiguration {
   MVRBTREE_RID_NODE_SAVE_MEMORY("mvrbtree.ridNodeSaveMemory",
       "Save memory usage by avoid keeping RIDs in memory but creating them at every access", Boolean.class, Boolean.FALSE),
 
+  // FIRST LEVEL CACHE FOR TREE
+  MVRBTREE_CACHE_EVICTION_SIZE("mvrbtree.cache.evictionSize", "Start eviction when cache size reach this threshold", Integer.class,
+      -1),
+
+  MVRBTREE_CACHE_DEFAULT_EVICTION_FACTOR("mvrbtree.cache.defaultEvictionFactor",
+      "Part of cache entries which will be evicted from cache", Float.class, 0.2f),
+
+  // NON-GC INDEX MEMORY
+  INDEX_MEMORY_CAPACITY("index.memory.capacity", "Size of buffer reserved for non GC memory for indexes. In bytes", Integer.class,
+      256000),
+
+  INDEX_MEMORY_MIN_CHUNK_SIZE("index.memory.minChunkSize",
+      "Size of the lowest chunk of bytes that can be allocated by index memory manager. In bytes.", Integer.class, 64),
+
   // COLLECTIONS
   LAZYSET_WORK_ON_STREAM("lazyset.workOnStream", "Upon add avoid unmarshalling set", Boolean.class, true),
 

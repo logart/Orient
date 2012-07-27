@@ -29,6 +29,7 @@ import com.orientechnologies.common.collection.OMVRBTree;
 import com.orientechnologies.common.collection.OMVRBTreeEntry;
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.common.profiler.OProfiler;
+import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.exception.ORecordNotFoundException;
 import com.orientechnologies.orient.core.exception.OStorageException;
@@ -36,7 +37,11 @@ import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.memory.OLowMemoryException;
 import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.record.ORecordInternal;
+import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLinkSerializer;
+import com.orientechnologies.orient.core.type.tree.provider.OMVRBTreeMapProvider;
 import com.orientechnologies.orient.core.type.tree.provider.OMVRBTreeProvider;
+import com.orientechnologies.orient.core.type.tree.provider.OMVRBTreeRIDProvider;
 
 /**
  * Persistent based MVRB-Tree implementation. The difference with the class OMVRBTreePersistent is the level. In facts this class
@@ -47,32 +52,26 @@ import com.orientechnologies.orient.core.type.tree.provider.OMVRBTreeProvider;
 @SuppressWarnings("serial")
 public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
 
-  protected final OMVRBTreeProvider<K, V>                  dataProvider;
-  protected ORecord<?>                                     owner;
-  protected final Set<OMVRBTreeEntryPersistent<K, V>>      recordsToCommit    = new HashSet<OMVRBTreeEntryPersistent<K, V>>();
+  protected final OMVRBTreeProvider<K, V>             dataProvider;
+  protected ORecord<?>                                owner;
+  protected final Set<OMVRBTreeEntryPersistent<K, V>> recordsToCommit    = new HashSet<OMVRBTreeEntryPersistent<K, V>>();
 
   // STORES IN MEMORY DIRECT REFERENCES TO PORTION OF THE TREE
-  protected int                                            optimizeThreshold;
-  protected volatile int                                   optimization       = 0;
-  private int                                              insertionCounter   = 0;
-  protected int                                            entryPointsSize;
+  protected int                                       optimizeThreshold;
+  protected volatile int                              optimization       = 0;
+  private int                                         insertionCounter   = 0;
 
-  protected float                                          optimizeEntryPointsFactor;
-  private final TreeMap<K, OMVRBTreeEntryPersistent<K, V>> entryPoints;
-  private final Map<ORID, OMVRBTreeEntryPersistent<K, V>>  cache              = new HashMap<ORID, OMVRBTreeEntryPersistent<K, V>>();
+  protected OTreeCacheStrategy<K, V>                  cacheStrategy      = new OTreeCacheBufferStrategy();
 
-  private static final int                                 OPTIMIZE_MAX_RETRY = 10;
+  private static final int                            OPTIMIZE_MAX_RETRY = 10;
 
   public OMVRBTreePersistent(OMVRBTreeProvider<K, V> iProvider) {
     super();
-    if (comparator != null)
-      entryPoints = new TreeMap<K, OMVRBTreeEntryPersistent<K, V>>(comparator);
-    else
-      entryPoints = new TreeMap<K, OMVRBTreeEntryPersistent<K, V>>();
-
     pageLoadFactor = (Float) OGlobalConfiguration.MVRBTREE_LOAD_FACTOR.getValue();
     dataProvider = iProvider;
     config();
+
+    cacheStrategy.init();
   }
 
   public OMVRBTreePersistent(OMVRBTreeProvider<K, V> iProvider, int keySize) {
@@ -102,6 +101,7 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
 
   public OMVRBTreePersistent<K, V> load() {
     dataProvider.load();
+    cacheStrategy.init();
 
     // RESET LAST SEARCH STATE
     setLastSearchNode(null, null);
@@ -207,8 +207,8 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
         super.clear();
         markDirty();
       }
-      entryPoints.clear();
-      cache.clear();
+
+      cacheStrategy.clearCache();
 
     } catch (IOException e) {
       OLogManager.instance().error(this, "Error on deleting the tree: " + dataProvider, e, OStorageException.class);
@@ -230,10 +230,7 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
 
     try {
       // DISCONNECT ALL THE NODES
-      for (OMVRBTreeEntryPersistent<K, V> entryPoint : entryPoints.values())
-        entryPoint.disconnectLinked(true);
-      entryPoints.clear();
-      cache.clear();
+      cacheStrategy.clearCache();
 
       recordsToCommit.clear();
       root = null;
@@ -274,100 +271,9 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
     final long timer = OProfiler.getInstance().startChrono();
 
     try {
-      if (root == null)
-        return 0;
-
-      if (OLogManager.instance().isDebugEnabled())
-        OLogManager.instance().debug(this, "Starting optimization of MVRB+Tree with %d items in memory...", cache.size());
-
-      // printInMemoryStructure();
-
-      if (entryPoints.size() == 0)
-        // FIRST TIME THE LIST IS NULL: START FROM ROOT
-        addNodeAsEntrypoint((OMVRBTreeEntryPersistent<K, V>) root);
-
-      // RECONFIG IT TO CATCH CHANGED VALUES
-      config();
-
-      if (OLogManager.instance().isDebugEnabled())
-        OLogManager.instance().debug(this, "Found %d items on disk, threshold=%f, entryPoints=%d, nodesInCache=%d", size(),
-            (entryPointsSize * optimizeEntryPointsFactor), entryPoints.size(), cache.size());
-
-      final int nodesInMemory = cache.size();
-
-      if (!iForce && nodesInMemory < entryPointsSize * optimizeEntryPointsFactor)
-        // UNDER THRESHOLD AVOID TO OPTIMIZE
-        return 0;
-
-      lastSearchFound = false;
-      lastSearchKey = null;
-      lastSearchNode = null;
-
-      int totalDisconnected = 0;
-
-      if (nodesInMemory > entryPointsSize) {
-        // REDUCE THE ENTRYPOINTS
-        final int distance = nodesInMemory / entryPointsSize + 1;
-
-        final Set<OMVRBTreeEntryPersistent<K, V>> entryPointsToRemove = new HashSet<OMVRBTreeEntryPersistent<K, V>>(nodesInMemory
-            - entryPointsSize + 2);
-
-        // REMOVE ENTRYPOINTS AT THE SAME DISTANCE
-        int currNode = 0;
-        for (final Iterator<OMVRBTreeEntryPersistent<K, V>> it = entryPoints.values().iterator(); it.hasNext();) {
-          final OMVRBTreeEntryPersistent<K, V> currentNode = it.next();
-
-          // JUMP THE FIRST (1 cannot never be the % of distance) THE LAST, ROOT AND LAST USED
-          // RECORDS THAT WERE CREATED INSIDE OF TRANSACTION CAN'T BE REMOVED TILL COMMIT
-          if (currentNode != root && currentNode != lastSearchNode && !currentNode.dataProvider.getIdentity().isTemporary()
-              && it.hasNext())
-            if (++currNode % distance != 0) {
-              // REMOVE THE NODE
-              entryPointsToRemove.add(currentNode);
-              it.remove();
-            }
-        }
-        addNodeAsEntrypoint((OMVRBTreeEntryPersistent<K, V>) lastSearchNode);
-        addNodeAsEntrypoint((OMVRBTreeEntryPersistent<K, V>) root);
-
-        // DISCONNECT THE REMOVED NODES
-        for (OMVRBTreeEntryPersistent<K, V> currentNode : entryPointsToRemove)
-          totalDisconnected += currentNode.disconnectLinked(false);
-
-        cache.clear();
-        for (OMVRBTreeEntryPersistent<K, V> entry : entryPoints.values())
-          addNodeInCache(entry);
-      }
-
-      if (isRuntimeCheckEnabled()) {
-        for (OMVRBTreeEntryPersistent<K, V> entryPoint : entryPoints.values())
-          for (OMVRBTreeEntryPersistent<K, V> e = (OMVRBTreeEntryPersistent<K, V>) entryPoint.getFirstInMemory(); e != null; e = e
-              .getNextInMemory())
-            e.checkEntryStructure();
-      }
-
-      // COUNT ALL IN-MEMORY NODES BY BROWSING ALL THE ENTRYPOINT NODES
-      if (OLogManager.instance().isDebugEnabled())
-        OLogManager.instance().debug(this, "After optimization: %d items on disk, threshold=%f, entryPoints=%d, nodesInCache=%d",
-            size(), (entryPointsSize * optimizeEntryPointsFactor), entryPoints.size(), cache.size());
-
-      if (debug) {
-        int i = 0;
-        System.out.println();
-        for (OMVRBTreeEntryPersistent<K, V> entryPoint : entryPoints.values())
-          System.out.println("- Entrypoint " + ++i + "/" + entryPoints.size() + ": " + entryPoint);
-      }
-
-      return totalDisconnected;
+      return cacheStrategy.optimize(iForce);
     } finally {
       optimization = 0;
-      if (isRuntimeCheckEnabled()) {
-        if (!entryPoints.isEmpty())
-          for (OMVRBTreeEntryPersistent<K, V> entryPoint : entryPoints.values())
-            checkTreeStructure(entryPoint.getFirstInMemory());
-        else
-          checkTreeStructure(root);
-      }
 
       OProfiler.getInstance().stopChrono("OMVRBTreePersistent.optimize", timer);
 
@@ -706,16 +612,12 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
     return optimizeThreshold;
   }
 
-  public void setOptimizeThreshold(int iOptimizeThreshold) {
-    this.optimizeThreshold = iOptimizeThreshold;
+  public void installHooks(String indexName) {
+    cacheStrategy.installHooks(indexName);
   }
 
-  public int getEntryPointSize() {
-    return entryPointsSize;
-  }
-
-  public void setEntryPointSize(int entryPointSize) {
-    this.entryPointsSize = entryPointSize;
+  public void uninstallHooks(String indexName) {
+    cacheStrategy.uninstallHooks(indexName);
   }
 
   @Override
@@ -783,11 +685,6 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
 
         return previous;
       } catch (OLowMemoryException e) {
-        OLogManager.instance().debug(this, "Optimization required during put %d/%d", i, OPTIMIZE_MAX_RETRY);
-
-        // LOW MEMORY DURING PUT: THIS MEANS DEEP LOADING OF NODES. EXECUTE THE OPTIMIZATION AND RETRY IT
-        optimize(true);
-
         System.gc();
 
         if (i > 0)
@@ -808,27 +705,20 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
    */
   @Override
   protected OMVRBTreeEntry<K, V> getBestEntryPoint(final K iKey) {
-    if (!entryPoints.isEmpty()) {
-      // SEARCHES EXACT OR BIGGER ENTRY
-      Entry<K, OMVRBTreeEntryPersistent<K, V>> closerNode = entryPoints.floorEntry(iKey);
-      if (closerNode != null)
-        return closerNode.getValue();
+    final OMVRBTreeEntry<K, V> bestEntryPoint = cacheStrategy.getBestEntryPoint(iKey);
 
-      // NO WAY: TRY WITH ANY NODE BEFORE THE KEY
-      closerNode = entryPoints.ceilingEntry(iKey);
-      if (closerNode != null)
-        return closerNode.getValue();
-    }
-
-    // USE ROOT
-    return super.getBestEntryPoint(iKey);
+    if (bestEntryPoint == null)
+      // USE ROOT
+      return super.getBestEntryPoint(iKey);
+    else
+      return bestEntryPoint;
   }
 
   /**
    * Remove an entry point from the list
    */
   void removeEntryPoint(final OMVRBTreeEntryPersistent<K, V> iEntry) {
-    entryPoints.remove(iEntry);
+    cacheStrategy.removeEntryPoint(iEntry);
   }
 
   synchronized void removeEntry(final ORID iEntryId) {
@@ -847,25 +737,21 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
    */
   @Override
   protected OMVRBTreeEntry<K, V> getFirstEntry() {
-    if (!entryPoints.isEmpty()) {
+    if (!cacheStrategy.isEntryPointsEmpty()) {
       // FIND THE FIRST ELEMENT STARTING FROM THE FIRST ENTRY-POINT IN MEMORY
-      final Map.Entry<K, OMVRBTreeEntryPersistent<K, V>> entry = entryPoints.firstEntry();
+      OMVRBTreeEntryPersistent<K, V> e = cacheStrategy.getFirstEntryPoint();
 
-      if (entry != null) {
-        OMVRBTreeEntryPersistent<K, V> e = entry.getValue();
+      OMVRBTreeEntryPersistent<K, V> prev;
+      do {
+        prev = (OMVRBTreeEntryPersistent<K, V>) predecessor(e);
+        if (prev != null)
+          e = prev;
+      } while (prev != null);
 
-        OMVRBTreeEntryPersistent<K, V> prev;
-        do {
-          prev = (OMVRBTreeEntryPersistent<K, V>) predecessor(e);
-          if (prev != null)
-            e = prev;
-        } while (prev != null);
+      if (e != null && e.getSize() > 0)
+        pageIndex = 0;
 
-        if (e != null && e.getSize() > 0)
-          pageIndex = 0;
-
-        return e;
-      }
+      return e;
     }
 
     // SEARCH FROM ROOT
@@ -878,25 +764,21 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
    */
   @Override
   protected OMVRBTreeEntry<K, V> getLastEntry() {
-    if (!entryPoints.isEmpty()) {
+    if (!cacheStrategy.isEntryPointsEmpty()) {
       // FIND THE LAST ELEMENT STARTING FROM THE FIRST ENTRY-POINT IN MEMORY
-      final Map.Entry<K, OMVRBTreeEntryPersistent<K, V>> entry = entryPoints.lastEntry();
+      OMVRBTreeEntryPersistent<K, V> e = cacheStrategy.getLastEntryPoint();
 
-      if (entry != null) {
-        OMVRBTreeEntryPersistent<K, V> e = entry.getValue();
+      OMVRBTreeEntryPersistent<K, V> next;
+      do {
+        next = (OMVRBTreeEntryPersistent<K, V>) successor(e);
+        if (next != null)
+          e = next;
+      } while (next != null);
 
-        OMVRBTreeEntryPersistent<K, V> next;
-        do {
-          next = (OMVRBTreeEntryPersistent<K, V>) successor(e);
-          if (next != null)
-            e = next;
-        } while (next != null);
+      if (e != null && e.getSize() > 0)
+        pageIndex = e.getSize() - 1;
 
-        if (e != null && e.getSize() > 0)
-          pageIndex = e.getSize() - 1;
-
-        return e;
-      }
+      return e;
     }
 
     // SEARCH FROM ROOT
@@ -920,9 +802,6 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
     if (dataProvider.updateConfig())
       markDirty();
     pageLoadFactor = OGlobalConfiguration.MVRBTREE_LOAD_FACTOR.getValueAsFloat();
-    optimizeEntryPointsFactor = OGlobalConfiguration.MVRBTREE_OPTIMIZE_ENTRYPOINTS_FACTOR.getValueAsFloat();
-    optimizeThreshold = OGlobalConfiguration.MVRBTREE_OPTIMIZE_THRESHOLD.getValueAsInteger();
-    entryPointsSize = OGlobalConfiguration.MVRBTREE_ENTRYPOINTS.getValueAsInteger();
   }
 
   @Override
@@ -964,26 +843,19 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
    *          Node to remove
    */
   protected void removeNodeFromMemory(final OMVRBTreeEntryPersistent<K, V> iNode) {
-    if (iNode.dataProvider != null && iNode.dataProvider.getIdentity().isValid())
-      cache.remove(iNode.dataProvider.getIdentity());
-    if (iNode.getSize() > 0)
-      entryPoints.remove(iNode.getKeyAt(0));
+    cacheStrategy.removeNodeFromMemory(iNode);
   }
 
   protected void addNodeInMemory(final OMVRBTreeEntryPersistent<K, V> iNode) {
-    addNodeAsEntrypoint(iNode);
-    addNodeInCache(iNode);
+    cacheStrategy.addNodeInMemory(iNode);
   }
 
-  protected boolean isNodeEntryPoint(final OMVRBTreeEntryPersistent<K, V> iNode) {
-    if (iNode != null && iNode.getSize() > 0)
-      return entryPoints.containsKey(iNode.getKeyAt(0));
-    return false;
+  protected boolean isUnloadable(final OMVRBTreeEntryPersistent<K, V> iNode) {
+    return cacheStrategy.isUnloadable(iNode);
   }
 
   protected void addNodeAsEntrypoint(final OMVRBTreeEntryPersistent<K, V> iNode) {
-    if (iNode != null && iNode.getSize() > 0)
-      entryPoints.put(iNode.getKeyAt(0), iNode);
+    cacheStrategy.addNodeAsEntrypoint(iNode);
   }
 
   /**
@@ -995,12 +867,7 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
    *          Node to update
    */
   protected void updateEntryPoint(final K iOldKey, final OMVRBTreeEntryPersistent<K, V> iNode) {
-    final OMVRBTreeEntryPersistent<K, V> node = entryPoints.remove(iOldKey);
-    if (node != null) {
-      if (node != iNode)
-        OLogManager.instance().warn(this, "Entrypoints nodes are different during update: old %s <-> new %s", node, iNode);
-      addNodeAsEntrypoint(iNode);
-    }
+    cacheStrategy.updateEntryPoint(iOldKey, iNode);
   }
 
   /**
@@ -1010,8 +877,7 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
    *          Node to store
    */
   protected void addNodeInCache(final OMVRBTreeEntryPersistent<K, V> iNode) {
-    if (iNode.dataProvider != null && iNode.dataProvider.getIdentity().isValid())
-      cache.put(iNode.dataProvider.getIdentity(), iNode);
+    cacheStrategy.addNodeInCache(iNode);
   }
 
   /**
@@ -1022,18 +888,18 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
    * @return Node is found, otherwise NULL
    */
   protected OMVRBTreeEntryPersistent<K, V> searchNodeInCache(final ORID iRid) {
-    return cache.get(iRid);
+    return cacheStrategy.searchNode(iRid);
   }
 
   public int getNumberOfNodesInCache() {
-    return cache.size();
+    return cacheStrategy.getNumberOfLoadedNodes();
   }
 
   /**
    * Returns all the RID of the nodes in memory.
    */
   protected Set<ORID> getAllNodesInCache() {
-    return cache.keySet();
+    return cacheStrategy.getAllLoadedNodes();
   }
 
   /**
@@ -1043,7 +909,7 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
    *          RID of node to remove
    */
   protected void removeNodeFromCache(final ORID iRid) {
-    cache.remove(iRid);
+    cacheStrategy.removeNodeFromCache(iRid);
   }
 
   protected void markDirty() {
@@ -1056,5 +922,461 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
   public OMVRBTreePersistent<K, V> setOwner(ORecord<?> owner) {
     this.owner = owner;
     return this;
+  }
+
+  protected static interface OTreeCacheStrategy<K, V> {
+    void init();
+
+    void addNodeInCache(final OMVRBTreeEntryPersistent<K, V> iNode);
+
+    OMVRBTreeEntryPersistent<K, V> searchNode(final ORID iRid);
+
+    Set<ORID> getAllLoadedNodes();
+
+    void removeNodeFromCache(final ORID iRid);
+
+    boolean isUnloadable(final OMVRBTreeEntryPersistent<K, V> iNode);
+
+    void addNodeAsEntrypoint(final OMVRBTreeEntryPersistent<K, V> iNode);
+
+    void updateEntryPoint(final K iOldKey, final OMVRBTreeEntryPersistent<K, V> iNode);
+
+    void removeEntryPoint(final OMVRBTreeEntryPersistent<K, V> iEntry);
+
+    OMVRBTreeEntry<K, V> getBestEntryPoint(final K iKey);
+
+    OMVRBTreeEntryPersistent<K, V> getLastEntryPoint();
+
+    OMVRBTreeEntryPersistent<K, V> getFirstEntryPoint();
+
+    void addNodeInMemory(final OMVRBTreeEntryPersistent<K, V> iNode);
+
+    void removeNodeFromMemory(final OMVRBTreeEntryPersistent<K, V> iNode);
+
+    void clearCache();
+
+    boolean isEntryPointsEmpty();
+
+    int getNumberOfLoadedNodes();
+
+    long getCacheSize();
+
+    int optimize(boolean iForce);
+
+    void installHooks(String indexName);
+
+    void uninstallHooks(String indexName);
+  }
+
+  protected class OTreeCacheBufferStrategy implements OTreeCacheStrategy<K, V> {
+    private OMemoryFirstLevelCache<K>                 firstLevelCache;
+    private Map<ORID, OMVRBTreeEntryPersistent<K, V>> loadedNodes = new HashMap<ORID, OMVRBTreeEntryPersistent<K, V>>();
+
+    public void init() {
+      if (firstLevelCache != null) {
+        firstLevelCache.clear();
+      }
+
+      final OBinarySerializer<K> keySerializer;
+      if (dataProvider instanceof OMVRBTreeMapProvider)
+        keySerializer = ((OMVRBTreeMapProvider<K, V>) dataProvider).getKeySerializer();
+      else if (dataProvider instanceof OMVRBTreeRIDProvider)
+        keySerializer = (OBinarySerializer<K>) new OLinkSerializer();
+      else
+        throw new IllegalStateException("Binary serializer does not found.");
+
+      firstLevelCache = new OMemoryFirstLevelCache<K>(Orient.instance().getMemoryForIndexes(), keySerializer, comparator());
+    }
+
+    public void addNodeInCache(final OMVRBTreeEntryPersistent<K, V> iNode) {
+      if (iNode.dataProvider != null && iNode.dataProvider.getIdentity().isValid())
+        loadedNodes.put(iNode.dataProvider.getIdentity(), iNode);
+    }
+
+    public OMVRBTreeEntryPersistent<K, V> searchNode(final ORID iRid) {
+      return loadedNodes.get(iRid);
+    }
+
+    public Set<ORID> getAllLoadedNodes() {
+      return loadedNodes.keySet();
+    }
+
+    public void removeNodeFromCache(ORID iRid) {
+      loadedNodes.remove(iRid);
+    }
+
+    public boolean isUnloadable(OMVRBTreeEntryPersistent<K, V> iNode) {
+      if (iNode != null && iNode.getProvider() != null)
+        return !loadedNodes.containsKey(iNode.getProvider().getIdentity());
+      return true;
+    }
+
+    public void addNodeAsEntrypoint(OMVRBTreeEntryPersistent<K, V> iNode) {
+      if (iNode != null && iNode.getSize() > 0 && !iNode.dataProvider.getIdentity().isNew()) {
+        firstLevelCache.add(iNode.createCacheEntry());
+      }
+    }
+
+    public void updateEntryPoint(K iOldKey, OMVRBTreeEntryPersistent<K, V> iNode) {
+      // TODO it should update only position, can we prevent unnecessary remove-add?
+
+      final OMemoryFirstLevelCache.CacheEntry<K> oldEntry = firstLevelCache.remove(iOldKey);
+      if (oldEntry != null) {
+        addNodeAsEntrypoint(iNode);
+      }
+    }
+
+    public void removeEntryPoint(OMVRBTreeEntryPersistent<K, V> iEntry) {
+      firstLevelCache.remove(iEntry.getFirstKey());
+    }
+
+    public OMVRBTreeEntry<K, V> getBestEntryPoint(K iKey) {
+      if (!firstLevelCache.isEmpty()) {
+        final OMemoryFirstLevelCache.CacheEntry<K> floorCacheEntry = firstLevelCache.getFloor(iKey);
+
+        if (floorCacheEntry != null) {
+          return loadEntry(floorCacheEntry);
+        }
+
+        final OMemoryFirstLevelCache.CacheEntry<K> ceilingCacheEntry = firstLevelCache.getCeiling(iKey);
+        if (ceilingCacheEntry != null) {
+          return loadEntry(ceilingCacheEntry);
+        }
+      }
+
+      return null;
+    }
+
+    public OMVRBTreeEntryPersistent<K, V> getLastEntryPoint() {
+      final OMemoryFirstLevelCache.CacheEntry<K> last = firstLevelCache.getLast();
+      return loadEntry(last);
+    }
+
+    public OMVRBTreeEntryPersistent<K, V> getFirstEntryPoint() {
+      final OMemoryFirstLevelCache.CacheEntry<K> first = firstLevelCache.getFirst();
+      return loadEntry(first);
+    }
+
+    public void addNodeInMemory(OMVRBTreeEntryPersistent<K, V> iNode) {
+      addNodeAsEntrypoint(iNode);
+      addNodeInCache(iNode);
+    }
+
+    public void removeNodeFromMemory(OMVRBTreeEntryPersistent<K, V> iNode) {
+      if (iNode.dataProvider != null && iNode.dataProvider.getIdentity().isValid())
+        loadedNodes.remove(iNode);
+      if (iNode.getSize() > 0)
+        removeEntryPoint(iNode);
+    }
+
+    public void clearCache() {
+      loadedNodes.clear();
+      firstLevelCache.clear();
+    }
+
+    public boolean isEntryPointsEmpty() {
+      return firstLevelCache.isEmpty();
+    }
+
+    public int getNumberOfLoadedNodes() {
+      return loadedNodes.size();
+    }
+
+    public long getCacheSize() {
+      return firstLevelCache.size();
+    }
+
+    public int optimize(boolean iForce) {
+      int entriesUnloaded = loadedNodes.size() - recordsToCommit.size();
+
+      loadedNodes.clear();
+
+      for (OMVRBTreeEntryPersistent<K, V> record : recordsToCommit) {
+        addNodeInCache(record);
+        record.disconnectLinked(false);
+      }
+
+      final OMVRBTreeEntryPersistent iRoot = (OMVRBTreeEntryPersistent<K, V>) root;
+      addNodeInCache(iRoot);
+      iRoot.disconnectLinked(false);
+
+      return entriesUnloaded;
+    }
+
+    public void installHooks(String indexName) {
+      // TODO weak references
+
+      OProfiler.getInstance().registerHookValue("index." + indexName + ".cacheSize", new OProfiler.OProfilerHookValue() {
+        public Object getValue() {
+          return getCacheSize();
+        }
+      });
+
+      OProfiler.getInstance().registerHookValue("index." + indexName + ".cacheEvictionSize", new OProfiler.OProfilerHookValue() {
+        public Object getValue() {
+          return firstLevelCache.getEvictionSize();
+        }
+      });
+
+      OProfiler.getInstance().registerHookValue("index." + indexName + ".cacheEvictionFactor", new OProfiler.OProfilerHookValue() {
+        public Object getValue() {
+          return firstLevelCache.getDefaultEvictionFactor();
+        }
+      });
+
+    }
+
+    public void uninstallHooks(String indexName) {
+      OProfiler.getInstance().unregisterHookValue("index." + indexName + ".cacheSize");
+      OProfiler.getInstance().unregisterHookValue("index." + indexName + ".cacheEvictionSize");
+      OProfiler.getInstance().unregisterHookValue("index." + indexName + ".cacheEvictionFactor");
+    }
+
+    private OMVRBTreeEntryPersistent<K, V> loadEntry(OMemoryFirstLevelCache.CacheEntry<K> entry) {
+      OMVRBTreeEntryPersistent<K, V> node = loadedNodes.get(entry.rid);
+      if (node != null)
+        return node;
+
+      // TODO find more efficient way
+      node = OMVRBTreePersistent.this.loadEntry(null, entry.rid);
+
+      addNodeInCache(node);
+
+      return node;
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+      firstLevelCache.clear();
+    }
+  }
+
+  protected class OEntryPointsListCacheStrategy implements OTreeCacheStrategy<K, V> {
+    // STORES IN MEMORY DIRECT REFERENCES TO PORTION OF THE TREE
+    protected int                                            entryPointsSize;
+
+    protected float                                          optimizeEntryPointsFactor;
+    private final TreeMap<K, OMVRBTreeEntryPersistent<K, V>> entryPoints;
+    private final Map<ORID, OMVRBTreeEntryPersistent<K, V>>  cache = new HashMap<ORID, OMVRBTreeEntryPersistent<K, V>>();
+
+    public OEntryPointsListCacheStrategy() {
+      if (comparator != null)
+        entryPoints = new TreeMap<K, OMVRBTreeEntryPersistent<K, V>>(comparator);
+      else
+        entryPoints = new TreeMap<K, OMVRBTreeEntryPersistent<K, V>>();
+
+      pageLoadFactor = (Float) OGlobalConfiguration.MVRBTREE_LOAD_FACTOR.getValue();
+    }
+
+    public void init() {
+      optimizeEntryPointsFactor = OGlobalConfiguration.MVRBTREE_OPTIMIZE_ENTRYPOINTS_FACTOR.getValueAsFloat();
+      optimizeThreshold = OGlobalConfiguration.MVRBTREE_OPTIMIZE_THRESHOLD.getValueAsInteger();
+      entryPointsSize = OGlobalConfiguration.MVRBTREE_ENTRYPOINTS.getValueAsInteger();
+    }
+
+    public void addNodeInCache(OMVRBTreeEntryPersistent<K, V> iNode) {
+      if (iNode.dataProvider != null && iNode.dataProvider.getIdentity().isValid())
+        cache.put(iNode.dataProvider.getIdentity(), iNode);
+    }
+
+    public OMVRBTreeEntryPersistent<K, V> searchNode(ORID iRid) {
+      return cache.get(iRid);
+    }
+
+    public Set<ORID> getAllLoadedNodes() {
+      return cache.keySet();
+    }
+
+    public void removeNodeFromCache(ORID iRid) {
+      cache.remove(iRid);
+    }
+
+    public boolean isUnloadable(OMVRBTreeEntryPersistent<K, V> iNode) {
+      if (iNode != null && iNode.getSize() > 0)
+        return !entryPoints.containsKey(iNode.getKeyAt(0));
+      return true;
+    }
+
+    public void addNodeAsEntrypoint(OMVRBTreeEntryPersistent<K, V> iNode) {
+      if (iNode != null && iNode.getSize() > 0)
+        entryPoints.put(iNode.getKeyAt(0), iNode);
+    }
+
+    public void updateEntryPoint(K iOldKey, OMVRBTreeEntryPersistent<K, V> iNode) {
+      final OMVRBTreeEntryPersistent<K, V> node = entryPoints.remove(iOldKey);
+      if (node != null) {
+        if (node != iNode)
+          OLogManager.instance().warn(this, "Entrypoints nodes are different during update: old %s <-> new %s", node, iNode);
+        addNodeAsEntrypoint(iNode);
+      }
+    }
+
+    public void removeEntryPoint(OMVRBTreeEntryPersistent<K, V> iEntry) {
+      entryPoints.remove(iEntry);
+    }
+
+    public OMVRBTreeEntry<K, V> getBestEntryPoint(K iKey) {
+      if (!entryPoints.isEmpty()) {
+        // SEARCHES EXACT OR BIGGER ENTRY
+        Entry<K, OMVRBTreeEntryPersistent<K, V>> closerNode = entryPoints.floorEntry(iKey);
+        if (closerNode != null)
+          return closerNode.getValue();
+
+        // NO WAY: TRY WITH ANY NODE BEFORE THE KEY
+        closerNode = entryPoints.ceilingEntry(iKey);
+        if (closerNode != null)
+          return closerNode.getValue();
+      }
+
+      // USE ROOT
+      return null;
+    }
+
+    public OMVRBTreeEntryPersistent<K, V> getLastEntryPoint() {
+      final Entry<K, OMVRBTreeEntryPersistent<K, V>> entry = entryPoints.lastEntry();
+      if (entry != null) {
+        return entry.getValue();
+      }
+      return null;
+    }
+
+    public OMVRBTreeEntryPersistent<K, V> getFirstEntryPoint() {
+      final Entry<K, OMVRBTreeEntryPersistent<K, V>> entry = entryPoints.firstEntry();
+      if (entry != null) {
+        return entry.getValue();
+      }
+      return null;
+    }
+
+    public void addNodeInMemory(OMVRBTreeEntryPersistent<K, V> iNode) {
+      addNodeAsEntrypoint(iNode);
+      addNodeInCache(iNode);
+    }
+
+    public void removeNodeFromMemory(OMVRBTreeEntryPersistent<K, V> iNode) {
+      if (iNode.dataProvider != null && iNode.dataProvider.getIdentity().isValid())
+        cache.remove(iNode.dataProvider.getIdentity());
+      if (iNode.getSize() > 0)
+        entryPoints.remove(iNode.getKeyAt(0));
+    }
+
+    public void clearCache() {
+      cache.clear();
+      entryPoints.clear();
+    }
+
+    public boolean isEntryPointsEmpty() {
+      return entryPoints.isEmpty();
+    }
+
+    public int getNumberOfLoadedNodes() {
+      return cache.size();
+    }
+
+    public long getCacheSize() {
+      return cache.size();
+    }
+
+    public int optimize(boolean iForce) {
+      if (root == null)
+        return 0;
+
+      if (OLogManager.instance().isDebugEnabled())
+        OLogManager.instance().debug(this, "Starting optimization of MVRB+Tree with %d items in memory...", cache.size());
+
+      // printInMemoryStructure();
+
+      if (entryPoints.size() == 0)
+        // FIRST TIME THE LIST IS NULL: START FROM ROOT
+        addNodeAsEntrypoint((OMVRBTreeEntryPersistent<K, V>) root);
+
+      // RECONFIG IT TO CATCH CHANGED VALUES
+      config();
+
+      if (OLogManager.instance().isDebugEnabled())
+        OLogManager.instance().debug(this, "Found %d items on disk, threshold=%f, entryPoints=%d, nodesInCache=%d", size(),
+            (entryPointsSize * optimizeEntryPointsFactor), entryPoints.size(), cache.size());
+
+      final int nodesInMemory = cache.size();
+
+      if (!iForce && nodesInMemory < entryPointsSize * optimizeEntryPointsFactor)
+        // UNDER THRESHOLD AVOID TO OPTIMIZE
+        return 0;
+
+      lastSearchFound = false;
+      lastSearchKey = null;
+      lastSearchNode = null;
+
+      int totalDisconnected = 0;
+
+      if (nodesInMemory > entryPointsSize) {
+        // REDUCE THE ENTRYPOINTS
+        final int distance = nodesInMemory / entryPointsSize + 1;
+
+        final Set<OMVRBTreeEntryPersistent<K, V>> entryPointsToRemove = new HashSet<OMVRBTreeEntryPersistent<K, V>>(nodesInMemory
+            - entryPointsSize + 2);
+
+        // REMOVE ENTRYPOINTS AT THE SAME DISTANCE
+        int currNode = 0;
+        for (final Iterator<OMVRBTreeEntryPersistent<K, V>> it = entryPoints.values().iterator(); it.hasNext();) {
+          final OMVRBTreeEntryPersistent<K, V> currentNode = it.next();
+
+          // JUMP THE FIRST (1 cannot never be the % of distance) THE LAST, ROOT AND LAST USED
+          // RECORDS THAT WERE CREATED INSIDE OF TRANSACTION CAN'T BE REMOVED TILL COMMIT
+          if (currentNode != root && currentNode != lastSearchNode && !currentNode.dataProvider.getIdentity().isTemporary()
+              && it.hasNext())
+            if (++currNode % distance != 0) {
+              // REMOVE THE NODE
+              entryPointsToRemove.add(currentNode);
+              it.remove();
+            }
+        }
+        addNodeAsEntrypoint((OMVRBTreeEntryPersistent<K, V>) lastSearchNode);
+        addNodeAsEntrypoint((OMVRBTreeEntryPersistent<K, V>) root);
+
+        // DISCONNECT THE REMOVED NODES
+        for (OMVRBTreeEntryPersistent<K, V> currentNode : entryPointsToRemove)
+          totalDisconnected += currentNode.disconnectLinked(false);
+
+        cache.clear();
+        for (OMVRBTreeEntryPersistent<K, V> entry : entryPoints.values())
+          addNodeInCache(entry);
+      }
+
+      if (isRuntimeCheckEnabled()) {
+        for (OMVRBTreeEntryPersistent<K, V> entryPoint : entryPoints.values())
+          for (OMVRBTreeEntryPersistent<K, V> e = (OMVRBTreeEntryPersistent<K, V>) entryPoint.getFirstInMemory(); e != null; e = e
+              .getNextInMemory())
+            e.checkEntryStructure();
+      }
+
+      // COUNT ALL IN-MEMORY NODES BY BROWSING ALL THE ENTRYPOINT NODES
+      if (OLogManager.instance().isDebugEnabled())
+        OLogManager.instance().debug(this, "After optimization: %d items on disk, threshold=%f, entryPoints=%d, nodesInCache=%d",
+            size(), (entryPointsSize * optimizeEntryPointsFactor), entryPoints.size(), cache.size());
+
+      if (debug) {
+        int i = 0;
+        System.out.println();
+        for (OMVRBTreeEntryPersistent<K, V> entryPoint : entryPoints.values())
+          System.out.println("- Entrypoint " + ++i + "/" + entryPoints.size() + ": " + entryPoint);
+      }
+
+      return totalDisconnected;
+    }
+
+    public void installHooks(String indexName) {
+      // TODO weak references
+
+      OProfiler.getInstance().registerHookValue("index." + indexName + ".entryPointSize", new OProfiler.OProfilerHookValue() {
+        public Object getValue() {
+          return entryPointsSize;
+        }
+      });
+    }
+
+    public void uninstallHooks(String indexName) {
+      OProfiler.getInstance().unregisterHookValue("index." + indexName + ".entryPointSize");
+    }
   }
 }

@@ -17,7 +17,7 @@ public class OffHeapTreeCacheBufferSpeedTest extends SpeedTestMonoThread {
 
   private OMemory                         offheapMemory   = new OBuddyMemory(60000000, 32);
   private OMemoryFirstLevelCache<Integer> firstLevelCache = new OMemoryFirstLevelCache<Integer>(offheapMemory,
-                                                              OIntegerSerializer.INSTANCE);
+                                                              OIntegerSerializer.INSTANCE, null);
 
   private int                             key;
 

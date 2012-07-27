@@ -16,6 +16,9 @@
 
 package com.orientechnologies.orient.core.type.tree;
 
+import java.util.Comparator;
+
+import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OIntegerSerializer;
@@ -25,31 +28,46 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OL
  * @author Andrey Lomakin
  * @since 07.04.12
  */
-public class OMemoryFirstLevelCache<K extends Comparable<K>> {
+public class OMemoryFirstLevelCache<K> {
   private final OMemory              memory;
   private final OMemorySkipList<K>   skipList;
   private final OBinarySerializer<K> keySerializer;
 
-  private int                        lruHeader              = OMemory.NULL_POINTER;
-  private int                        lruTail                = OMemory.NULL_POINTER;
+  private int                        lruHeader             = OMemory.NULL_POINTER;
+  private int                        lruTail               = OMemory.NULL_POINTER;
 
-  private int                        evictionSize           = -1;
-  private int                        defaultEvictionPercent = 20;
+  private int                        evictionSize          = -1;
+  private float                      defaultEvictionFactor = 0.2f;
 
-  private long                       size                   = 0;
+  private long                       size                  = 0;
 
-  public OMemoryFirstLevelCache(final OMemory memory, final OBinarySerializer<K> keySerializer) {
+  public OMemoryFirstLevelCache(final OMemory memory, final OBinarySerializer<K> keySerializer, Comparator<? super K> keyComparator) {
     this.memory = memory;
-    this.skipList = new OMemorySkipList<K>(memory, keySerializer);
+    this.skipList = new OMemorySkipList<K>(memory, keySerializer, keyComparator);
     this.keySerializer = keySerializer;
+
+    config();
+  }
+
+  private void config() {
+    evictionSize = OGlobalConfiguration.MVRBTREE_CACHE_EVICTION_SIZE.getValueAsInteger();
+    defaultEvictionFactor = OGlobalConfiguration.MVRBTREE_CACHE_DEFAULT_EVICTION_FACTOR.getValueAsFloat();
   }
 
   public void setEvictionSize(int evictionSize) {
     this.evictionSize = evictionSize;
   }
 
-  public void setDefaultEvictionPercent(int defaultEvictionPercent) {
-    this.defaultEvictionPercent = defaultEvictionPercent;
+  public int getEvictionSize() {
+    return evictionSize;
+  }
+
+  public void setDefaultEvictionFactor(float defaultEvictionFactor) {
+    this.defaultEvictionFactor = defaultEvictionFactor;
+  }
+
+  public float getDefaultEvictionFactor() {
+    return defaultEvictionFactor;
   }
 
   public boolean add(CacheEntry<K> entry) {
@@ -100,6 +118,10 @@ public class OMemoryFirstLevelCache<K extends Comparable<K>> {
     return size;
   }
 
+  public boolean isEmpty() {
+    return size == 0;
+  }
+
   public CacheEntry<K> getCeiling(K firstKey) {
     if (size == 0)
       return null;
@@ -122,6 +144,30 @@ public class OMemoryFirstLevelCache<K extends Comparable<K>> {
 
     updateItemInLRU(itemPointer);
     return loadEntry(getDataPointer(itemPointer));
+  }
+
+  public CacheEntry<K> getFirst() {
+    if (size == 0)
+      return null;
+
+    final int pointer = skipList.getFirst();
+    if (pointer == OMemory.NULL_POINTER)
+      return null;
+
+    updateItemInLRU(pointer);
+    return loadEntry(getDataPointer(pointer));
+  }
+
+  public CacheEntry<K> getLast() {
+    if (size == 0)
+      return null;
+
+    final int pointer = skipList.getLast();
+    if (pointer == OMemory.NULL_POINTER)
+      return null;
+
+    updateItemInLRU(pointer);
+    return loadEntry(getDataPointer(pointer));
   }
 
   public CacheEntry<K> remove(K firstKey) {
@@ -155,14 +201,14 @@ public class OMemoryFirstLevelCache<K extends Comparable<K>> {
   }
 
   public boolean evict() {
-    return evict(defaultEvictionPercent);
+    return evict(defaultEvictionFactor);
   }
 
-  public boolean evict(int percent) {
-    if (percent <= 0 || percent > 100)
+  public boolean evict(float factor) {
+    if (factor <= 0 || factor > 1)
       return false;
 
-    long evictionSize = (size * percent) / 100;
+    long evictionSize = (long) (size * factor);
     if (evictionSize == 0)
       return false;
 
@@ -185,6 +231,10 @@ public class OMemoryFirstLevelCache<K extends Comparable<K>> {
       setNextLRUPointer(lruTail, OMemory.NULL_POINTER);
 
     return true;
+  }
+
+  public void clear() {
+    evict(1f);
   }
 
   private void addItemToLRU(int pointer) {

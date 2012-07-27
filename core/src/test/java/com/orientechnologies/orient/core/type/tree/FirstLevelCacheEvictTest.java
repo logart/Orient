@@ -1,6 +1,9 @@
 package com.orientechnologies.orient.core.type.tree;
 
-import org.testng.Assert;
+//TODO migrate to testng
+
+import junit.framework.Assert;
+
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -15,7 +18,7 @@ public class FirstLevelCacheEvictTest {
 
   @BeforeMethod
   public void setUp() {
-    firstLevelCache = new OMemoryFirstLevelCache<Integer>(memory, OIntegerSerializer.INSTANCE);
+    firstLevelCache = new OMemoryFirstLevelCache<Integer>(memory, OIntegerSerializer.INSTANCE, null);
   }
 
   @AfterMethod
@@ -25,7 +28,7 @@ public class FirstLevelCacheEvictTest {
 
   public void testAdd100RemainLast7() {
     firstLevelCache.setEvictionSize(10);
-    firstLevelCache.setDefaultEvictionPercent(30);
+    firstLevelCache.setDefaultEvictionFactor(0.3f);
 
     for (int i = 0; i < 100; i++) {
       firstLevelCache.add(createCacheEntry(i));
@@ -33,7 +36,7 @@ public class FirstLevelCacheEvictTest {
 
     Assert.assertEquals(7, firstLevelCache.size());
     for (int i = 99; i >= 93; i--)
-      Assert.assertEquals(createCacheEntry(i), firstLevelCache.remove(i));
+      Assert.assertEquals(i + " -key is absent", createCacheEntry(i), firstLevelCache.remove(i));
 
     Assert.assertEquals(0, firstLevelCache.size());
     Assert.assertEquals(memory.capacity(), memory.freeSpace());
@@ -41,7 +44,7 @@ public class FirstLevelCacheEvictTest {
 
   public void testAdd10RemainFirst6Get() {
     firstLevelCache.setEvictionSize(10);
-    firstLevelCache.setDefaultEvictionPercent(30);
+    firstLevelCache.setDefaultEvictionFactor(0.3f);
 
     for (int i = 0; i < 9; i++)
       firstLevelCache.add(createCacheEntry(i));
@@ -53,9 +56,9 @@ public class FirstLevelCacheEvictTest {
 
     Assert.assertEquals(7, firstLevelCache.size());
     for (int i = 5; i >= 0; i--)
-      Assert.assertEquals(createCacheEntry(i), firstLevelCache.remove(i));
+      Assert.assertEquals(i + " -key is absent", createCacheEntry(i), firstLevelCache.remove(i));
 
-    Assert.assertEquals(createCacheEntry(9), firstLevelCache.remove(9));
+    Assert.assertEquals("9 -key is absent", createCacheEntry(9), firstLevelCache.remove(9));
 
     Assert.assertEquals(0, firstLevelCache.size());
     Assert.assertEquals(memory.capacity(), memory.freeSpace());
@@ -63,7 +66,7 @@ public class FirstLevelCacheEvictTest {
 
   public void testAdd100RemainFirst3Get() {
     firstLevelCache.setEvictionSize(10);
-    firstLevelCache.setDefaultEvictionPercent(30);
+    firstLevelCache.setDefaultEvictionFactor(0.3f);
 
     for (int n = 0; n < 10; n++) {
       for (int i = 0; i < 3; i++)
@@ -90,10 +93,10 @@ public class FirstLevelCacheEvictTest {
     Assert.assertEquals(7, firstLevelCache.size());
 
     for (int i = 0; i < 3; i++)
-      Assert.assertEquals(createCacheEntry(i), firstLevelCache.remove(i));
+      Assert.assertEquals(i + " -key is absent", createCacheEntry(i), firstLevelCache.remove(i));
 
     for (int i = 99; i >= 96; i--)
-      Assert.assertEquals(createCacheEntry(i), firstLevelCache.remove(i));
+      Assert.assertEquals(i + " -key is absent", createCacheEntry(i), firstLevelCache.remove(i));
 
     Assert.assertEquals(0, firstLevelCache.size());
     Assert.assertEquals(memory.capacity(), memory.freeSpace());
@@ -101,7 +104,7 @@ public class FirstLevelCacheEvictTest {
 
   public void testAdd10RemainFirst6GetCeiling() {
     firstLevelCache.setEvictionSize(10);
-    firstLevelCache.setDefaultEvictionPercent(30);
+    firstLevelCache.setDefaultEvictionFactor(0.3f);
 
     for (int i = 0; i < 9; i++)
       firstLevelCache.add(createCacheEntry(i));
@@ -113,9 +116,9 @@ public class FirstLevelCacheEvictTest {
 
     Assert.assertEquals(7, firstLevelCache.size());
     for (int i = 5; i >= 0; i--)
-      Assert.assertEquals(createCacheEntry(i), firstLevelCache.remove(i));
+      Assert.assertEquals(i + " -key is absent", createCacheEntry(i), firstLevelCache.remove(i));
 
-    Assert.assertEquals(createCacheEntry(9), firstLevelCache.remove(9));
+    Assert.assertEquals("9 -key is absent", createCacheEntry(9), firstLevelCache.remove(9));
 
     Assert.assertEquals(0, firstLevelCache.size());
     Assert.assertEquals(memory.capacity(), memory.freeSpace());
@@ -123,7 +126,7 @@ public class FirstLevelCacheEvictTest {
 
   public void testAdd10RemainFirst6GetFloor() {
     firstLevelCache.setEvictionSize(10);
-    firstLevelCache.setDefaultEvictionPercent(30);
+    firstLevelCache.setDefaultEvictionFactor(0.3f);
 
     for (int i = 0; i < 9; i++)
       firstLevelCache.add(createCacheEntry(i));
@@ -135,9 +138,9 @@ public class FirstLevelCacheEvictTest {
 
     Assert.assertEquals(7, firstLevelCache.size());
     for (int i = 5; i >= 0; i--)
-      Assert.assertEquals(createCacheEntry(i), firstLevelCache.remove(i));
+      Assert.assertEquals(i + " -key is absent", createCacheEntry(i), firstLevelCache.remove(i));
 
-    Assert.assertEquals(createCacheEntry(9), firstLevelCache.remove(9));
+    Assert.assertEquals("9 -key is absent", createCacheEntry(9), firstLevelCache.remove(9));
 
     Assert.assertEquals(0, firstLevelCache.size());
     Assert.assertEquals(memory.capacity(), memory.freeSpace());
@@ -145,7 +148,7 @@ public class FirstLevelCacheEvictTest {
 
   public void testAdd10RemainFirst6Update() {
     firstLevelCache.setEvictionSize(10);
-    firstLevelCache.setDefaultEvictionPercent(30);
+    firstLevelCache.setDefaultEvictionFactor(0.3f);
 
     for (int i = 0; i < 9; i++)
       firstLevelCache.add(createCacheEntry(i));
@@ -157,9 +160,24 @@ public class FirstLevelCacheEvictTest {
 
     Assert.assertEquals(7, firstLevelCache.size());
     for (int i = 5; i >= 0; i--)
-      Assert.assertEquals(createUpdateCacheEntry(i), firstLevelCache.remove(i));
+      Assert.assertEquals(i + " -key is absent", createUpdateCacheEntry(i), firstLevelCache.remove(i));
 
-    Assert.assertEquals(createCacheEntry(9), firstLevelCache.remove(9));
+    Assert.assertEquals("9 -key is absent", createCacheEntry(9), firstLevelCache.remove(9));
+
+    Assert.assertEquals(0, firstLevelCache.size());
+    Assert.assertEquals(memory.capacity(), memory.freeSpace());
+  }
+
+  @Test
+  public void testClear() throws Exception {
+    firstLevelCache.setEvictionSize(50);
+    firstLevelCache.setDefaultEvictionFactor(0.5f);
+
+    for (int i = 0; i < 100; i++) {
+      firstLevelCache.add(createCacheEntry(i));
+    }
+
+    firstLevelCache.clear();
 
     Assert.assertEquals(0, firstLevelCache.size());
     Assert.assertEquals(memory.capacity(), memory.freeSpace());

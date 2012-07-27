@@ -19,7 +19,7 @@ public class FirstLevelCacheUpdateTest {
 
   @BeforeMethod
   public void setUp() {
-    firstLevelCache = new OMemoryFirstLevelCache<Integer>(memory, OIntegerSerializer.INSTANCE);
+    firstLevelCache = new OMemoryFirstLevelCache<Integer>(memory, OIntegerSerializer.INSTANCE, null);
   }
 
   @AfterMethod

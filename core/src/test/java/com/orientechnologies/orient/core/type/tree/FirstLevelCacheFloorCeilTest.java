@@ -15,7 +15,7 @@ public class FirstLevelCacheFloorCeilTest {
 
   @BeforeMethod
   public void setUp() {
-    firstLevelCache = new OMemoryFirstLevelCache<Double>(memory, ODoubleSerializer.INSTANCE);
+    firstLevelCache = new OMemoryFirstLevelCache<Double>(memory, ODoubleSerializer.INSTANCE, null);
     for (double i = 0; i < 10; i++)
       firstLevelCache.add(createCacheEntry(i));
   }

@@ -58,6 +58,8 @@ public class OMVRBTreeDatabase<K, V> extends OMVRBTreePersistent<K, V> {
         // OVERWRITE IT WITH THE NEW RID
         removeNodeFromCache(rid);
         addNodeInCache(entry);
+        if (entry.getSize() > 0)
+          updateEntryPoint(entry.getFirstKey(), entry);
       }
     }
   }
