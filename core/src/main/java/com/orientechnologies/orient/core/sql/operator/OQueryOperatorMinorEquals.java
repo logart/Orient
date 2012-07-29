@@ -18,10 +18,10 @@ package com.orientechnologies.orient.core.sql.operator;
 import java.util.Collection;
 import java.util.List;
 
-import com.orientechnologies.common.profiler.OProfiler;
 import com.orientechnologies.orient.core.command.OCommandContext;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORID;
+import com.orientechnologies.orient.core.index.OCompositeIndexDefinition;
 import com.orientechnologies.orient.core.index.OIndex;
 import com.orientechnologies.orient.core.index.OIndexDefinition;
 import com.orientechnologies.orient.core.index.OIndexDefinitionMultiValue;
@@ -62,7 +62,7 @@ public class OQueryOperatorMinorEquals extends OQueryOperatorEqualityNotNulls {
   }
 
   @Override
-  public Collection<OIdentifiable> executeIndexQuery(OIndex<?> index, List<Object> keyParams, int fetchLimit) {
+  public Object executeIndexQuery(OIndex<?> index, INDEX_OPERATION_TYPE iOperationType, List<Object> keyParams, int fetchLimit) {
     final OIndexDefinition indexDefinition = index.getDefinition();
 
     final OIndexInternal<?> internalIndex = index.getInternal();
@@ -90,12 +90,14 @@ public class OQueryOperatorMinorEquals extends OQueryOperatorEqualityNotNulls {
       // index that contains key with value field1=1 and which right not included boundary
       // is the biggest composite key in the index that contains key with value field1=1 and field2=2.
 
-      final Object keyOne = indexDefinition.createValue(keyParams.subList(0, keyParams.size() - 1));
+      final OCompositeIndexDefinition compositeIndexDefinition = (OCompositeIndexDefinition) indexDefinition;
+
+      final Object keyOne = compositeIndexDefinition.createSingleValue(keyParams.subList(0, keyParams.size() - 1));
 
       if (keyOne == null)
         return null;
 
-      final Object keyTwo = indexDefinition.createValue(keyParams);
+      final Object keyTwo = compositeIndexDefinition.createSingleValue(keyParams);
 
       if (keyTwo == null)
         return null;
@@ -105,10 +107,7 @@ public class OQueryOperatorMinorEquals extends OQueryOperatorEqualityNotNulls {
       else
         result = index.getValuesBetween(keyOne, true, keyTwo, true);
 
-      if (OProfiler.getInstance().isRecording()) {
-        OProfiler.getInstance().updateCounter("Query.compositeIndexUsage", 1);
-        OProfiler.getInstance().updateCounter("Query.compositeIndexUsage." + indexDefinition.getParamCount(), 1);
-      }
+      updateProfiler(index, keyParams, indexDefinition);
     }
     return result;
   }

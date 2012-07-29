@@ -22,10 +22,10 @@ import java.util.Iterator;
 import java.util.List;
 
 import com.orientechnologies.common.collection.OMultiValue;
-import com.orientechnologies.common.profiler.OProfiler;
 import com.orientechnologies.orient.core.command.OCommandContext;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORID;
+import com.orientechnologies.orient.core.index.OCompositeIndexDefinition;
 import com.orientechnologies.orient.core.index.OIndex;
 import com.orientechnologies.orient.core.index.OIndexDefinition;
 import com.orientechnologies.orient.core.index.OIndexInternal;
@@ -86,7 +86,7 @@ public class OQueryOperatorBetween extends OQueryOperatorEqualityNotNulls {
   }
 
   @Override
-  public Collection<OIdentifiable> executeIndexQuery(OIndex<?> index, List<Object> keyParams, int fetchLimit) {
+  public Object executeIndexQuery(OIndex<?> index, INDEX_OPERATION_TYPE iOperationType, List<Object> keyParams, int fetchLimit) {
     final OIndexDefinition indexDefinition = index.getDefinition();
     final Collection<OIdentifiable> result;
 
@@ -108,6 +108,8 @@ public class OQueryOperatorBetween extends OQueryOperatorEqualityNotNulls {
       else
         result = index.getValuesBetween(keyOne, true, keyTwo, true);
     } else {
+      final OCompositeIndexDefinition compositeIndexDefinition = (OCompositeIndexDefinition) indexDefinition;
+
       final Object[] betweenKeys = (Object[]) keyParams.get(keyParams.size() - 1);
 
       final Object betweenKeyOne = OSQLHelper.getValue(betweenKeys[0]);
@@ -128,12 +130,12 @@ public class OQueryOperatorBetween extends OQueryOperatorEqualityNotNulls {
       betweenKeyTwoParams.addAll(keyParams.subList(0, keyParams.size() - 1));
       betweenKeyTwoParams.add(betweenKeyTwo);
 
-      final Object keyOne = indexDefinition.createValue(betweenKeyOneParams);
+      final Object keyOne = compositeIndexDefinition.createSingleValue(betweenKeyOneParams);
 
       if (keyOne == null)
         return null;
 
-      final Object keyTwo = indexDefinition.createValue(betweenKeyTwoParams);
+      final Object keyTwo = compositeIndexDefinition.createSingleValue(betweenKeyTwoParams);
 
       if (keyTwo == null)
         return null;
@@ -143,10 +145,7 @@ public class OQueryOperatorBetween extends OQueryOperatorEqualityNotNulls {
       else
         result = index.getValuesBetween(keyOne, true, keyTwo, true);
 
-      if (OProfiler.getInstance().isRecording()) {
-        OProfiler.getInstance().updateCounter("Query.compositeIndexUsage", 1);
-        OProfiler.getInstance().updateCounter("Query.compositeIndexUsage." + indexDefinition.getParamCount(), 1);
-      }
+      updateProfiler(index, keyParams, indexDefinition);
     }
 
     return result;

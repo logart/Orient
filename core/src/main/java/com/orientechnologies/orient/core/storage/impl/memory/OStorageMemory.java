@@ -302,7 +302,7 @@ public class OStorageMemory extends OStorageEmbedded {
 
     } finally {
       lock.releaseSharedLock();
-      OProfiler.getInstance().stopChrono("OStorageMemory.createRecord", timer);
+      OProfiler.getInstance().stopChrono(PROFILER_CREATE_RECORD, timer);
     }
   }
 
@@ -344,7 +344,7 @@ public class OStorageMemory extends OStorageEmbedded {
 
     } finally {
       lock.releaseSharedLock();
-      OProfiler.getInstance().stopChrono("OStorageMemory.readRecord", timer);
+      OProfiler.getInstance().stopChrono(PROFILER_READ_RECORD, timer);
     }
   }
 
@@ -398,7 +398,7 @@ public class OStorageMemory extends OStorageEmbedded {
 
     } finally {
       lock.releaseSharedLock();
-      OProfiler.getInstance().stopChrono("OStorageMemory.updateRecord", timer);
+      OProfiler.getInstance().stopChrono(PROFILER_UPDATE_RECORD, timer);
     }
   }
 
@@ -448,7 +448,7 @@ public class OStorageMemory extends OStorageEmbedded {
 
     } finally {
       lock.releaseSharedLock();
-      OProfiler.getInstance().stopChrono("OStorageMemory.deleteRecord", timer);
+      OProfiler.getInstance().stopChrono(PROFILER_DELETE_RECORD, timer);
     }
   }
 

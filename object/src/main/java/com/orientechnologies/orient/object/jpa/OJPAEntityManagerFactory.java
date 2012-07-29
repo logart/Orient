@@ -20,8 +20,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.persistence.Cache;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
+import javax.persistence.PersistenceUnitUtil;
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.metamodel.Metamodel;
+
 
 /**
  * JPA EntityManagerFactory implementation that uses OrientDB EntityManager instances. Can works also as singleton by using
@@ -31,34 +36,55 @@ import javax.persistence.EntityManagerFactory;
  * 
  */
 public class OJPAEntityManagerFactory implements EntityManagerFactory {
-	private boolean																opened		= true;
-	private List<OJPAEntityManager>								instances	= new ArrayList<OJPAEntityManager>();
-	private static final OJPAEntityManagerFactory	INSTANCE	= new OJPAEntityManagerFactory();
+  private boolean                               opened    = true;
+  private List<OJPAEntityManager>               instances = new ArrayList<OJPAEntityManager>();
+  private static final OJPAEntityManagerFactory INSTANCE  = new OJPAEntityManagerFactory();
 
-	public EntityManager createEntityManager() {
-		return createEntityManager(new HashMap<Object, Object>());
-	}
+  public EntityManager createEntityManager() {
+    return createEntityManager(new HashMap<Object, Object>());
+  }
 
-	@SuppressWarnings("rawtypes")
-	public EntityManager createEntityManager(final Map map) {
-		final OJPAEntityManager newInstance = new OJPAEntityManager(map);
-		instances.add(newInstance);
-		return newInstance;
-	}
+  @SuppressWarnings("rawtypes")
+  public EntityManager createEntityManager(final Map map) {
+    final OJPAEntityManager newInstance = new OJPAEntityManager(map);
+    instances.add(newInstance);
+    return newInstance;
+  }
 
-	public void close() {
-		for (OJPAEntityManager instance : instances) {
-			instance.close();
-		}
-		instances.clear();
-		opened = false;
-	}
+  public void close() {
+    for (OJPAEntityManager instance : instances) {
+      instance.close();
+    }
+    instances.clear();
+    opened = false;
+  }
 
-	public boolean isOpen() {
-		return opened;
-	}
+  public boolean isOpen() {
+    return opened;
+  }
 
-	public static OJPAEntityManagerFactory getInstance() {
-		return INSTANCE;
-	}
+  public static OJPAEntityManagerFactory getInstance() {
+    return INSTANCE;
+  }
+
+  public CriteriaBuilder getCriteriaBuilder() {
+    throw new UnsupportedOperationException("getCriteriaBuilder");
+  }
+
+  public Metamodel getMetamodel() {
+    throw new UnsupportedOperationException("getMetamodel");
+  }
+
+  public Map<String, Object> getProperties() {
+    throw new UnsupportedOperationException("getProperties");
+  }
+
+  public Cache getCache() {
+    throw new UnsupportedOperationException("getCache");
+  }
+
+  public PersistenceUnitUtil getPersistenceUnitUtil() {
+    throw new UnsupportedOperationException("getPersistenceUnitUtil");
+  }
+
 }

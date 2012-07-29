@@ -15,20 +15,21 @@
  */
 package com.orientechnologies.orient.core.sql.operator;
 
-import com.orientechnologies.orient.core.command.OCommandContext;
-import com.orientechnologies.orient.core.db.record.OIdentifiable;
-import com.orientechnologies.orient.core.id.ORID;
-import com.orientechnologies.orient.core.index.OIndex;
-import com.orientechnologies.orient.core.index.OIndexDefinition;
-import com.orientechnologies.orient.core.index.OIndexDefinitionMultiValue;
-import com.orientechnologies.orient.core.index.OIndexInternal;
-import com.orientechnologies.orient.core.sql.filter.OSQLFilterCondition;
-
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+
+import com.orientechnologies.orient.core.command.OCommandContext;
+import com.orientechnologies.orient.core.db.record.OIdentifiable;
+import com.orientechnologies.orient.core.id.ORID;
+import com.orientechnologies.orient.core.index.OCompositeIndexDefinition;
+import com.orientechnologies.orient.core.index.OIndex;
+import com.orientechnologies.orient.core.index.OIndexDefinition;
+import com.orientechnologies.orient.core.index.OIndexDefinitionMultiValue;
+import com.orientechnologies.orient.core.index.OIndexInternal;
+import com.orientechnologies.orient.core.sql.filter.OSQLFilterCondition;
 
 /**
  * CONTAINS operator.
@@ -114,7 +115,7 @@ public class OQueryOperatorContains extends OQueryOperatorEqualityNotNulls {
 
   @SuppressWarnings("unchecked")
   @Override
-  public Collection<OIdentifiable> executeIndexQuery(OIndex<?> index, List<Object> keyParams, int fetchLimit) {
+  public Object executeIndexQuery(OIndex<?> index, INDEX_OPERATION_TYPE iOperationType, List<Object> keyParams, int fetchLimit) {
     final OIndexDefinition indexDefinition = index.getDefinition();
 
     final OIndexInternal<?> internalIndex = index.getInternal();
@@ -135,11 +136,32 @@ public class OQueryOperatorContains extends OQueryOperatorEqualityNotNulls {
       if (indexResult instanceof Collection)
         return (Collection<OIdentifiable>) indexResult;
 
-			if(indexResult == null)
-				return Collections.emptyList();
-      return  Collections.singletonList((OIdentifiable) indexResult);
+      if (indexResult == null)
+        return Collections.emptyList();
+      return Collections.singletonList((OIdentifiable) indexResult);
+    } else {
+      // in case of composite keys several items can be returned in case of we perform search
+      // using part of composite key stored in index.
+
+      final OCompositeIndexDefinition compositeIndexDefinition = (OCompositeIndexDefinition) indexDefinition;
+
+      final Object keyOne = compositeIndexDefinition.createSingleValue(keyParams);
+
+      if (keyOne == null)
+        return null;
+
+      final Object keyTwo = compositeIndexDefinition.createSingleValue(keyParams);
+
+      final Collection<OIdentifiable> result;
+      if (fetchLimit > -1)
+        result = index.getValuesBetween(keyOne, true, keyTwo, true, fetchLimit);
+      else
+        result = index.getValuesBetween(keyOne, true, keyTwo, true);
+
+      updateProfiler(index, keyParams, indexDefinition);
+
+      return result;
     }
-    return null;
   }
 
   @Override

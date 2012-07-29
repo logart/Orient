@@ -454,22 +454,23 @@ public class OPropertyImpl extends ODocumentWrapperNoClass implements OProperty 
       throw new IllegalArgumentException("attribute is null");
 
     final String stringValue = iValue != null ? iValue.toString() : null;
+    final boolean isNull = stringValue == null || stringValue.equalsIgnoreCase("NULL");
 
     switch (attribute) {
     case LINKEDCLASS:
-      setLinkedClassInternal(getDatabase().getMetadata().getSchema().getClass(stringValue));
+      setLinkedClassInternal(isNull ? null : getDatabase().getMetadata().getSchema().getClass(stringValue));
       break;
     case LINKEDTYPE:
-      setLinkedTypeInternal(OType.valueOf(stringValue));
+      setLinkedTypeInternal(isNull ? null : OType.valueOf(stringValue));
       break;
     case MIN:
-      setMinInternal(stringValue);
+      setMinInternal(isNull ? null : stringValue);
       break;
     case MANDATORY:
       setMandatoryInternal(Boolean.parseBoolean(stringValue));
       break;
     case MAX:
-      setMaxInternal(stringValue);
+      setMaxInternal(isNull ? null : stringValue);
       break;
     case NAME:
       setNameInternal(stringValue);
@@ -478,10 +479,10 @@ public class OPropertyImpl extends ODocumentWrapperNoClass implements OProperty 
       setNotNullInternal(Boolean.parseBoolean(stringValue));
       break;
     case REGEXP:
-      setRegexpInternal(stringValue);
+      setRegexpInternal(isNull ? null : stringValue);
       break;
     case TYPE:
-      setTypeInternal(OType.valueOf(stringValue.toUpperCase(Locale.ENGLISH)));
+      setTypeInternal(isNull ? null : OType.valueOf(stringValue.toUpperCase(Locale.ENGLISH)));
       break;
     case CUSTOM:
       if (iValue.toString().indexOf("=") == -1)
@@ -615,18 +616,13 @@ public class OPropertyImpl extends ODocumentWrapperNoClass implements OProperty 
       document.field("mandatory", mandatory);
       document.field("notNull", notNull);
 
-      if (min != null)
-        document.field("min", min);
-      if (max != null)
-        document.field("max", max);
-      if (regexp != null)
-        document.field("regexp", regexp);
-      if (linkedType != null)
-        document.field("linkedType", linkedType.id);
-      if (linkedClass != null || linkedClassName != null)
-        document.field("linkedClass", linkedClass != null ? linkedClass.getName() : linkedClassName);
-      if (customFields != null && customFields.size() > 0)
-        document.field("customFields", customFields, OType.EMBEDDEDMAP);
+      document.field("min", min);
+      document.field("max", max);
+      document.field("regexp", regexp);
+
+      document.field("linkedType", linkedType != null ? linkedType.id : null);
+      document.field("linkedClass", linkedClass != null ? linkedClass.getName() : linkedClassName);
+      document.field("customFields", customFields != null && customFields.size() > 0 ? customFields : null, OType.EMBEDDEDMAP);
 
     } finally {
       document.setInternalStatus(ORecordElement.STATUS.LOADED);

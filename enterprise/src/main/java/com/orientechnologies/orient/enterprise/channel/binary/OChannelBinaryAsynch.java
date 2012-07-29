@@ -18,6 +18,7 @@ package com.orientechnologies.orient.enterprise.channel.binary;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 import com.orientechnologies.common.concur.OTimeoutException;
@@ -32,9 +33,10 @@ import com.orientechnologies.orient.core.config.OGlobalConfiguration;
  * 
  */
 public class OChannelBinaryAsynch extends OChannelBinary {
-  private final ReentrantLock lockRead    = new ReentrantLock();
-  private final ReentrantLock lockWrite   = new ReentrantLock();
-  private boolean             channelRead = false;
+  private final ReentrantLock lockRead      = new ReentrantLock(true);
+  private final Condition     readCondition = lockRead.newCondition();
+  private final ReentrantLock lockWrite     = new ReentrantLock();
+  private boolean             channelRead   = false;
   private byte                currentStatus;
   private int                 currentSessionId;
   private final int           maxUnreadResponses;
@@ -77,11 +79,12 @@ public class OChannelBinaryAsynch extends OChannelBinary {
             currentSessionId = readInt();
 
             if (debug)
-              OLogManager.instance().debug(this, "%s - Read response: %d-%d", socket.getRemoteSocketAddress(), (int) currentStatus,
+              OLogManager.instance().debug(this, "%s - Read response: %d-%d", socket.getLocalAddress(), (int) currentStatus,
                   currentSessionId);
 
           } catch (IOException e) {
             // UNLOCK THE RESOURCE AND PROPAGATES THE EXCEPTION
+            readCondition.signalAll();
             lockRead.unlock();
             channelRead = false;
             throw e;
@@ -92,34 +95,52 @@ public class OChannelBinaryAsynch extends OChannelBinary {
           // IT'S FOR ME
           break;
 
-        if (debug)
-          OLogManager.instance().debug(this, "%s - Session %d skip response, it is for %d", socket.getRemoteSocketAddress(),
-              iRequesterId, currentSessionId);
+        try {
+          if (debug)
+            OLogManager.instance().debug(this, "%s - Session %d skip response, it is for %d", socket.getLocalAddress(),
+                iRequesterId, currentSessionId);
 
-        if (iTimeout > 0 && (System.currentTimeMillis() - startClock) > iTimeout)
-          throw new OTimeoutException("Timeout on reading response from the server for the request " + iRequesterId);
+          if (iTimeout > 0 && (System.currentTimeMillis() - startClock) > iTimeout)
+            throw new OTimeoutException("Timeout on reading response from the server for the request " + iRequesterId);
 
-        if (unreadResponse > maxUnreadResponses)
-          clearInput();
+          if (unreadResponse > maxUnreadResponses) {
+            if (debug)
+              OLogManager.instance().info(this, "Unread responses %d > %d, consider the buffer as dirty: clean it", unreadResponse,
+                  maxUnreadResponses);
 
-        lockRead.unlock();
-
-        // WAIT 1 SECOND AND RETRY
-        synchronized (this) {
-          try {
-            final long start = System.currentTimeMillis();
-            wait(1000);
-            if (System.currentTimeMillis() - start >= 1000)
-              unreadResponse++;
-
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            close();
+            throw new IOException("Timeout on reading response");
           }
+
+          // WAIT 1 SECOND AND RETRY
+
+          readCondition.signalAll();
+
+          if (debug)
+            OLogManager.instance().debug(this, "Session %d is going to sleep...", iRequesterId);
+
+          final long start = System.currentTimeMillis();
+
+          readCondition.await(1, TimeUnit.SECONDS);
+          final long now = System.currentTimeMillis();
+
+          if (debug)
+            OLogManager.instance().debug(this, "Waked up: slept %dms, checking again from %s for session %d", (now - start),
+                socket.getLocalAddress(), iRequesterId);
+
+          if (now - start >= 1000)
+            unreadResponse++;
+
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+
+        } finally {
+          lockRead.unlock();
         }
       } while (true);
 
       if (debug)
-        OLogManager.instance().debug(this, "%s - Session %d handle response", socket.getRemoteSocketAddress(), iRequesterId);
+        OLogManager.instance().debug(this, "%s - Session %d handle response", socket.getLocalAddress(), iRequesterId);
 
       handleStatus(currentStatus, currentSessionId);
     } catch (InterruptedException e) {
@@ -131,11 +152,14 @@ public class OChannelBinaryAsynch extends OChannelBinary {
 
   public void endResponse() {
     channelRead = false;
-    lockRead.unlock();
 
     // WAKE UP ALL THE WAITING THREADS
-    synchronized (this) {
-      notifyAll();
+
+    try {
+      readCondition.signalAll();
+      lockRead.unlock();
+    } catch (IllegalMonitorStateException e) {
+      // IGNORE IT
     }
   }
 
@@ -149,9 +173,12 @@ public class OChannelBinaryAsynch extends OChannelBinary {
 
   @Override
   public void close() {
-    synchronized (this) {
-      notifyAll();
-    }
+    if (lockRead.tryLock())
+      try {
+        readCondition.signalAll();
+      } finally {
+        lockRead.unlock();
+      }
 
     super.close();
   }

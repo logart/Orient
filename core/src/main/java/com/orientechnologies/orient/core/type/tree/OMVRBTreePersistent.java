@@ -290,17 +290,7 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
       } catch (OLowMemoryException e) {
         OLogManager.instance().debug(this, "Optimization required during node search %d/%d", i, OPTIMIZE_MAX_RETRY);
 
-        // LOW MEMORY DURING LOAD: THIS MEANS DEEP LOADING OF NODES. EXECUTE THE OPTIMIZATION AND RETRY IT
-        optimize(true);
-
-        System.gc();
-
-        if (i > 0)
-          // WAIT A PROPORTIONAL TIME
-          try {
-            Thread.sleep(300 * i);
-          } catch (InterruptedException e1) {
-          }
+        freeMemory(i);
       }
     }
 
@@ -315,17 +305,7 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
       } catch (OLowMemoryException e) {
         OLogManager.instance().debug(this, "Optimization required during node search %d/%d", i, OPTIMIZE_MAX_RETRY);
 
-        // LOW MEMORY DURING LOAD: THIS MEANS DEEP LOADING OF NODES. EXECUTE THE OPTIMIZATION AND RETRY IT
-        optimize(true);
-
-        System.gc();
-
-        if (i > 0)
-          // WAIT A PROPORTIONAL TIME
-          try {
-            Thread.sleep(300 * i);
-          } catch (InterruptedException e1) {
-          }
+        freeMemory(i);
       }
     }
     throw new OLowMemoryException("OMVRBTreePersistent.getFloorEntry()");
@@ -339,17 +319,7 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
       } catch (OLowMemoryException e) {
         OLogManager.instance().debug(this, "Optimization required during node search %d/%d", i, OPTIMIZE_MAX_RETRY);
 
-        // LOW MEMORY DURING LOAD: THIS MEANS DEEP LOADING OF NODES. EXECUTE THE OPTIMIZATION AND RETRY IT
-        optimize(true);
-
-        System.gc();
-
-        if (i > 0)
-          // WAIT A PROPORTIONAL TIME
-          try {
-            Thread.sleep(300 * i);
-          } catch (InterruptedException e1) {
-          }
+        freeMemory(i);
       }
     }
     throw new OLowMemoryException("OMVRBTreePersistent.getHigherEntry)");
@@ -363,17 +333,7 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
       } catch (OLowMemoryException e) {
         OLogManager.instance().debug(this, "Optimization required during node search %d/%d", i, OPTIMIZE_MAX_RETRY);
 
-        // LOW MEMORY DURING LOAD: THIS MEANS DEEP LOADING OF NODES. EXECUTE THE OPTIMIZATION AND RETRY IT
-        optimize(true);
-
-        System.gc();
-
-        if (i > 0)
-          // WAIT A PROPORTIONAL TIME
-          try {
-            Thread.sleep(300 * i);
-          } catch (InterruptedException e1) {
-          }
+        freeMemory(i);
       }
     }
     throw new OLowMemoryException("OMVRBTreePersistent.getLowerEntry()");
@@ -425,17 +385,7 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
         } catch (OLowMemoryException e) {
           OLogManager.instance().debug(this, "Optimization required during remove %d/%d", i, OPTIMIZE_MAX_RETRY);
 
-          // LOW MEMORY DURING REMOVAL: THIS MEANS DEEP LOADING OF NODES. EXECUTE THE OPTIMIZATION AND RETRY IT
-          optimize(true);
-
-          System.gc();
-
-          if (i > 0)
-            // WAIT A PROPORTIONAL TIME
-            try {
-              Thread.sleep(300 * i);
-            } catch (InterruptedException e1) {
-            }
+          freeMemory(i);
 
           // AVOID CONTINUE EXCEPTIONS
           optimization = -1;
@@ -515,18 +465,7 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
         return super.get(iKey);
       } catch (OLowMemoryException e) {
         OLogManager.instance().debug(this, "Optimization required during node search %d/%d", i, OPTIMIZE_MAX_RETRY);
-
-        // LOW MEMORY DURING LOAD: THIS MEANS DEEP LOADING OF NODES. EXECUTE THE OPTIMIZATION AND RETRY IT
-        optimize(true);
-
-        System.gc();
-
-        if (i > 0)
-          // WAIT A PROPORTIONAL TIME
-          try {
-            Thread.sleep(300 * i);
-          } catch (InterruptedException e1) {
-          }
+        freeMemory(i);
       }
     }
 
@@ -540,18 +479,7 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
         return super.containsKey(iKey);
       } catch (OLowMemoryException e) {
         OLogManager.instance().debug(this, "Optimization required during node search %d/%d", i, OPTIMIZE_MAX_RETRY);
-
-        // LOW MEMORY DURING LOAD: THIS MEANS DEEP LOADING OF NODES. EXECUTE THE OPTIMIZATION AND RETRY IT
-        optimize(true);
-
-        System.gc();
-
-        if (i > 0)
-          // WAIT A PROPORTIONAL TIME
-          try {
-            Thread.sleep(300 * i);
-          } catch (InterruptedException e1) {
-          }
+        freeMemory(i);
       }
     }
 
@@ -565,18 +493,7 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
         return super.containsValue(iValue);
       } catch (OLowMemoryException e) {
         OLogManager.instance().debug(this, "Optimization required during node search %d/%d", i, OPTIMIZE_MAX_RETRY);
-
-        // LOW MEMORY DURING LOAD: THIS MEANS DEEP LOADING OF NODES. EXECUTE THE OPTIMIZATION AND RETRY IT
-        optimize(true);
-
-        System.gc();
-
-        if (i > 0)
-          // WAIT A PROPORTIONAL TIME
-          try {
-            Thread.sleep(300 * i);
-          } catch (InterruptedException e1) {
-          }
+        freeMemory(i);
       }
     }
 
@@ -685,14 +602,8 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
 
         return previous;
       } catch (OLowMemoryException e) {
-        System.gc();
-
-        if (i > 0)
-          // WAIT A PROPORTIONAL TIME
-          try {
-            Thread.sleep(300 * i);
-          } catch (InterruptedException e1) {
-          }
+        OLogManager.instance().debug(this, "Optimization required during put %d/%d", i, OPTIMIZE_MAX_RETRY);
+        freeMemory(i);
       }
     }
 
@@ -913,6 +824,20 @@ public abstract class OMVRBTreePersistent<K, V> extends OMVRBTree<K, V> {
   }
 
   protected void markDirty() {
+  }
+
+  protected void freeMemory(final int i) {
+    // LOW MEMORY DURING LOAD: THIS MEANS DEEP LOADING OF NODES. EXECUTE THE OPTIMIZATION AND RETRY IT
+    optimize(true);
+
+    System.gc();
+
+    if (i > 0)
+      // WAIT A PROPORTIONAL TIME
+      try {
+        Thread.sleep(300 * i);
+      } catch (InterruptedException e1) {
+      }
   }
 
   public ORecord<?> getOwner() {

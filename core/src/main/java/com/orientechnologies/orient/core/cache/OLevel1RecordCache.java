@@ -43,9 +43,9 @@ public class OLevel1RecordCache extends OAbstractRecordCache {
     ODatabaseRecord db = ODatabaseRecordThreadLocal.INSTANCE.get();
     secondary = db.getLevel2Cache();
 
-    profilerPrefix = "db." + db.getName();
-    CACHE_HIT = profilerPrefix + ".cache.found";
-    CACHE_MISS = profilerPrefix + ".cache.notFound";
+    profilerPrefix = "db." + db.getName() + ".cache.level1.";
+    CACHE_HIT = profilerPrefix + "cache.found";
+    CACHE_MISS = profilerPrefix + "cache.notFound";
 
     excludedCluster = db.getClusterIdByName(CLUSTER_INDEX_NAME);
 
@@ -82,7 +82,8 @@ public class OLevel1RecordCache extends OAbstractRecordCache {
    */
   public ORecordInternal<?> findRecord(final ORID rid) {
     if (!isEnabled())
-      return null;
+      // DELEGATE TO THE 2nd LEVEL CACHE
+      return null; // secondary.retrieveRecord(rid);
 
     ORecordInternal<?> record;
     underlying.lock(rid);
@@ -90,9 +91,11 @@ public class OLevel1RecordCache extends OAbstractRecordCache {
       record = underlying.get(rid);
 
       if (record == null) {
+        // DELEGATE TO THE 2nd LEVEL CACHE
         record = secondary.retrieveRecord(rid);
 
         if (record != null)
+          // STORE IT LOCALLY
           underlying.put(record);
       }
     } finally {

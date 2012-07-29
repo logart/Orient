@@ -70,7 +70,8 @@ public abstract class OSQLFilterItemAbstract implements OSQLFilterItem {
               if (op.minArguments > 0) {
                 arguments = OStringSerializerHelper.getParameters(part);
                 if (arguments.size() < op.minArguments || arguments.size() > op.maxArguments)
-                  throw new OQueryParsingException(iQueryToParse.text, "Syntax error: field operator '" + op.keyword + "' needs "
+                  throw new OQueryParsingException(iQueryToParse.parserText, "Syntax error: field operator '" + op.keyword
+                      + "' needs "
                       + (op.minArguments == op.maxArguments ? op.minArguments : op.minArguments + "-" + op.maxArguments)
                       + " argument(s) while has been received " + arguments.size(), 0);
               } else
@@ -84,7 +85,7 @@ public abstract class OSQLFilterItemAbstract implements OSQLFilterItem {
 
           if (!operatorFound)
             // ERROR: OPERATOR NOT FOUND OR MISPELLED
-            throw new OQueryParsingException(iQueryToParse.text,
+            throw new OQueryParsingException(iQueryToParse.parserText,
                 "Syntax error: field operator not recognized between the supported ones: "
                     + Arrays.toString(OSQLFilterFieldOperator.OPERATORS), 0);
         } else {
@@ -163,20 +164,26 @@ public abstract class OSQLFilterItemAbstract implements OSQLFilterItem {
             int endIndex = op.value.size() > 1 ? Integer.parseInt(op.value.get(1)) : op.value.get(0).length();
             ioResult = ioResult != null ? ioResult.toString().substring(Integer.parseInt(op.value.get(0)), endIndex) : null;
 
+          } else if (operator == OSQLFilterFieldOperator.REPLACE.id) {
+            ioResult = ioResult != null ? ioResult.toString().replace(op.value.get(0), op.value.get(1)) : null;
+
           } else if (operator == OSQLFilterFieldOperator.APPEND.id) {
             final Object v = getParameterValue(iRecord, op.value.get(0));
-            ioResult = ioResult != null ? ioResult.toString() + v : null;
+            if (v != null)
+              ioResult = ioResult != null ? ioResult.toString() + v : null;
 
           } else if (operator == OSQLFilterFieldOperator.PREFIX.id) {
             final Object v = getParameterValue(iRecord, op.value.get(0));
-            ioResult = ioResult != null ? v + ioResult.toString() : null;
+            if (v != null)
+              ioResult = ioResult != null ? v + ioResult.toString() : null;
 
           } else if (operator == OSQLFilterFieldOperator.FORMAT.id) {
             final Object v = getParameterValue(iRecord, op.value.get(0));
-            if (ioResult instanceof Date)
-              ioResult = new SimpleDateFormat(v.toString()).format(ioResult);
-            else
-              ioResult = ioResult != null ? String.format(v.toString(), ioResult) : null;
+            if (v != null)
+              if (ioResult instanceof Date)
+                ioResult = new SimpleDateFormat(v.toString()).format(ioResult);
+              else
+                ioResult = ioResult != null ? String.format(v.toString(), ioResult) : null;
           } else if (operator == OSQLFilterFieldOperator.LEFT.id) {
             final int len = Integer.parseInt(op.value.get(0));
             ioResult = ioResult != null ? ioResult.toString().substring(0,

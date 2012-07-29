@@ -21,6 +21,7 @@ import java.io.StringWriter;
 import java.util.Date;
 import java.util.List;
 
+import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.record.ORecord;
@@ -62,12 +63,8 @@ public abstract class OServerCommandAbstract implements OServerCommand {
       throws IOException {
     final String content;
     final String contentType;
-    if (iRequest.url.indexOf('?') > 0 && iRequest.url.indexOf(OHttpUtils.CALLBACK_PARAMETER_NAME, iRequest.url.indexOf('?')) > 0) {
-      String callbackFunction = iRequest.url.substring(iRequest.url.indexOf(OHttpUtils.CALLBACK_PARAMETER_NAME,
-          iRequest.url.indexOf('?'))
-          + OHttpUtils.CALLBACK_PARAMETER_NAME.length());
-      if (callbackFunction.indexOf('&') > -1)
-        callbackFunction = callbackFunction.substring(0, callbackFunction.indexOf('&'));
+    if ((iRequest.parameters != null) && iRequest.parameters.containsKey(OHttpUtils.CALLBACK_PARAMETER_NAME)) {
+      final String callbackFunction = iRequest.parameters.get(OHttpUtils.CALLBACK_PARAMETER_NAME);
       content = callbackFunction + "(" + iContent + ")";
       contentType = "text/javascript";
     } else {
@@ -145,13 +142,13 @@ public abstract class OServerCommandAbstract implements OServerCommand {
       iRequest.channel.outStream.write(OBinaryProtocol.string2bytes(iContent));
   }
 
-  protected String[] checkSyntax(String iURL, final int iArgumentCount, final String iSyntax) {
+  protected String[] checkSyntax(final String iURL, final int iArgumentCount, final String iSyntax) {
     final List<String> parts = OStringSerializerHelper.smartSplit(iURL, URL_SEPARATOR, 1, -1, true);
     if (parts.size() < iArgumentCount)
       throw new OHttpRequestException(iSyntax);
 
     final String[] array = new String[parts.size()];
-    return parts.toArray(array);
+    return decodeParts(parts.toArray(array));
   }
 
   protected void sendRecordsContent(final OHttpRequest iRequest, final List<OIdentifiable> iRecords) throws IOException {
@@ -220,5 +217,30 @@ public abstract class OServerCommandAbstract implements OServerCommand {
     }
 
     iRequest.channel.flush();
+  }
+
+  /**
+   * urldecode each request part return the same array instance
+   * 
+   * @param parts
+   * @return
+   */
+  private String[] decodeParts(final String[] parts) {
+    try {
+      if (parts == null)
+        return null;
+      for (int i = 0; i < parts.length; i++) {
+        String part = parts[i];
+        if (part == null)
+          continue;
+
+        // NEEDS DECODING
+        part = java.net.URLDecoder.decode(part, "UTF-8");
+        parts[i] = part;
+      }
+      return parts;
+    } catch (Exception ex) {
+      throw new OException(ex);
+    }
   }
 }

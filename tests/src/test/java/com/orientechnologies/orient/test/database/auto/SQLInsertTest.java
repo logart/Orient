@@ -18,16 +18,17 @@ package com.orientechnologies.orient.test.database.auto;
 import java.util.List;
 import java.util.Map;
 
-import org.testng.Assert;
-import org.testng.annotations.Parameters;
-import org.testng.annotations.Test;
-
 import com.orientechnologies.orient.core.db.document.ODatabaseDocument;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
+import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.sql.OCommandSQL;
+
+import org.testng.Assert;
+import org.testng.annotations.Parameters;
+import org.testng.annotations.Test;
 
 @Test(groups = "sql-insert")
 public class SQLInsertTest {
@@ -227,6 +228,26 @@ public class SQLInsertTest {
     Assert.assertTrue(doc != null);
     Assert.assertEquals(doc.getIdentity().getClusterId(), database.getDefaultClusterId());
     Assert.assertEquals(doc.getClassName(), "Account");
+
+    database.close();
+  }
+
+  public void updateMultipleFields() {
+    database.open("admin", "admin");
+
+    OIdentifiable result = database.command(
+        new OCommandSQL("  INSERT INTO Account SET id= 3232,name= 'my name',map= {\"key\":\"value\"},dir= '',user= #2:0"))
+        .execute();
+    Assert.assertNotNull(result);
+
+    ODocument record = result.getRecord();
+
+    Assert.assertEquals(record.field("id"), 3232);
+    Assert.assertEquals(record.field("name"), "my name");
+    Map<String, String> map = record.field("map");
+    Assert.assertTrue(map.get("key").equals("value"));
+    Assert.assertEquals(record.field("dir"), "");
+    Assert.assertEquals(record.field("user", OType.LINK), new ORecordId("#2:0"));
 
     database.close();
   }

@@ -19,6 +19,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+
 /**
  * Contains HTTP utilities static methods and constants.
  * 
@@ -62,12 +63,14 @@ public class OHttpUtils {
   public static final String CONTENT_JAVASCRIPT                  = "text/javascript";
   public static final String CONTENT_GZIP                        = "application/x-gzip";
 
-  public static final String CALLBACK_PARAMETER_NAME             = "callback=";
+  public static final String CALLBACK_PARAMETER_NAME             = "callback";
 
   public static final int    STATUS_CREATED_CODE                 = 201;
   public static final String STATUS_CREATED_DESCRIPTION          = "Created";
   public static final int    STATUS_OK_CODE                      = 200;
   public static final String STATUS_OK_DESCRIPTION               = "OK";
+  public static final int    STATUS_OK_NOCONTENT_CODE            = 204;
+  public static final String STATUS_OK_NOCONTENT_DESCRIPTION     = "OK";
   public static final int    STATUS_BADREQ_CODE                  = 400;
   public static final String STATUS_BADREQ_DESCRIPTION           = "Bad request";
   public static final int    STATUS_AUTH_CODE                    = 401;
@@ -114,7 +117,7 @@ public class OHttpUtils {
   public static String nextChainUrl(final String iCurrentUrl) {
     if (!iCurrentUrl.contains("/"))
       return iCurrentUrl;
-  
+
     return iCurrentUrl.startsWith("/") ? iCurrentUrl.substring(iCurrentUrl.indexOf('/', 1)) : iCurrentUrl.substring(iCurrentUrl
         .indexOf("/"));
   }

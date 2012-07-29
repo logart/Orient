@@ -15,6 +15,10 @@
  */
 package com.orientechnologies.orient.core.sql.operator;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+
 import com.orientechnologies.orient.core.db.ODatabaseComplex;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORID;
@@ -24,10 +28,6 @@ import com.orientechnologies.orient.core.index.OIndexFullText;
 import com.orientechnologies.orient.core.metadata.schema.OProperty;
 import com.orientechnologies.orient.core.sql.filter.OSQLFilterCondition;
 import com.orientechnologies.orient.core.sql.filter.OSQLFilterItemField;
-
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
 
 /**
  * CONTAINS KEY operator.
@@ -102,7 +102,7 @@ public class OQueryOperatorContainsText extends OQueryTargetOperator {
 
   @SuppressWarnings("unchecked")
   @Override
-  public Collection<OIdentifiable> executeIndexQuery(OIndex<?> index, List<Object> keyParams, int fetchLimit) {
+  public Object executeIndexQuery(OIndex<?> index, INDEX_OPERATION_TYPE iOperationType, List<Object> keyParams, int fetchLimit) {
     final OIndexDefinition indexDefinition = index.getDefinition();
     if (indexDefinition.getParamCount() > 1)
       return null;
@@ -114,10 +114,10 @@ public class OQueryOperatorContainsText extends OQueryTargetOperator {
       if (indexResult instanceof Collection)
         return (Collection<OIdentifiable>) indexResult;
 
-			if(indexResult == null)
-				return Collections.emptyList();
-			return  Collections.singletonList((OIdentifiable) indexResult);
-		}
+      if (indexResult == null)
+        return Collections.emptyList();
+      return Collections.singletonList((OIdentifiable) indexResult);
+    }
     return null;
   }
 

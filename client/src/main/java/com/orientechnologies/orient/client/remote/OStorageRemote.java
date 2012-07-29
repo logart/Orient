@@ -38,6 +38,7 @@ import javax.naming.directory.Attributes;
 import javax.naming.directory.DirContext;
 import javax.naming.directory.InitialDirContext;
 
+import com.orientechnologies.common.concur.OTimeoutException;
 import com.orientechnologies.common.concur.lock.OModificationOperationProhibitedException;
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.common.io.OIOException;
@@ -163,8 +164,8 @@ public class OStorageRemote extends OStorageAbstract implements OStorageProxy {
     addUser();
 
     lock.acquireExclusiveLock();
-
     try {
+
       connectionUserName = iUserName;
       connectionUserPassword = iUserPassword;
       connectionOptions = iOptions != null ? new HashMap<String, Object>(iOptions) : null; // CREATE A COPY TO AVOID USER
@@ -193,31 +194,38 @@ public class OStorageRemote extends OStorageAbstract implements OStorageProxy {
   public void reload() {
     checkConnection();
 
-    do {
-      try {
+    lock.acquireExclusiveLock();
+    try {
 
-        OChannelBinaryClient network = null;
+      do {
         try {
-          network = beginRequest(OChannelBinaryProtocol.REQUEST_DB_RELOAD);
-        } finally {
-          endRequest(network);
+
+          OChannelBinaryClient network = null;
+          try {
+            network = beginRequest(OChannelBinaryProtocol.REQUEST_DB_RELOAD);
+          } finally {
+            endRequest(network);
+          }
+
+          try {
+            beginResponse(network);
+
+            readDatabaseInformation(network);
+            break;
+
+          } finally {
+            endResponse(network);
+          }
+
+        } catch (Exception e) {
+          handleException("Error on reloading database information", e);
+
         }
+      } while (true);
 
-        try {
-          beginResponse(network);
-
-          readDatabaseInformation(network);
-          break;
-
-        } finally {
-          endResponse(network);
-        }
-
-      } catch (Exception e) {
-        handleException("Error on reloading database information", e);
-
-      }
-    } while (true);
+    } finally {
+      lock.releaseExclusiveLock();
+    }
   }
 
   public void create(final Map<String, Object> iOptions) {
@@ -231,10 +239,11 @@ public class OStorageRemote extends OStorageAbstract implements OStorageProxy {
   }
 
   public void close(final boolean iForce) {
-    lock.acquireExclusiveLock();
-
     OChannelBinaryClient network = null;
+
+    lock.acquireExclusiveLock();
     try {
+
       synchronized (networkPool) {
         if (networkPool.size() > 0) {
           try {
@@ -271,8 +280,8 @@ public class OStorageRemote extends OStorageAbstract implements OStorageProxy {
     } catch (Exception e) {
       OLogManager.instance().debug(this, "Error on closing remote connection: %s", network);
       closeChannel(network);
-    } finally {
 
+    } finally {
       lock.releaseExclusiveLock();
     }
   }
@@ -415,6 +424,7 @@ public class OStorageRemote extends OStorageAbstract implements OStorageProxy {
               database.getLevel1Cache().updateRecord(record);
           }
           return buffer;
+
         } finally {
           endResponse(network);
         }
@@ -1155,11 +1165,12 @@ public class OStorageRemote extends OStorageAbstract implements OStorageProxy {
    * @param iException
    */
   protected void handleException(final String iMessage, final Exception iException) {
-    if (iException instanceof OException)
+    if (iException instanceof OTimeoutException) {
+      // DO NOTHING
+    } else if (iException instanceof OException)
       // RE-THROW IT
       throw (OException) iException;
-
-    if (!(iException instanceof IOException))
+    else if (!(iException instanceof IOException))
       throw new OStorageException(iMessage, iException);
 
     if (status != STATUS.OPEN)
@@ -1266,22 +1277,29 @@ public class OStorageRemote extends OStorageAbstract implements OStorageProxy {
           sessionId = network.readInt();
           setSessionId(sessionId);
 
-          OLogManager.instance().debug(null, "Client connected with session id: " + sessionId);
+          OLogManager.instance().debug(this, "Client connected with session id: " + sessionId);
 
           readDatabaseInformation(network);
 
           // READ CLUSTER CONFIGURATION
           updateClusterConfiguration(network.readBytes());
-
-          defaultClusterId = clusterMap.get(OStorage.CLUSTER_DEFAULT_NAME).getId();
           status = STATUS.OPEN;
           return;
 
         } finally {
           endResponse(network);
         }
+      } catch (IOException e) {
+        OLogManager.instance().debug(this, "Error while reading response on creation of connection ", e);
+      } catch (OTimeoutException e) {
+        OLogManager.instance().debug(this, "Error while reading response on creation of connection ", e);
       } catch (Exception e) {
         handleException("Cannot create a connection to remote server address(es): " + serverURLs, e);
+      }
+
+      // CHECK AGAIN IF THERE ARE FREE CHANNELS
+      synchronized (networkPool) {
+        availableConnections = !networkPool.isEmpty();
       }
     }
 
@@ -1464,14 +1482,14 @@ public class OStorageRemote extends OStorageAbstract implements OStorageProxy {
             final long startToWait = System.currentTimeMillis();
             try {
               networkPool.wait(5000);
-              OProfiler.getInstance().updateCounter("network.connectionPool.timeout", +1);
+              OProfiler.getInstance().updateCounter("system.network.connectionPool.timeout", +1);
             } catch (InterruptedException e) {
               // THREAD INTERRUPTED: RETURN EXCEPTION
               Thread.currentThread().interrupt();
               throw new OStorageException("Cannot acquire a connection because the thread has been interrupted");
             }
 
-            final long elapsed = OProfiler.getInstance().stopChrono("network.connectionPool.waitingTime", startToWait);
+            final long elapsed = OProfiler.getInstance().stopChrono("system.network.connectionPool.waitingTime", startToWait);
 
             if (debug)
               System.out.println("Waiting for connection = elapsed: " + elapsed);

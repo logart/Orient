@@ -65,6 +65,7 @@ import com.orientechnologies.orient.server.config.OServerNetworkListenerConfigur
 import com.orientechnologies.orient.server.config.OServerNetworkProtocolConfiguration;
 import com.orientechnologies.orient.server.config.OServerStorageConfiguration;
 import com.orientechnologies.orient.server.config.OServerUserConfiguration;
+import com.orientechnologies.orient.server.distributed.ODistributedServerManager;
 import com.orientechnologies.orient.server.handler.OServerHandler;
 import com.orientechnologies.orient.server.managed.OrientServer;
 import com.orientechnologies.orient.server.network.OServerNetworkListener;
@@ -82,6 +83,7 @@ public class OServer {
   protected Map<String, Class<? extends ONetworkProtocol>> networkProtocols   = new HashMap<String, Class<? extends ONetworkProtocol>>();
   protected List<OServerNetworkListener>                   networkListeners   = new ArrayList<OServerNetworkListener>();
   protected List<OServerLifecycleListener>                 lifecycleListeners = new ArrayList<OServerLifecycleListener>();
+  protected ODistributedServerManager                      distributedManager;
   protected static ThreadGroup                             threadGroup;
 
   private OrientServer                                     managedServer;
@@ -153,6 +155,11 @@ public class OServer {
     Orient.instance();
 
     loadConfiguration(iConfiguration);
+
+    if (OGlobalConfiguration.ENVIRONMENT_DUMP_CFG_AT_STARTUP.getValueAsBoolean()) {
+      System.out.println("Dumping environment after server startup...");
+      OGlobalConfiguration.dumpConfiguration(System.out);
+    }
   }
 
   @SuppressWarnings("unchecked")
@@ -575,6 +582,9 @@ public class OServer {
 
         handler.config(this, h.parameters);
         handler.startup();
+
+        if (handler instanceof ODistributedServerManager)
+          distributedManager = (ODistributedServerManager) handler;
       }
     }
   }
@@ -637,5 +647,9 @@ public class OServer {
     // database.getLevel1Cache().setEnable(false);
 
     return database;
+  }
+
+  public ODistributedServerManager getDistributedManager() {
+    return distributedManager;
   }
 }

@@ -28,6 +28,7 @@ import java.util.Comparator;
 public class ODefaultComparator implements Comparator<Object> {
   public static final ODefaultComparator INSTANCE = new ODefaultComparator();
 
+  @SuppressWarnings("unchecked")
   public int compare(final Object objectOne, final Object objectTwo) {
     if (objectOne instanceof Comparable)
       return ((Comparable<Object>) objectOne).compareTo(objectTwo);

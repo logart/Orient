@@ -25,12 +25,12 @@ import java.util.Arrays;
  * 
  */
 public abstract class OBaseParser {
-  public String                   text;
-  public String                   textUpperCase;
+  public String                   parserText;
+  public String                   parserTextUpperCase;
 
   private transient StringBuilder parserLastWord      = new StringBuilder();
-  private transient int           currentPos          = 0;
-  private transient int           previousPos         = 0;
+  private transient int           parserCurrentPos    = 0;
+  private transient int           parserPreviousPos   = 0;
   private transient char          parserLastSeparator = ' ';
 
   /**
@@ -53,7 +53,7 @@ public abstract class OBaseParser {
    * @return The word parsed if any, otherwise null
    */
   protected String parserOptionalWord(final boolean iUpperCase) {
-    previousPos = currentPos;
+    parserPreviousPos = parserCurrentPos;
 
     parserNextWord(iUpperCase);
     if (parserLastWord.length() == 0)
@@ -97,8 +97,8 @@ public abstract class OBaseParser {
    * @return The previous position
    */
   protected int parserGoBack() {
-    currentPos = previousPos;
-    return currentPos;
+    parserCurrentPos = parserPreviousPos;
+    return parserCurrentPos;
   }
 
   /**
@@ -207,8 +207,8 @@ public abstract class OBaseParser {
    * @return True if the string is not ended, otherwise false
    */
   protected boolean parserSkipWhiteSpaces() {
-    currentPos = OStringParser.jumpWhiteSpaces(text, currentPos);
-    return currentPos > -1;
+    parserCurrentPos = OStringParser.jumpWhiteSpaces(parserText, parserCurrentPos, -1);
+    return parserCurrentPos > -1;
   }
 
   /**
@@ -219,11 +219,11 @@ public abstract class OBaseParser {
    * @return True if the string is not ended, otherwise false
    */
   protected boolean parserSetCurrentPosition(final int iPosition) {
-    currentPos = iPosition;
-    if (currentPos >= text.length())
+    parserCurrentPos = iPosition;
+    if (parserCurrentPos >= parserText.length())
       // END OF TEXT
-      currentPos = -1;
-    return currentPos > -1;
+      parserCurrentPos = -1;
+    return parserCurrentPos > -1;
   }
 
   /**
@@ -234,9 +234,9 @@ public abstract class OBaseParser {
    * @return True if the string is not ended, otherwise false
    */
   protected boolean parserMoveCurrentPosition(final int iOffset) {
-    if (currentPos < 0)
+    if (parserCurrentPos < 0)
       return false;
-    return parserSetCurrentPosition(currentPos + iOffset);
+    return parserSetCurrentPosition(parserCurrentPos + iOffset);
   }
 
   /**
@@ -258,19 +258,19 @@ public abstract class OBaseParser {
    *          Separator characters
    */
   protected void parserNextWord(final boolean iForceUpperCase, final String iSeparatorChars) {
-    previousPos = currentPos;
+    parserPreviousPos = parserCurrentPos;
     parserLastWord.setLength(0);
 
     parserSkipWhiteSpaces();
-    if (currentPos == -1)
+    if (parserCurrentPos == -1)
       return;
 
     char stringBeginChar = ' ';
 
-    final String text2Use = iForceUpperCase ? textUpperCase : text;
+    final String text2Use = iForceUpperCase ? parserTextUpperCase : parserText;
 
-    while (currentPos < text2Use.length()) {
-      final char c = text2Use.charAt(currentPos);
+    while (parserCurrentPos < text2Use.length()) {
+      final char c = text2Use.charAt(parserCurrentPos);
       boolean found = false;
       for (int sepIndex = 0; sepIndex < iSeparatorChars.length(); ++sepIndex) {
         if (iSeparatorChars.charAt(sepIndex) == c) {
@@ -282,12 +282,12 @@ public abstract class OBaseParser {
       if (!found)
         break;
 
-      currentPos++;
+      parserCurrentPos++;
     }
 
     try {
-      while (currentPos < text2Use.length()) {
-        final char c = text2Use.charAt(currentPos);
+      while (parserCurrentPos < text2Use.length()) {
+        final char c = text2Use.charAt(parserCurrentPos);
 
         if (c == '\'' || c == '"') {
           if (stringBeginChar != ' ') {
@@ -311,15 +311,15 @@ public abstract class OBaseParser {
         }
 
         parserLastWord.append(c);
-        currentPos++;
+        parserCurrentPos++;
       }
 
       parserLastSeparator = ' ';
 
     } finally {
-      if (currentPos >= text2Use.length())
+      if (parserCurrentPos >= text2Use.length())
         // END OF TEXT
-        currentPos = -1;
+        parserCurrentPos = -1;
     }
   }
 
@@ -343,7 +343,7 @@ public abstract class OBaseParser {
    * @return Offset from the beginning
    */
   public int parserGetPreviousPosition() {
-    return previousPos;
+    return parserPreviousPos;
   }
 
   /**
@@ -352,7 +352,7 @@ public abstract class OBaseParser {
    * @return True if is ended, otherwise false
    */
   public boolean parserIsEnded() {
-    return currentPos == -1;
+    return parserCurrentPos == -1;
   }
 
   /**
@@ -361,7 +361,7 @@ public abstract class OBaseParser {
    * @return Offset from the beginning
    */
   public int parserGetCurrentPosition() {
-    return currentPos;
+    return parserCurrentPos;
   }
 
   /**
@@ -370,9 +370,9 @@ public abstract class OBaseParser {
    * @return The current character in the current cursor position. If the end is reached, then a blank (' ') is returned
    */
   public char parserGetCurrentChar() {
-    if (currentPos < 0)
+    if (parserCurrentPos < 0)
       return ' ';
-    return text.charAt(currentPos);
+    return parserText.charAt(parserCurrentPos);
   }
 
   /**
@@ -393,7 +393,7 @@ public abstract class OBaseParser {
       final boolean iForceUpperCase, final String iSeparatorChars) {
     ioWord.setLength(0);
 
-    ioCurrentPosition = OStringParser.jumpWhiteSpaces(iText, ioCurrentPosition);
+    ioCurrentPosition = OStringParser.jumpWhiteSpaces(iText, ioCurrentPosition, -1);
     if (ioCurrentPosition < 0)
       return -1;
 

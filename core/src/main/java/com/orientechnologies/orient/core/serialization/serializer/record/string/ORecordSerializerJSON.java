@@ -62,15 +62,17 @@ public class ORecordSerializerJSON extends ORecordSerializerStringAbstract {
   public static final char[]                PARAMETER_SEPARATOR   = new char[] { ':', ',' };
   private static final Long                 MAX_INT               = new Long(Integer.MAX_VALUE);
   private static final Long                 MIN_INT               = new Long(Integer.MIN_VALUE);
+  private static final Double               MAX_FLOAT             = new Double(Float.MAX_VALUE);
+  private static final Double               MIN_FLOAT             = new Double(Float.MIN_VALUE);
 
   private SimpleDateFormat                  dateFormat            = new SimpleDateFormat(DEF_DATE_FORMAT);
 
   @Override
-  public ORecordInternal<?> fromString(String iSource, ORecordInternal<?> iRecord) {
-    return fromString(iSource, iRecord, null);
+  public ORecordInternal<?> fromString(String iSource, ORecordInternal<?> iRecord, final String[] iFields) {
+    return fromString(iSource, iRecord, iFields, null);
   }
 
-  public ORecordInternal<?> fromString(String iSource, ORecordInternal<?> iRecord, final String iOptions) {
+  public ORecordInternal<?> fromString(String iSource, ORecordInternal<?> iRecord, final String[] iFields, final String iOptions) {
     if (iSource == null)
       throw new OSerializationException("Error on unmarshalling JSON content: content is null");
 
@@ -224,7 +226,7 @@ public class ORecordSerializerJSON extends ORecordSerializerStringAbstract {
 
       if (iNoMap || hasTypeField(fields)) {
         // OBJECT
-        final ORecordInternal<?> recordInternal = fromString(iFieldValue, new ODocument(), iOptions);
+        final ORecordInternal<?> recordInternal = fromString(iFieldValue, new ODocument(), null, iOptions);
         if (recordInternal instanceof ODocument)
           ((ODocument) recordInternal).addOwner(iRecord);
         return recordInternal;
@@ -306,10 +308,21 @@ public class ORecordSerializerJSON extends ORecordSerializerStringAbstract {
             // TRY TO AUTODETERMINE THE BEST TYPE
             if (iFieldValue.charAt(0) == ORID.PREFIX && iFieldValue.contains(":"))
               iType = OType.LINK;
-            else if (OStringSerializerHelper.contains(iFieldValue, '.'))
-              iType = OType.FLOAT;
-            else {
+            else if (OStringSerializerHelper.contains(iFieldValue, '.')) {
+              // DECIMAL FORMAT: DETERMINE IF DOUBLE OR FLOAT
+              final Double v = new Double(OStringSerializerHelper.getStringContent(iFieldValue));
+              if (v.doubleValue() > 0) {
+                // POSITIVE NUMBER
+                if (v.compareTo(MAX_FLOAT) <= 0)
+                  return v.floatValue();
+              } else if (v.compareTo(MIN_FLOAT) >= 0)
+                // NEGATIVE NUMBER
+                return v.floatValue();
+
+              return v;
+            } else {
               final Long v = new Long(OStringSerializerHelper.getStringContent(iFieldValue));
+              // INTEGER FORMAT: DETERMINE IF DOUBLE OR FLOAT
               if (v.longValue() > 0) {
                 // POSITIVE NUMBER
                 if (v.compareTo(MAX_INT) <= 0)

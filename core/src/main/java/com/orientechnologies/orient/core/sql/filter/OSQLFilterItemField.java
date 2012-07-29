@@ -42,7 +42,14 @@ public class OSQLFilterItemField extends OSQLFilterItemAbstract {
     if (iRecord == null)
       throw new OCommandExecutionException("expression item '" + name + "' cannot be resolved");
 
-    return transformValue(iRecord, ODocumentHelper.getFieldValue((ODocument) iRecord.getRecord(), name));
+    final ODocument doc = (ODocument) iRecord.getRecord();
+
+    // UNMARSHALL THE SINGLE FIELD
+    if (doc.deserializeFields(name))
+      // FIELD FOUND
+      return transformValue(iRecord, ODocumentHelper.getFieldValue(doc, name));
+
+    return null;
   }
 
   public String getRoot() {

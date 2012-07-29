@@ -15,7 +15,6 @@
  */
 package com.orientechnologies.orient.server.network.protocol.binary;
 
-import java.io.EOFException;
 import java.io.IOException;
 import java.net.Socket;
 import java.net.SocketException;
@@ -121,10 +120,7 @@ public abstract class OBinaryNetworkProtocolAbstract extends ONetworkProtocol {
 
       onAfterRequest();
 
-    } catch (EOFException e) {
-      handleConnectionError(channel, e);
-      sendShutdown();
-    } catch (SocketException e) {
+    } catch (IOException e) {
       handleConnectionError(channel, e);
       sendShutdown();
     } catch (OException e) {
@@ -188,7 +184,9 @@ public abstract class OBinaryNetworkProtocolAbstract extends ONetworkProtocol {
           OLogManager.instance().log(this, logClientExceptions, "Sent run-time exception to the client %s: %s", null,
               channel.socket.getRemoteSocketAddress(), t.toString());
       }
-
+    } catch (Exception e) {
+      if (e instanceof SocketException)
+        shutdown();
     } finally {
       channel.releaseExclusiveLock();
     }

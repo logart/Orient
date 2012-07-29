@@ -109,6 +109,8 @@ public class OObjectProxyMethodHandler implements MethodHandler {
   public void detach(Object self) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
     for (String fieldName : doc.fieldNames()) {
       Object value = getValue(self, fieldName, false, null);
+      if (value instanceof OLazyObjectMultivalueElement)
+        ((OLazyObjectMultivalueElement) value).detach();
       OObjectEntitySerializer.setFieldValue(getField(fieldName, self.getClass()), self, value);
     }
     OObjectEntitySerializer.setIdField(self.getClass(), self, doc.getIdentity());
@@ -572,6 +574,8 @@ public class OObjectProxyMethodHandler implements MethodHandler {
               doc.field(fieldName, valueToSet);
           }
         }
+      } else if (valueToSet.getClass().isEnum()) {
+        doc.field(fieldName, ((Enum) valueToSet).name());
       } else {
         if (OObjectEntitySerializer.isToSerialize(valueToSet.getClass())) {
           doc.field(fieldName,

@@ -25,6 +25,7 @@ import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.server.distributed.ODistributedServerManager.EXECUTION_MODE;
 import com.orientechnologies.orient.server.distributed.OStorageSynchronizer;
+import com.orientechnologies.orient.server.distributed.conflict.OReplicationConflictResolver;
 import com.orientechnologies.orient.server.journal.ODatabaseJournal.OPERATION_TYPES;
 
 /**
@@ -52,16 +53,32 @@ public class ODeleteRecordDistributedTask extends OAbstractRecordDistributedTask
   protected Boolean executeOnLocalNode(final OStorageSynchronizer dbSynchronizer) {
     OLogManager.instance().warn(this, "DISTRIBUTED <-[%s/%s] DELETE RECORD %s v.%d", nodeSource, databaseName, rid, version);
 
-    final ODatabaseDocumentTx database = getDatabase();
+    final ODatabaseDocumentTx database = openDatabase();
     try {
       final ORecordInternal<?> record = database.load(rid);
-      record.setVersion(version);
-      record.delete();
-
-      return Boolean.TRUE;
+      if (record != null) {
+        record.setVersion(version);
+        record.delete();
+        return Boolean.TRUE;
+      }
+      return Boolean.FALSE;
     } finally {
-      database.close();
+      closeDatabase(database);
     }
+  }
+
+  /**
+   * Handles conflict between local and remote execution results.
+   * 
+   * @param localResult
+   *          The result on local node
+   * @param remoteResult
+   *          the result on remote node
+   */
+  @Override
+  public void handleConflict(final String iRemoteNodeId, final Object localResult, final Object remoteResult) {
+    final OReplicationConflictResolver resolver = getDatabaseSynchronizer().getConflictResolver();
+    resolver.handleDeleteConflict(iRemoteNodeId, rid);
   }
 
   @Override

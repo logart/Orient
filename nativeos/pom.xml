@@ -16,38 +16,38 @@
   -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <parent>
-        <artifactId>orientdb-parent</artifactId>
-        <groupId>com.orientechnologies</groupId>
-        <version>1.1.0-SNAPSHOT</version>
-        <relativePath>../</relativePath>
-    </parent>
-    <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <artifactId>orientdb-parent</artifactId>
+    <groupId>com.orientechnologies</groupId>
+    <version>1.2.0-SNAPSHOT</version>
+    <relativePath>../</relativePath>
+  </parent>
+  <modelVersion>4.0.0</modelVersion>
 
-    <name>OrientDB Native OS Code</name>
+  <name>OrientDB Native OS Code</name>
 
-    <organization>
-        <name>Orient Technologies</name>
-        <url>http://www.orientechnologies.com</url>
-    </organization>
+  <organization>
+    <name>Orient Technologies</name>
+    <url>http://www.orientechnologies.com</url>
+  </organization>
 
-    <properties>
-        <javac.src.version>1.6</javac.src.version>
-        <javac.target.version>1.6</javac.target.version>
-    </properties>
+  <properties>
+    <javac.src.version>1.6</javac.src.version>
+    <javac.target.version>1.6</javac.target.version>
+  </properties>
 
-    <artifactId>orientdb-nativeos</artifactId>
+  <artifactId>orientdb-nativeos</artifactId>
 
-    <dependencies>
-        <dependency>
-            <groupId>net.java.dev.jna</groupId>
-            <artifactId>jna</artifactId>
-            <version>3.4.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.orientechnologies</groupId>
-            <artifactId>orient-commons</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-    </dependencies>
+  <dependencies>
+    <dependency>
+      <groupId>net.java.dev.jna</groupId>
+      <artifactId>jna</artifactId>
+      <version>3.4.0</version>
+    </dependency>
+    <dependency>
+      <groupId>com.orientechnologies</groupId>
+      <artifactId>orient-commons</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+  </dependencies>
 </project>

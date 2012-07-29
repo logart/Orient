@@ -15,17 +15,17 @@
  */
 package com.orientechnologies.orient.core.index;
 
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.Map.Entry;
+import java.util.Set;
+
 import com.orientechnologies.common.listener.OProgressListener;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.impl.ODocument;
-
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.Map.Entry;
-import java.util.Set;
 
 /**
  * Generic abstract wrapper for indexes. It delegates all the operations to the wrapped OIndex instance.
@@ -60,6 +60,10 @@ public class OIndexAbstractDelegate<T> implements OIndex<T> {
 
   public T get(final Object iKey) {
     return delegate.get(iKey);
+  }
+
+  public long count(final Object iKey) {
+    return delegate.count(iKey);
   }
 
   public boolean contains(final Object iKey) {
@@ -254,7 +258,7 @@ public class OIndexAbstractDelegate<T> implements OIndex<T> {
     return delegate.toString();
   }
 
-	public long getKeySize() {
-		return delegate.getKeySize();
-	}
+  public long getKeySize() {
+    return delegate.getKeySize();
+  }
 }

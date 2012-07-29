@@ -60,17 +60,11 @@ public class OMetadata {
   }
 
   public void create() throws IOException {
-    final long timer = OProfiler.getInstance().startChrono();
+    init(false);
 
-    try {
-      init(false);
-
-      security.create();
-      schema.create();
-      indexManager.create();
-    } finally {
-      OProfiler.getInstance().stopChrono("OMetadata.load", timer);
-    }
+    security.create();
+    schema.create();
+    indexManager.create();
   }
 
   public OSchema getSchema() {
@@ -93,6 +87,15 @@ public class OMetadata {
     final ODatabaseRecord database = getDatabase();
     schemaClusterId = database.getClusterIdByName(OStorage.CLUSTER_INTERNAL_NAME);
 
+    schema = new OSchemaProxy(database.getStorage().getResource(OSchema.class.getSimpleName(), new Callable<OSchemaShared>() {
+      public OSchemaShared call() {
+        final OSchemaShared instance = new OSchemaShared(schemaClusterId);
+        if (iLoad)
+          instance.load();
+        return instance;
+      }
+    }), database);
+
     indexManager = new OIndexManagerProxy(database.getStorage().getResource(OIndexManager.class.getSimpleName(),
         new Callable<OIndexManager>() {
           public OIndexManager call() {
@@ -108,15 +111,6 @@ public class OMetadata {
             return instance;
           }
         }), database);
-
-    schema = new OSchemaProxy(database.getStorage().getResource(OSchema.class.getSimpleName(), new Callable<OSchemaShared>() {
-      public OSchemaShared call() {
-        final OSchemaShared instance = new OSchemaShared(schemaClusterId);
-        if (iLoad)
-          instance.load();
-        return instance;
-      }
-    }), database);
 
     final Boolean enableSecurity = (Boolean) database.getProperty(ODatabase.OPTIONS.SECURITY.toString());
     if (enableSecurity != null && !enableSecurity)

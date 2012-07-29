@@ -101,6 +101,7 @@ public abstract class ORecordAbstract<T> implements ORecord<T>, ORecordInternal<
   public ORecordAbstract<T> reset() {
     _status = ORecordElement.STATUS.LOADED;
     _version = 0;
+    _size = 0;
 
     setDirty();
     if (_recordId != null)
@@ -169,12 +170,12 @@ public abstract class ORecordAbstract<T> implements ORecord<T>, ORecordInternal<
   }
 
   public <RET extends ORecord<T>> RET fromJSON(final String iSource, final String iOptions) {
-    ORecordSerializerJSON.INSTANCE.fromString(iSource, this, iOptions);
+    ORecordSerializerJSON.INSTANCE.fromString(iSource, this, null, iOptions);
     return (RET) this;
   }
 
   public <RET extends ORecord<T>> RET fromJSON(final String iSource) {
-    ORecordSerializerJSON.INSTANCE.fromString(iSource, this);
+    ORecordSerializerJSON.INSTANCE.fromString(iSource, this, null);
     return (RET) this;
   }
 

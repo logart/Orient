@@ -15,20 +15,28 @@
  */
 package com.orientechnologies.orient.test.database.auto;
 
+import java.lang.reflect.Field;
+import java.util.List;
+
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.sql.OCommandSQL;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 import com.orientechnologies.orient.object.db.OObjectDatabaseTx;
+import com.orientechnologies.orient.object.enhancement.OObjectEntitySerializer;
+import com.orientechnologies.orient.test.domain.base.IdObject;
+import com.orientechnologies.orient.test.domain.base.Instrument;
+import com.orientechnologies.orient.test.domain.base.Musician;
 import com.orientechnologies.orient.test.domain.business.Account;
 import com.orientechnologies.orient.test.domain.business.Address;
 import com.orientechnologies.orient.test.domain.business.City;
 import com.orientechnologies.orient.test.domain.business.Company;
 import com.orientechnologies.orient.test.domain.business.Country;
+import com.orientechnologies.orient.test.domain.inheritance.InheritanceTestClass;
+import com.orientechnologies.orient.test.domain.inheritance.InheritanceTestSuperclass;
+
 import org.testng.Assert;
 import org.testng.annotations.Parameters;
 import org.testng.annotations.Test;
-
-import java.util.List;
 
 @Test(groups = { "crud", "object" }, sequential = true)
 public class CRUDObjectInheritanceTest {
@@ -127,6 +135,43 @@ public class CRUDObjectInheritanceTest {
 
     Assert.assertEquals(database.countClusterElements("Company"), startRecordNumber - 1);
 
+    database.close();
+  }
+
+  @Test(dependsOnMethods = "deleteFirst")
+  public void testIdFieldInheritance() {
+    database.open("admin", "admin");
+
+    database.getEntityManager().registerEntityClass(Musician.class);
+    database.getEntityManager().registerEntityClass(Instrument.class);
+    database.getEntityManager().registerEntityClass(IdObject.class);
+    Field idField = OObjectEntitySerializer.getIdField(IdObject.class);
+    Assert.assertNotNull(idField);
+    Field musicianIdField = OObjectEntitySerializer.getIdField(Musician.class);
+    Assert.assertNotNull(musicianIdField);
+    Assert.assertEquals(idField, musicianIdField);
+    Field instrumentIdField = OObjectEntitySerializer.getIdField(Instrument.class);
+    Assert.assertNotNull(instrumentIdField);
+    Assert.assertEquals(idField, instrumentIdField);
+    Assert.assertEquals(instrumentIdField, musicianIdField);
+    idField = OObjectEntitySerializer.getIdField(IdObject.class);
+    database.close();
+  }
+
+  @Test(dependsOnMethods = "testIdFieldInheritance")
+  public void testIdFieldInheritanceFirstSubClass() {
+    database.open("admin", "admin");
+
+    database.getEntityManager().registerEntityClass(InheritanceTestClass.class);
+    database.getEntityManager().registerEntityClass(InheritanceTestSuperclass.class);
+    InheritanceTestSuperclass a = database.newInstance(InheritanceTestSuperclass.class);
+    InheritanceTestSuperclass b = database.newInstance(InheritanceTestClass.class);
+    database.save(a);
+    database.save(b);
+
+    final List<InheritanceTestSuperclass> result1 = database.query(new OSQLSynchQuery<InheritanceTestSuperclass>(
+        "select from InheritanceTestSuperclass"));
+    Assert.assertEquals(2, result1.size());
     database.close();
   }
 

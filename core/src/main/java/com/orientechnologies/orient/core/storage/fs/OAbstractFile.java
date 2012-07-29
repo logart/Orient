@@ -57,7 +57,7 @@ public abstract class OAbstractFile implements OFile {
   protected byte[]           securityCode           = new byte[32];          // PART OF HEADER (32 bytes)
   protected String           mode;
   protected boolean          failCheck              = true;
-  protected int              size;                                           // PART OF HEADER (4 bytes)
+  protected volatile int     size;                                           // PART OF HEADER (4 bytes)
 
   protected static final int HEADER_SIZE            = 1024;
   protected static final int HEADER_DATA_OFFSET     = 128;

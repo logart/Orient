@@ -15,6 +15,21 @@
  */
 package com.orientechnologies.orient.core.db.tool;
 
+import java.io.BufferedInputStream;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.lang.reflect.InvocationTargetException;
+import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.zip.GZIPInputStream;
+
 import com.orientechnologies.orient.core.command.OCommandOutputListener;
 import com.orientechnologies.orient.core.db.ODatabase.STATUS;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocument;
@@ -41,21 +56,6 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.OBinary
 import com.orientechnologies.orient.core.serialization.serializer.record.string.ORecordSerializerJSON;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.type.tree.provider.OMVRBTreeRIDProvider;
-
-import java.io.BufferedInputStream;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.lang.reflect.InvocationTargetException;
-import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.zip.GZIPInputStream;
 
 /**
  * Import data from a file into a database.
@@ -209,7 +209,7 @@ public class ODatabaseImport extends ODatabaseImpExpAbstract {
         final String value = jsonReader.readString(OJSONReader.NEXT_IN_ARRAY).trim();
 
         if (!value.isEmpty()) {
-          doc = (ODocument) ORecordSerializerJSON.INSTANCE.fromString(value, doc);
+          doc = (ODocument) ORecordSerializerJSON.INSTANCE.fromString(value, doc, null);
 
           if (!doc.<Boolean> field("binary"))
             index.put(doc.field("key"), doc.<OIdentifiable> field("rid"));
@@ -562,7 +562,7 @@ public class ODatabaseImport extends ODatabaseImpExpAbstract {
 
     record = null;
     try {
-      record = ORecordSerializerJSON.INSTANCE.fromString(value, record);
+      record = ORecordSerializerJSON.INSTANCE.fromString(value, record, null);
 
       if (schemaImported && record.getIdentity().toString().equals(database.getStorage().getConfiguration().schemaRecordId)) {
         // JUMP THE SCHEMA
@@ -728,7 +728,7 @@ public class ODatabaseImport extends ODatabaseImpExpAbstract {
     final String value = jsonReader.readString(OJSONReader.END_OBJECT, true);
 
     final OIndexDefinition indexDefinition;
-    final ODocument indexDefinitionDoc = (ODocument) ORecordSerializerJSON.INSTANCE.fromString(value, null);
+    final ODocument indexDefinitionDoc = (ODocument) ORecordSerializerJSON.INSTANCE.fromString(value, null, null);
     try {
       final Class<?> indexDefClass = Class.forName(className);
       indexDefinition = (OIndexDefinition) indexDefClass.getDeclaredConstructor().newInstance();

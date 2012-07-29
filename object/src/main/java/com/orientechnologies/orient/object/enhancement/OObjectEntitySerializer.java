@@ -34,6 +34,11 @@ import java.util.Set;
 import javassist.util.proxy.Proxy;
 import javassist.util.proxy.ProxyObject;
 
+import javax.persistence.CascadeType;
+import javax.persistence.ManyToMany;
+import javax.persistence.OneToMany;
+import javax.persistence.OneToOne;
+
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.common.profiler.OProfiler;
 import com.orientechnologies.common.reflection.OReflectionHelper;
@@ -69,6 +74,7 @@ import com.orientechnologies.orient.object.serialization.OObjectSerializerHelper
 
 /**
  * @author luca.molino
+ * 
  */
 public class OObjectEntitySerializer {
 
@@ -77,6 +83,7 @@ public class OObjectEntitySerializer {
   private static final HashMap<Class<?>, List<String>>         directAccessFields  = new HashMap<Class<?>, List<String>>();
   private static final HashMap<Class<?>, Field>                boundDocumentFields = new HashMap<Class<?>, Field>();
   private static final HashMap<Class<?>, List<String>>         transientFields     = new HashMap<Class<?>, List<String>>();
+  private static final HashMap<Class<?>, List<String>>         cascadeDeleteFields = new HashMap<Class<?>, List<String>>();
   private static final HashMap<Class<?>, Map<Field, Class<?>>> serializedFields    = new HashMap<Class<?>, Map<Field, Class<?>>>();
   private static final HashMap<Class<?>, Field>                fieldIds            = new HashMap<Class<?>, Field>();
   private static final HashMap<Class<?>, Field>                fieldVersions       = new HashMap<Class<?>, Field>();
@@ -205,7 +212,42 @@ public class OObjectEntitySerializer {
     boolean isTransientField = false;
     for (Class<?> currentClass = iClass; currentClass != null && currentClass != Object.class
         && !currentClass.equals(ODocument.class) && !isTransientField;) {
-      List<String> classEmbeddedFields = transientFields.get(iClass);
+      List<String> classCascadeDeleteFields = transientFields.get(currentClass);
+      isTransientField = classCascadeDeleteFields != null && classCascadeDeleteFields.contains(iField);
+      currentClass = currentClass.getSuperclass();
+    }
+    return isTransientField;
+  }
+
+  public static List<String> getCascadeDeleteFields(Class<?> iClass) {
+    checkClassRegistration(iClass);
+    List<String> classCascadeDeleteFields = new ArrayList<String>();
+    for (Class<?> currentClass = iClass; currentClass != null && currentClass != Object.class
+        && !currentClass.equals(ODocument.class);) {
+      List<String> classDeleteFields = cascadeDeleteFields.get(currentClass);
+      if (classDeleteFields != null)
+        classCascadeDeleteFields.addAll(classDeleteFields);
+      currentClass = currentClass.getSuperclass();
+    }
+    return classCascadeDeleteFields;
+  }
+
+  public static List<String> getCascadeDeleteFields(String iClassName) {
+    if (iClassName == null || iClassName.isEmpty())
+      return null;
+    for (Class<?> iClass : cascadeDeleteFields.keySet()) {
+      if (iClass.getSimpleName().equals(iClassName))
+        return getCascadeDeleteFields(iClass);
+    }
+    return null;
+  }
+
+  public static boolean isCascadeDeleteField(Class<?> iClass, String iField) {
+    checkClassRegistration(iClass);
+    boolean isTransientField = false;
+    for (Class<?> currentClass = iClass; currentClass != null && currentClass != Object.class
+        && !currentClass.equals(ODocument.class) && !isTransientField;) {
+      List<String> classEmbeddedFields = cascadeDeleteFields.get(currentClass);
       isTransientField = classEmbeddedFields != null && classEmbeddedFields.contains(iField);
       currentClass = currentClass.getSuperclass();
     }
@@ -246,129 +288,164 @@ public class OObjectEntitySerializer {
       ODatabaseRecordThreadLocal.INSTANCE.get().getMetadata().getSchema().createClass(iClass.getSimpleName());
 
     for (Class<?> currentClass = iClass; currentClass != Object.class;) {
-      classes.add(currentClass);
+      if (!classes.contains(currentClass)) {
+        classes.add(currentClass);
 
-      Class<?> fieldType;
-      for (Field f : currentClass.getDeclaredFields()) {
-        final String fieldName = f.getName();
-        final int fieldModifier = f.getModifiers();
-        if (Modifier.isStatic(fieldModifier) || Modifier.isNative(fieldModifier) || Modifier.isTransient(fieldModifier))
-          continue;
+        Class<?> fieldType;
+        for (Field f : currentClass.getDeclaredFields()) {
+          final String fieldName = f.getName();
+          final int fieldModifier = f.getModifiers();
+          if (Modifier.isStatic(fieldModifier) || Modifier.isNative(fieldModifier) || Modifier.isTransient(fieldModifier))
+            continue;
 
-        if (fieldName.equals("this$0")) {
-          List<String> classTransientFields = transientFields.get(currentClass);
-          if (classTransientFields == null)
-            classTransientFields = new ArrayList<String>();
-          classTransientFields.add(fieldName);
-          transientFields.put(currentClass, classTransientFields);
-        }
-
-        if (OObjectSerializerHelper.jpaTransientClass != null) {
-          Annotation ann = f.getAnnotation(OObjectSerializerHelper.jpaTransientClass);
-          if (ann != null) {
-            // @Transient DEFINED
+          if (fieldName.equals("this$0")) {
             List<String> classTransientFields = transientFields.get(currentClass);
             if (classTransientFields == null)
               classTransientFields = new ArrayList<String>();
             classTransientFields.add(fieldName);
             transientFields.put(currentClass, classTransientFields);
           }
-        }
 
-        fieldType = f.getType();
-        if (Collection.class.isAssignableFrom(fieldType) || fieldType.isArray() || Map.class.isAssignableFrom(fieldType)) {
-          fieldType = OReflectionHelper.getGenericMultivalueType(f);
-        }
-        if (isToSerialize(fieldType)) {
-          Map<Field, Class<?>> serializeClass = serializedFields.get(currentClass);
-          if (serializeClass == null)
-            serializeClass = new HashMap<Field, Class<?>>();
-          serializeClass.put(f, fieldType);
-          serializedFields.put(currentClass, serializeClass);
-        }
-
-        // CHECK FOR DIRECT-BINDING
-        boolean directBinding = true;
-        if (f.getAnnotation(OAccess.class) == null || f.getAnnotation(OAccess.class).value() == OAccess.OAccessType.PROPERTY)
-          directBinding = true;
-        // JPA 2+ AVAILABLE?
-        else if (OObjectSerializerHelper.jpaAccessClass != null) {
-          Annotation ann = f.getAnnotation(OObjectSerializerHelper.jpaAccessClass);
-          if (ann != null) {
-            directBinding = true;
+          if (OObjectSerializerHelper.jpaTransientClass != null) {
+            Annotation ann = f.getAnnotation(OObjectSerializerHelper.jpaTransientClass);
+            if (ann != null) {
+              // @Transient DEFINED
+              List<String> classTransientFields = transientFields.get(currentClass);
+              if (classTransientFields == null)
+                classTransientFields = new ArrayList<String>();
+              classTransientFields.add(fieldName);
+              transientFields.put(currentClass, classTransientFields);
+            }
           }
-        }
-        if (directBinding) {
-          List<String> classDirectAccessFields = directAccessFields.get(currentClass);
-          if (classDirectAccessFields == null)
-            classDirectAccessFields = new ArrayList<String>();
-          classDirectAccessFields.add(fieldName);
-          directAccessFields.put(currentClass, classDirectAccessFields);
+
+          if (OObjectSerializerHelper.jpaOneToOneClass != null) {
+            Annotation ann = f.getAnnotation(OObjectSerializerHelper.jpaOneToOneClass);
+            if (ann != null) {
+              // @OneToOne DEFINED
+              OneToOne oneToOne = ((OneToOne) ann);
+              if (checkCascadeDelete(oneToOne)) {
+                addCascadeDeleteField(currentClass, fieldName);
+              }
+            }
+          }
+
+          if (OObjectSerializerHelper.jpaOneToManyClass != null) {
+            Annotation ann = f.getAnnotation(OObjectSerializerHelper.jpaOneToManyClass);
+            if (ann != null) {
+              // @OneToMany DEFINED
+              OneToMany oneToMany = ((OneToMany) ann);
+              if (checkCascadeDelete(oneToMany)) {
+                addCascadeDeleteField(currentClass, fieldName);
+              }
+            }
+          }
+
+          if (OObjectSerializerHelper.jpaManyToManyClass != null) {
+            Annotation ann = f.getAnnotation(OObjectSerializerHelper.jpaManyToManyClass);
+            if (ann != null) {
+              // @OneToMany DEFINED
+              ManyToMany manyToMany = ((ManyToMany) ann);
+              if (checkCascadeDelete(manyToMany)) {
+                addCascadeDeleteField(currentClass, fieldName);
+              }
+            }
+          }
+
+          fieldType = f.getType();
+          if (Collection.class.isAssignableFrom(fieldType) || fieldType.isArray() || Map.class.isAssignableFrom(fieldType)) {
+            fieldType = OReflectionHelper.getGenericMultivalueType(f);
+          }
+          if (isToSerialize(fieldType)) {
+            Map<Field, Class<?>> serializeClass = serializedFields.get(currentClass);
+            if (serializeClass == null)
+              serializeClass = new HashMap<Field, Class<?>>();
+            serializeClass.put(f, fieldType);
+            serializedFields.put(currentClass, serializeClass);
+          }
+
+          // CHECK FOR DIRECT-BINDING
+          boolean directBinding = true;
+          if (f.getAnnotation(OAccess.class) == null || f.getAnnotation(OAccess.class).value() == OAccess.OAccessType.PROPERTY)
+            directBinding = true;
+          // JPA 2+ AVAILABLE?
+          else if (OObjectSerializerHelper.jpaAccessClass != null) {
+            Annotation ann = f.getAnnotation(OObjectSerializerHelper.jpaAccessClass);
+            if (ann != null) {
+              directBinding = true;
+            }
+          }
+          if (directBinding) {
+            List<String> classDirectAccessFields = directAccessFields.get(currentClass);
+            if (classDirectAccessFields == null)
+              classDirectAccessFields = new ArrayList<String>();
+            classDirectAccessFields.add(fieldName);
+            directAccessFields.put(currentClass, classDirectAccessFields);
+          }
+
+          if (f.getAnnotation(ODocumentInstance.class) != null)
+            // BOUND DOCUMENT ON IT
+            boundDocumentFields.put(currentClass, f);
+
+          boolean idFound = false;
+          if (f.getAnnotation(OId.class) != null) {
+            // RECORD ID
+            fieldIds.put(currentClass, f);
+            idFound = true;
+          }
+          // JPA 1+ AVAILABLE?
+          else if (OObjectSerializerHelper.jpaIdClass != null && f.getAnnotation(OObjectSerializerHelper.jpaIdClass) != null) {
+            // RECORD ID
+            fieldIds.put(currentClass, f);
+            idFound = true;
+          }
+          if (idFound) {
+            // CHECK FOR TYPE
+            if (fieldType.isPrimitive())
+              OLogManager.instance().warn(OObjectSerializerHelper.class, "Field '%s' cannot be a literal to manage the Record Id",
+                  f.toString());
+            else if (!ORID.class.isAssignableFrom(fieldType) && fieldType != String.class && fieldType != Object.class
+                && !Number.class.isAssignableFrom(fieldType))
+              OLogManager.instance().warn(OObjectSerializerHelper.class, "Field '%s' cannot be managed as type: %s", f.toString(),
+                  fieldType);
+          }
+
+          boolean vFound = false;
+          if (f.getAnnotation(OVersion.class) != null) {
+            // RECORD ID
+            fieldVersions.put(currentClass, f);
+            vFound = true;
+          }
+          // JPA 1+ AVAILABLE?
+          else if (OObjectSerializerHelper.jpaVersionClass != null
+              && f.getAnnotation(OObjectSerializerHelper.jpaVersionClass) != null) {
+            // RECORD ID
+            fieldVersions.put(currentClass, f);
+            vFound = true;
+          }
+          if (vFound) {
+            // CHECK FOR TYPE
+            if (fieldType.isPrimitive())
+              OLogManager.instance().warn(OObjectSerializerHelper.class, "Field '%s' cannot be a literal to manage the Version",
+                  f.toString());
+            else if (fieldType != String.class && fieldType != Object.class && !Number.class.isAssignableFrom(fieldType))
+              OLogManager.instance().warn(OObjectSerializerHelper.class, "Field '%s' cannot be managed as type: %s", f.toString(),
+                  fieldType);
+          }
+
+          // JPA 1+ AVAILABLE?
+          if (OObjectSerializerHelper.jpaEmbeddedClass != null && f.getAnnotation(OObjectSerializerHelper.jpaEmbeddedClass) != null) {
+            List<String> classEmbeddedFields = embeddedFields.get(currentClass);
+            if (classEmbeddedFields == null)
+              classEmbeddedFields = new ArrayList<String>();
+            classEmbeddedFields.add(fieldName);
+            embeddedFields.put(currentClass, classEmbeddedFields);
+          }
+
         }
 
-        if (f.getAnnotation(ODocumentInstance.class) != null)
-          // BOUND DOCUMENT ON IT
-          boundDocumentFields.put(currentClass, f);
-
-        boolean idFound = false;
-        if (f.getAnnotation(OId.class) != null) {
-          // RECORD ID
-          fieldIds.put(currentClass, f);
-          idFound = true;
-        }
-        // JPA 1+ AVAILABLE?
-        else if (OObjectSerializerHelper.jpaIdClass != null && f.getAnnotation(OObjectSerializerHelper.jpaIdClass) != null) {
-          // RECORD ID
-          fieldIds.put(currentClass, f);
-          idFound = true;
-        }
-        if (idFound) {
-          // CHECK FOR TYPE
-          if (fieldType.isPrimitive())
-            OLogManager.instance().warn(OObjectSerializerHelper.class, "Field '%s' cannot be a literal to manage the Record Id",
-                f.toString());
-          else if (!ORID.class.isAssignableFrom(fieldType) && fieldType != String.class && fieldType != Object.class
-              && !Number.class.isAssignableFrom(fieldType))
-            OLogManager.instance().warn(OObjectSerializerHelper.class, "Field '%s' cannot be managed as type: %s", f.toString(),
-                fieldType);
-        }
-
-        boolean vFound = false;
-        if (f.getAnnotation(OVersion.class) != null) {
-          // RECORD ID
-          fieldVersions.put(currentClass, f);
-          vFound = true;
-        }
-        // JPA 1+ AVAILABLE?
-        else if (OObjectSerializerHelper.jpaVersionClass != null
-            && f.getAnnotation(OObjectSerializerHelper.jpaVersionClass) != null) {
-          // RECORD ID
-          fieldVersions.put(currentClass, f);
-          vFound = true;
-        }
-        if (vFound) {
-          // CHECK FOR TYPE
-          if (fieldType.isPrimitive())
-            OLogManager.instance().warn(OObjectSerializerHelper.class, "Field '%s' cannot be a literal to manage the Version",
-                f.toString());
-          else if (fieldType != String.class && fieldType != Object.class && !Number.class.isAssignableFrom(fieldType))
-            OLogManager.instance().warn(OObjectSerializerHelper.class, "Field '%s' cannot be managed as type: %s", f.toString(),
-                fieldType);
-        }
-
-        // JPA 1+ AVAILABLE?
-        if (OObjectSerializerHelper.jpaEmbeddedClass != null && f.getAnnotation(OObjectSerializerHelper.jpaEmbeddedClass) != null) {
-          List<String> classEmbeddedFields = embeddedFields.get(currentClass);
-          if (classEmbeddedFields == null)
-            classEmbeddedFields = new ArrayList<String>();
-          classEmbeddedFields.add(fieldName);
-          embeddedFields.put(currentClass, classEmbeddedFields);
-        }
+        registerCallbacks(currentClass);
 
       }
-
-      registerCallbacks(currentClass);
-
       String iClassName = iClass.getSimpleName();
       currentClass = currentClass.getSuperclass();
 
@@ -394,6 +471,36 @@ public class OObjectEntitySerializer {
     }
     if (ODatabaseRecordThreadLocal.INSTANCE.get() != null && !ODatabaseRecordThreadLocal.INSTANCE.get().isClosed())
       ODatabaseRecordThreadLocal.INSTANCE.get().getMetadata().getSchema().save();
+  }
+
+  protected static boolean checkCascadeDelete(OneToOne oneToOne) {
+    return oneToOne.orphanRemoval() || checkCascadeAnnotationAttribute(oneToOne.cascade());
+  }
+
+  protected static boolean checkCascadeDelete(OneToMany oneToMany) {
+    return oneToMany.orphanRemoval() || checkCascadeAnnotationAttribute(oneToMany.cascade());
+  }
+
+  protected static boolean checkCascadeDelete(ManyToMany manyToMany) {
+    return checkCascadeAnnotationAttribute(manyToMany.cascade());
+  }
+
+  protected static boolean checkCascadeAnnotationAttribute(CascadeType[] cascadeList) {
+    if (cascadeList == null || cascadeList.length <= 0)
+      return false;
+    for (CascadeType type : cascadeList) {
+      if (type.equals(CascadeType.ALL) || type.equals(CascadeType.REMOVE))
+        return true;
+    }
+    return false;
+  }
+
+  protected static void addCascadeDeleteField(Class<?> currentClass, final String fieldName) {
+    List<String> classCascadeDeleteFields = cascadeDeleteFields.get(currentClass);
+    if (classCascadeDeleteFields == null)
+      classCascadeDeleteFields = new ArrayList<String>();
+    classCascadeDeleteFields.add(fieldName);
+    cascadeDeleteFields.put(currentClass, classCascadeDeleteFields);
   }
 
   public static boolean isSerializedType(final Field iField) {
@@ -541,7 +648,7 @@ public class OObjectEntitySerializer {
     return fieldIds.containsValue(iField);
   }
 
-  protected static Field getIdField(final Class<?> iClass) {
+  public static Field getIdField(final Class<?> iClass) {
     if (!classes.contains(iClass)) {
       registerClass(iClass);
     }
@@ -591,7 +698,7 @@ public class OObjectEntitySerializer {
     return isVersionField;
   }
 
-  protected static Field getVersionField(final Class<?> iClass) {
+  public static Field getVersionField(final Class<?> iClass) {
     if (!classes.contains(iClass)) {
       registerClass(iClass);
     }

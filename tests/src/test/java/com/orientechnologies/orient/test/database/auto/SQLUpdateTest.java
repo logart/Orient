@@ -20,16 +20,16 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
-import org.testng.Assert;
-import org.testng.annotations.Parameters;
-import org.testng.annotations.Test;
-
 import com.orientechnologies.orient.core.db.document.ODatabaseDocument;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.sql.OCommandSQL;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
+
+import org.testng.Assert;
+import org.testng.annotations.Parameters;
+import org.testng.annotations.Test;
 
 @Test(groups = "sql-update", sequential = true)
 public class SQLUpdateTest {
@@ -291,5 +291,4 @@ public class SQLUpdateTest {
     Assert.assertEquals(expectedCity, oDoc.field("city"));
     Assert.assertEquals(expectedGender, oDoc.field("gender"));
   }
-
 }

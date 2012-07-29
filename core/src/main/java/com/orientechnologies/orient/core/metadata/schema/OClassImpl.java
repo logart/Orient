@@ -60,16 +60,17 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
   protected OSchemaShared                owner;
   protected String                       name;
   protected Class<?>                     javaClass;
-  protected final Map<String, OProperty> properties = new HashMap<String, OProperty>();
+  protected final Map<String, OProperty> properties    = new HashMap<String, OProperty>();
 
   protected int[]                        clusterIds;
   protected int                          defaultClusterId;
   protected OClassImpl                   superClass;
   protected int[]                        polymorphicClusterIds;
   protected List<OClass>                 baseClasses;
-  protected float                        overSize   = 0f;
+  protected float                        overSize      = 0f;
   protected String                       shortName;
-  protected boolean                      strictMode = false;                           // @SINCE v1.0rc8
+  protected boolean                      strictMode    = false;                             // @SINCE v1.0rc8
+  private static final Iterator<OClass>  EMPTY_CLASSES = new ArrayList<OClass>().iterator();
 
   /**
    * Constructor used in unmarshalling.
@@ -139,15 +140,22 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
    */
   public OClass setSuperClass(final OClass iSuperClass) {
     getDatabase().checkSecurity(ODatabaseSecurityResources.SCHEMA, ORole.PERMISSION_UPDATE);
-    final String cmd = String.format("alter class %s superclass %s", name, iSuperClass.getName());
+    final String cmd = String.format("alter class %s superclass %s", name, iSuperClass != null ? iSuperClass.getName() : null);
     getDatabase().command(new OCommandSQL(cmd)).execute();
     setSuperClassInternal(iSuperClass);
     return this;
   }
 
   public void setSuperClassInternal(final OClass iSuperClass) {
-    this.superClass = (OClassImpl) iSuperClass;
-    superClass.addBaseClasses(this);
+    final OClassImpl cls = (OClassImpl) iSuperClass;
+
+    if (cls != null)
+      cls.addBaseClasses(this);
+    else if (superClass != null)
+      // REMOVE THE PREVIOUS ONE
+      superClass.removeBaseClassInternal(this);
+
+    this.superClass = cls;
   }
 
   public String getName() {
@@ -291,6 +299,9 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
   }
 
   public void dropProperty(final String iPropertyName) {
+    if (getDatabase().getTransaction().isActive())
+      throw new IllegalStateException("Cannot drop a property inside a transaction");
+
     getDatabase().checkSecurity(ODatabaseSecurityResources.SCHEMA, ORole.PERMISSION_DELETE);
 
     final String lowerName = iPropertyName.toLowerCase();
@@ -311,6 +322,9 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
   }
 
   public void dropPropertyInternal(final String iPropertyName) {
+    if (getDatabase().getTransaction().isActive())
+      throw new IllegalStateException("Cannot drop a property inside a transaction");
+
     getDatabase().checkSecurity(ODatabaseSecurityResources.SCHEMA, ORole.PERMISSION_DELETE);
 
     final OProperty prop = properties.remove(iPropertyName.toLowerCase());
@@ -320,6 +334,9 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
   }
 
   protected OProperty addProperty(final String iPropertyName, final OType iType, final OType iLinkedType, final OClass iLinkedClass) {
+    if (getDatabase().getTransaction().isActive())
+      throw new IllegalStateException("Cannot create a new property inside a transaction");
+
     getDatabase().checkSecurity(ODatabaseSecurityResources.SCHEMA, ORole.PERMISSION_UPDATE);
 
     final String lowerName = iPropertyName.toLowerCase();
@@ -402,8 +419,7 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 
     try {
       document.field("name", name);
-      if (shortName != null)
-        document.field("shortName", shortName);
+      document.field("shortName", shortName);
       document.field("defaultClusterId", defaultClusterId);
       document.field("clusterIds", clusterIds);
       document.field("overSize", overSize);
@@ -417,8 +433,7 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
         document.field("properties", props, OType.EMBEDDEDSET);
       }
 
-      if (superClass != null)
-        document.field("superClass", superClass.getName());
+      document.field("superClass", superClass != null ? superClass.getName() : null);
 
     } finally {
       document.setInternalStatus(ORecordElement.STATUS.LOADED);
@@ -515,7 +530,7 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 
   public Iterator<OClass> getBaseClasses() {
     if (baseClasses == null || baseClasses.size() == 0)
-      return null;
+      return EMPTY_CLASSES;
 
     return baseClasses.iterator();
   }
@@ -766,16 +781,17 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
       throw new IllegalArgumentException("attribute is null");
 
     final String stringValue = iValue != null ? iValue.toString() : null;
+    final boolean isNull = stringValue == null || stringValue.equalsIgnoreCase("NULL");
 
     switch (attribute) {
     case NAME:
       setNameInternal(stringValue);
       break;
     case SHORTNAME:
-      setShortNameInternal(stringValue);
+      setShortNameInternal(isNull ? null : stringValue);
       break;
     case SUPERCLASS:
-      setSuperClassInternal(getDatabase().getMetadata().getSchema().getClass(stringValue));
+      setSuperClassInternal(isNull ? null : getDatabase().getMetadata().getSchema().getClass(stringValue));
       break;
     case OVERSIZE:
       setOverSizeInternal(Float.parseFloat(stringValue.replace(',', '.')));
@@ -858,7 +874,7 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
     boolean found;
     for (int i : iBaseClass.polymorphicClusterIds) {
       found = false;
-      for (int k : clusterIds) {
+      for (int k : polymorphicClusterIds) {
         if (i == k) {
           found = true;
           break;
@@ -917,6 +933,14 @@ public class OClassImpl extends ODocumentWrapperNoClass implements OClass {
 
   public OIndex<?> createIndex(final String iName, final String iType, final OProgressListener iProgressListener,
       final String... fields) {
+
+    try {
+      final INDEX_TYPE recognizedIdxType = INDEX_TYPE.valueOf(iType);
+      if (!recognizedIdxType.isAutomaticIndexable())
+        throw new IllegalArgumentException("Index type '" + iType + "' cannot be used as automatic index against properties");
+    } catch (IllegalArgumentException e) {
+      // IGNORE IT
+    }
 
     if (fields.length == 0) {
       throw new OIndexException("List of fields to index cannot be empty.");

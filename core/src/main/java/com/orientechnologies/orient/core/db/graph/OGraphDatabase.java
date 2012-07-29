@@ -127,13 +127,32 @@ public class OGraphDatabase extends ODatabaseDocumentTx {
     return createVertex(null);
   }
 
-  public ODocument createVertex(String iClassName) {
-    if (iClassName == null)
-      iClassName = VERTEX_CLASS_NAME;
-    else
-      checkVertexClass(iClassName);
+  public ODocument createVertex(final String iClassName) {
+    return createVertex(iClassName, (Object[]) null);
+  }
 
-    return new ODocument(iClassName).setOrdered(true);
+  @SuppressWarnings("unchecked")
+  public ODocument createVertex(final String iClassName, final Object... iFields) {
+    final OClass cls = checkVertexClass(iClassName);
+
+    final ODocument vertex = new ODocument(cls).setOrdered(true);
+
+    if (iFields != null)
+      // SET THE FIELDS
+      if (iFields != null)
+        if (iFields.length == 1) {
+          Object f = iFields[0];
+          if (f instanceof Map<?, ?>)
+            vertex.fields((Map<String, Object>) f);
+          else
+            throw new IllegalArgumentException(
+                "Invalid fields: expecting a pairs of fields as String,Object or a single Map<String,Object>, but found: " + f);
+        } else
+          // SET THE FIELDS
+          for (int i = 0; i < iFields.length; i += 2)
+            vertex.field(iFields[i].toString(), iFields[i + 1]);
+
+    return vertex;
   }
 
   public ODocument createEdge(final ORID iSourceVertexRid, final ORID iDestVertexRid) {
@@ -245,20 +264,38 @@ public class OGraphDatabase extends ODatabaseDocumentTx {
   }
 
   public ODocument createEdge(final ODocument iOutVertex, final ODocument iInVertex, final String iClassName) {
+    return createEdge(iOutVertex, iInVertex, iClassName, (Object[]) null);
+  }
+
+  @SuppressWarnings("unchecked")
+  public ODocument createEdge(final ODocument iOutVertex, final ODocument iInVertex, final String iClassName, Object... iFields) {
     if (iOutVertex == null)
       throw new IllegalArgumentException("iOutVertex is null");
 
     if (iInVertex == null)
       throw new IllegalArgumentException("iInVertex is null");
 
-    checkEdgeClass(iClassName);
+    final OClass cls = checkEdgeClass(iClassName);
 
     final boolean safeMode = beginBlock();
 
     try {
-      final ODocument edge = new ODocument(iClassName != null ? iClassName : EDGE_CLASS_NAME).setOrdered(true);
+      final ODocument edge = new ODocument(cls).setOrdered(true);
       edge.field(EDGE_FIELD_OUT, iOutVertex);
       edge.field(EDGE_FIELD_IN, iInVertex);
+
+      if (iFields != null)
+        if (iFields.length == 1) {
+          Object f = iFields[0];
+          if (f instanceof Map<?, ?>)
+            edge.fields((Map<String, Object>) f);
+          else
+            throw new IllegalArgumentException(
+                "Invalid fields: expecting a pairs of fields as String,Object or a single Map<String,Object>, but found: " + f);
+        } else
+          // SET THE FIELDS
+          for (int i = 0; i < iFields.length; i += 2)
+            edge.field(iFields[i].toString(), iFields[i + 1]);
 
       OMVRBTreeRIDSet out = ((OMVRBTreeRIDSet) iOutVertex.field(VERTEX_FIELD_OUT));
       if (out == null) {
@@ -273,7 +310,7 @@ public class OGraphDatabase extends ODatabaseDocumentTx {
         iInVertex.field(VERTEX_FIELD_IN, in);
       }
       in.add(edge);
-      
+
       edge.setDirty();
 
       if (safeMode) {
@@ -339,20 +376,22 @@ public class OGraphDatabase extends ODatabaseDocumentTx {
     if (iVertex1 != null && iVertex2 != null) {
       // CHECK OUT EDGES
       for (OIdentifiable e : getOutEdges(iVertex1)) {
-        final ODocument edge = (ODocument) e;
+        final ODocument edge = (ODocument) e.getRecord();
 
         if (checkEdge(edge, iLabels, iClassNames)) {
-          if (edge.<ODocument> field("in").equals(iVertex2))
+          final OIdentifiable in = edge.<ODocument> field("in");
+          if (in != null && in.equals(iVertex2))
             result.add(edge);
         }
       }
 
       // CHECK IN EDGES
       for (OIdentifiable e : getInEdges(iVertex1)) {
-        final ODocument edge = (ODocument) e;
+        final ODocument edge = (ODocument) e.getRecord();
 
         if (checkEdge(edge, iLabels, iClassNames)) {
-          if (edge.<ODocument> field("out").equals(iVertex2))
+          final OIdentifiable out = edge.<ODocument> field("out");
+          if (out != null && out.equals(iVertex2))
             result.add(edge);
         }
       }
@@ -543,8 +582,7 @@ public class OGraphDatabase extends ODatabaseDocumentTx {
   }
 
   public OClass createVertexType(final String iClassName, final String iSuperClassName) {
-    checkVertexClass(iSuperClassName);
-    return getMetadata().getSchema().createClass(iClassName, getMetadata().getSchema().getClass(iSuperClassName));
+    return getMetadata().getSchema().createClass(iClassName, checkVertexClass(iSuperClassName));
   }
 
   public OClass createVertexType(final String iClassName, final OClass iSuperClass) {
@@ -561,8 +599,7 @@ public class OGraphDatabase extends ODatabaseDocumentTx {
   }
 
   public OClass createEdgeType(final String iClassName, final String iSuperClassName) {
-    checkEdgeClass(iSuperClassName);
-    return getMetadata().getSchema().createClass(iClassName, getMetadata().getSchema().getClass(iSuperClassName));
+    return getMetadata().getSchema().createClass(iClassName, checkEdgeClass(iSuperClassName));
   }
 
   public OClass createEdgeType(final String iClassName, final OClass iSuperClass) {
@@ -643,19 +680,25 @@ public class OGraphDatabase extends ODatabaseDocumentTx {
   }
 
   public void checkVertexClass(final ODocument iVertex) {
+    // FORCE EARLY UNMARSHALLING
+    iVertex.deserializeFields();
+
     if (useCustomTypes && !iVertex.getSchemaClass().isSubClassOf(vertexBaseClass))
       throw new IllegalArgumentException("The document received is not a vertex. Found class '" + iVertex.getSchemaClass() + "'");
   }
 
-  public void checkVertexClass(final String iVertexTypeName) {
-    if (useCustomTypes && iVertexTypeName != null) {
-      final OClass cls = getMetadata().getSchema().getClass(iVertexTypeName);
-      if (cls == null)
-        throw new IllegalArgumentException("The class '" + iVertexTypeName + "' was not found");
+  public OClass checkVertexClass(final String iVertexTypeName) {
+    if (iVertexTypeName == null || !useCustomTypes)
+      return getVertexBaseClass();
 
-      if (!cls.isSubClassOf(vertexBaseClass))
-        throw new IllegalArgumentException("The class '" + iVertexTypeName + "' does not extend the vertex type");
-    }
+    final OClass cls = getMetadata().getSchema().getClass(iVertexTypeName);
+    if (cls == null)
+      throw new IllegalArgumentException("The class '" + iVertexTypeName + "' was not found");
+
+    if (!cls.isSubClassOf(vertexBaseClass))
+      throw new IllegalArgumentException("The class '" + iVertexTypeName + "' does not extend the vertex type");
+
+    return cls;
   }
 
   public void checkVertexClass(final OClass iVertexType) {
@@ -666,19 +709,25 @@ public class OGraphDatabase extends ODatabaseDocumentTx {
   }
 
   public void checkEdgeClass(final ODocument iEdge) {
+    // FORCE EARLY UNMARSHALLING
+    iEdge.deserializeFields();
+
     if (useCustomTypes && !iEdge.getSchemaClass().isSubClassOf(edgeBaseClass))
       throw new IllegalArgumentException("The document received is not an edge. Found class '" + iEdge.getSchemaClass() + "'");
   }
 
-  public void checkEdgeClass(final String iEdgeTypeName) {
-    if (useCustomTypes && iEdgeTypeName != null) {
-      final OClass cls = getMetadata().getSchema().getClass(iEdgeTypeName);
-      if (cls == null)
-        throw new IllegalArgumentException("The class '" + iEdgeTypeName + "' was not found");
+  public OClass checkEdgeClass(final String iEdgeTypeName) {
+    if (iEdgeTypeName == null || !useCustomTypes)
+      return getEdgeBaseClass();
 
-      if (!cls.isSubClassOf(edgeBaseClass))
-        throw new IllegalArgumentException("The class '" + iEdgeTypeName + "' does not extend the edge type");
-    }
+    final OClass cls = getMetadata().getSchema().getClass(iEdgeTypeName);
+    if (cls == null)
+      throw new IllegalArgumentException("The class '" + iEdgeTypeName + "' was not found");
+
+    if (!cls.isSubClassOf(edgeBaseClass))
+      throw new IllegalArgumentException("The class '" + iEdgeTypeName + "' does not extend the edge type");
+
+    return cls;
   }
 
   public void checkEdgeClass(final OClass iEdgeType) {

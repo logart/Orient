@@ -72,8 +72,8 @@ public class OPropertyListIndexDefinition extends OAbstractIndexDefinitionMultiV
     return values;
   }
 
-  public Object createSingleValue(final Object param) {
-    return OType.convert(param, keyType.getDefaultJavaType());
+  public Object createSingleValue(final Object... param) {
+    return OType.convert(param[0], keyType.getDefaultJavaType());
   }
 
   public void processChangeEvent(final OMultiValueChangeEvent<?, ?> changeEvent, final Map<Object, Integer> keysToAdd,

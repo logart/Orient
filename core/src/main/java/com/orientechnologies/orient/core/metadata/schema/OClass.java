@@ -27,6 +27,7 @@ import com.orientechnologies.orient.core.index.OIndex;
  * Schema class
  * 
  * @author Luca Garulli (l.garulli--at--orientechnologies.com)
+ * 
  */
 public interface OClass extends Comparable<OClass> {
   public static enum ATTRIBUTES {
@@ -34,7 +35,17 @@ public interface OClass extends Comparable<OClass> {
   }
 
   public static enum INDEX_TYPE {
-    UNIQUE, NOTUNIQUE, FULLTEXT, DICTIONARY, PROXY
+    UNIQUE(true), NOTUNIQUE(true), FULLTEXT(true), DICTIONARY(false), PROXY(true);
+
+    private final boolean automaticIndexable;
+
+    INDEX_TYPE(boolean iValue) {
+      automaticIndexable = iValue;
+    }
+
+    public boolean isAutomaticIndexable() {
+      return automaticIndexable;
+    }
   }
 
   public <T> T newInstance() throws InstantiationException, IllegalAccessException;
@@ -165,6 +176,7 @@ public interface OClass extends Comparable<OClass> {
    *          Database index name
    * @param iType
    *          Index type.
+   * 
    * @return Class index registered inside of given class ans associated with database index.
    */
   public OIndex<?> createIndex(String iName, INDEX_TYPE iType, String... fields);
@@ -179,6 +191,7 @@ public interface OClass extends Comparable<OClass> {
    *          Database index name
    * @param iType
    *          Index type.
+   * 
    * @return Class index registered inside of given class ans associated with database index.
    */
   public OIndex<?> createIndex(String iName, String iType, String... fields);
@@ -194,6 +207,7 @@ public interface OClass extends Comparable<OClass> {
    *          Index type.
    * @param iProgressListener
    *          Progress listener.
+   * 
    * @return Class index registered inside of given class ans associated with database index.
    */
   public OIndex<?> createIndex(String iName, INDEX_TYPE iType, OProgressListener iProgressListener, String... fields);
@@ -209,47 +223,62 @@ public interface OClass extends Comparable<OClass> {
    *          Index type.
    * @param iProgressListener
    *          Progress listener.
+   * 
    * @return Class index registered inside of given class ans associated with database index.
    */
   public OIndex<?> createIndex(String iName, String iType, OProgressListener iProgressListener, String... fields);
 
   /**
    * Returns list of indexes that contain passed in fields names as their first keys. Order of fields does not matter.
-   * <p/>
+   * 
    * All indexes sorted by their count of parameters in ascending order. If there are indexes for the given set of fields in super
    * class they will be taken into account.
    * 
+   * 
+   * 
    * @param fields
    *          Field names.
+   * 
    * @return list of indexes that contain passed in fields names as their first keys.
+   * 
    * @see com.orientechnologies.orient.core.index.OIndexDefinition#getParamCount()
    */
   public Set<OIndex<?>> getInvolvedIndexes(Collection<String> fields);
 
   /**
+   * 
+   * 
    * @param fields
    *          Field names.
    * @return <code>true</code> if given fields are contained as first key fields in class indexes.
+   * 
    * @see #getInvolvedIndexes(java.util.Collection)
    */
   public Set<OIndex<?>> getInvolvedIndexes(String... fields);
 
   /**
    * Returns list of indexes that contain passed in fields names as their first keys. Order of fields does not matter.
-   * <p/>
+   * 
    * Indexes that related only to the given class will be returned.
+   * 
+   * 
    * 
    * @param fields
    *          Field names.
+   * 
    * @return list of indexes that contain passed in fields names as their first keys.
+   * 
    * @see com.orientechnologies.orient.core.index.OIndexDefinition#getParamCount()
    */
   public Set<OIndex<?>> getClassInvolvedIndexes(Collection<String> fields);
 
   /**
+   * 
+   * 
    * @param fields
    *          Field names.
    * @return list of indexes that contain passed in fields names as their first keys.
+   * 
    * @see #getClassInvolvedIndexes(java.util.Collection)
    */
   public Set<OIndex<?>> getClassInvolvedIndexes(String... fields);
@@ -260,6 +289,7 @@ public interface OClass extends Comparable<OClass> {
    * 
    * @param fields
    *          Field names.
+   * 
    * @return <code>true</code> if given fields are contained as first key fields in class indexes.
    */
   public boolean areIndexed(Collection<String> fields);

@@ -23,17 +23,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.testng.Assert;
-import org.testng.annotations.Parameters;
-import org.testng.annotations.Test;
-
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 import com.orientechnologies.orient.object.db.OObjectDatabasePool;
 import com.orientechnologies.orient.object.db.OObjectDatabaseTx;
-import com.orientechnologies.orient.object.enhancement.OObjectEntitySerializer;
 import com.orientechnologies.orient.test.domain.base.EnumTest;
 import com.orientechnologies.orient.test.domain.base.JavaAttachDetachTestClass;
 import com.orientechnologies.orient.test.domain.business.Account;
@@ -41,6 +36,10 @@ import com.orientechnologies.orient.test.domain.business.Child;
 import com.orientechnologies.orient.test.domain.business.City;
 import com.orientechnologies.orient.test.domain.business.Country;
 import com.orientechnologies.orient.test.domain.whiz.Profile;
+
+import org.testng.Assert;
+import org.testng.annotations.Parameters;
+import org.testng.annotations.Test;
 
 @Test(groups = { "object" })
 public class ObjectDetachingTest {
@@ -329,7 +328,7 @@ public class ObjectDetachingTest {
     attach.enumMap = new HashMap<String, EnumTest>();
     attach.enumMap.put("1", EnumTest.ENUM2);
     attach.enumMap.put("2", EnumTest.ENUM3);
-    OObjectEntitySerializer.attach(attach, database);
+    database.attach(attach);
     ODocument doc = database.getRecordByUserObject(attach, false);
     Assert.assertEquals(doc.field("text"), "test");
     Assert.assertEquals(doc.field("numberSimple"), 12345);
@@ -362,7 +361,7 @@ public class ObjectDetachingTest {
 
     database = OObjectDatabasePool.global().acquire(url, "admin", "admin");
     JavaAttachDetachTestClass loadedJavaObj = (JavaAttachDetachTestClass) database.load(id);
-    OObjectEntitySerializer.detach(loadedJavaObj, database);
+    database.detach(loadedJavaObj);
     Assert.assertEquals(loadedJavaObj.text, "test");
     Assert.assertEquals(loadedJavaObj.numberSimple, 12345);
     Assert.assertEquals(loadedJavaObj.doubleSimple, 12.34d);

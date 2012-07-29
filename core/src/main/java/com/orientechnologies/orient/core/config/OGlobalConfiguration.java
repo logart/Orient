@@ -173,9 +173,7 @@ public enum OGlobalConfiguration {
   // FILE
   FILE_LOCK("file.lock", "Locks files when used. Default is false", boolean.class, false),
 
-  FILE_DEFRAG_STRATEGY(
-      "file.defrag.strategy",
-      "Strategy to recycle free space. 0 = Recycles the first hole with enough size: fast, 1 = recycles the best hole: better usage of space but slower",
+  FILE_DEFRAG_STRATEGY("file.defrag.strategy", "Strategy to recycle free space: 0 = synchronous defrag, 1 = asynchronous defrag, ",
       Integer.class, 0),
 
   FILE_DEFRAG_HOLE_MAX_DISTANCE(
@@ -254,7 +252,7 @@ public enum OGlobalConfiguration {
       Integer.class, 32736),
 
   NETWORK_BINARY_READ_RESPONSE_MAX_TIMES("network.binary.readResponse.maxTimes",
-      "Maximum times to wait until response will be read. Otherwise response will be dropped from chanel", Integer.class, 10),
+      "Maximum times to wait until response will be read. Otherwise response will be dropped from chanel", Integer.class, 20),
 
   NETWORK_BINARY_DEBUG("network.binary.debug", "Debug mode: print all data incoming on the binary channel", Boolean.class, false),
 
@@ -310,6 +308,9 @@ public enum OGlobalConfiguration {
 
   CLIENT_CHANNEL_MAX_POOL("client.channel.maxPool", "Maximum channel pool size", Integer.class, 5),
 
+  CLIENT_CONNECT_POOL_WAIT_TIMEOUT("client.connectionPool.waitTimeout",
+      "Maximum time which client should wait connection from the pool", Integer.class, 5000),
+
   CLIENT_DB_RELEASE_WAIT_TIMEOUT("client.channel.dbReleaseWaitTimeout",
       "Delay in ms. after which data modification command will be resent if DB was frozen", Integer.class, 10000),
 
@@ -338,8 +339,6 @@ public enum OGlobalConfiguration {
   static {
     readConfiguration();
     autoConfig();
-    if (ENVIRONMENT_DUMP_CFG_AT_STARTUP.getValueAsBoolean())
-      dumpConfiguration(System.out);
   }
 
   OGlobalConfiguration(final String iKey, final String iDescription, final Class<?> iType, final Object iDefValue,

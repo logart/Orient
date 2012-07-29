@@ -21,10 +21,9 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.util.concurrent.Callable;
 
-import com.orientechnologies.common.log.OLogManager;
-import com.orientechnologies.orient.core.Orient;
+import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
-import com.orientechnologies.orient.core.storage.OStorage;
+import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.server.OServerMain;
 import com.orientechnologies.orient.server.config.OServerUserConfiguration;
 import com.orientechnologies.orient.server.distributed.ODistributedAbstractPlugin;
@@ -52,13 +51,12 @@ public abstract class OAbstractDistributedTask<T> implements Callable<T>, Extern
 
   protected EXECUTION_MODE                  mode;
   protected STATUS                          status;
+  protected boolean                         inheritedDatabase;
 
   protected static OServerUserConfiguration replicatorUser;
   static {
     replicatorUser = OServerMain.server().getUser(ODistributedAbstractPlugin.REPLICATOR_USER);
   }
-
-  public abstract String getName();
 
   /**
    * Constructor used from unmarshalling.
@@ -88,6 +86,20 @@ public abstract class OAbstractDistributedTask<T> implements Callable<T>, Extern
     this.runId = getDistributedServerManager().getRunId();
     this.operationSerial = getDistributedServerManager().incrementDistributedSerial(databaseName);
   }
+
+  /**
+   * Handles conflict between local and remote execution results.
+   * 
+   * @param localResult
+   *          The result on local node
+   * @param remoteResult
+   *          the result on remote node
+   * @param remoteResult2
+   */
+  public void handleConflict(final String iRemoteNode, Object localResult, Object remoteResult) {
+  }
+
+  public abstract String getName();
 
   @Override
   public void writeExternal(final ObjectOutput out) throws IOException {
@@ -146,24 +158,13 @@ public abstract class OAbstractDistributedTask<T> implements Callable<T>, Extern
     this.nodeSource = nodeSource;
   }
 
-  protected OStorage getStorage() {
-    OStorage stg = Orient.instance().getStorage(databaseName);
-    if (stg == null) {
-      final String url = OServerMain.server().getStorageURL(databaseName);
+  public void setDatabaseName(String databaseName) {
+    this.databaseName = databaseName;
+  }
 
-      if (url == null) {
-        OLogManager.instance().error(this,
-            "DISTRIBUTED <- database '%s' is not configured on this server. Copy the database here to enable the replication",
-            databaseName);
-        return null;
-      }
-
-      stg = Orient.instance().loadStorage(url);
-    }
-
-    if (stg.isClosed())
-      stg.open(null, null, null);
-    return stg;
+  @Override
+  public String toString() {
+    return getName();
   }
 
   protected OStorageSynchronizer getDatabaseSynchronizer() {
@@ -174,21 +175,28 @@ public abstract class OAbstractDistributedTask<T> implements Callable<T>, Extern
     return (ODistributedServerManager) OServerMain.server().getVariable("ODistributedAbstractPlugin");
   }
 
-  public void setDatabaseName(String databaseName) {
-    this.databaseName = databaseName;
-  }
-
-  @Override
-  public String toString() {
-    return getName();
-  }
-
   protected void setAsCompleted(final OStorageSynchronizer dbSynchronizer, long operationLogOffset) throws IOException {
     dbSynchronizer.getLog().changeOperationStatus(operationLogOffset, null);
   }
 
-  protected ODatabaseDocumentTx getDatabase() {
+  protected ODatabaseDocumentTx openDatabase() {
+    inheritedDatabase = true;
+
+    final ODatabaseRecord db = ODatabaseRecordThreadLocal.INSTANCE.getIfDefined();
+    if (db != null && db.getName().equals(databaseName) && !db.isClosed()) {
+      if (db instanceof ODatabaseDocumentTx)
+        return (ODatabaseDocumentTx) db;
+      else if (db.getDatabaseOwner() instanceof ODatabaseDocumentTx)
+        return (ODatabaseDocumentTx) db.getDatabaseOwner();
+    }
+
+    inheritedDatabase = false;
     return (ODatabaseDocumentTx) OServerMain.server().openDatabase("document", databaseName, replicatorUser.name,
         replicatorUser.password);
+  }
+
+  protected void closeDatabase(final ODatabaseDocumentTx iDatabase) {
+    if (!inheritedDatabase)
+      iDatabase.close();
   }
 }

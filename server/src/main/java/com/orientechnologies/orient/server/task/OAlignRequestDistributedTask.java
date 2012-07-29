@@ -40,7 +40,7 @@ public class OAlignRequestDistributedTask extends OAbstractDistributedTask<Integ
 
   protected long             lastRunId;
   protected long             lastOperationId;
-  protected static final int OP_BUFFER        = 50;
+  protected static final int OP_BUFFER        = 150;
 
   public OAlignRequestDistributedTask() {
   }
@@ -64,6 +64,9 @@ public class OAlignRequestDistributedTask extends OAbstractDistributedTask<Integ
     final String localNode = dManager.getLocalNodeId();
 
     final OStorageSynchronizer synchronizer = getDatabaseSynchronizer();
+    if (synchronizer == null)
+      return 0;
+
     final ODatabaseJournal log = synchronizer.getLog();
 
     // GET THE DISTRIBUTED LOCK TO ALIGN THE DATABASE
@@ -78,6 +81,11 @@ public class OAlignRequestDistributedTask extends OAbstractDistributedTask<Integ
           final long pos = it.next();
 
           final OAbstractDistributedTask<?> operation = log.getOperation(pos);
+          if (operation == null) {
+            OLogManager.instance().warn(this, "DISTRIBUTED ->[%s/%s] skipped operation #%d.%d", nodeSource, databaseName,
+                lastRunId, lastOperationId);
+            continue;
+          }
 
           OLogManager.instance().warn(this, "DISTRIBUTED ->[%s/%s] operation %s", nodeSource, databaseName, operation);
 

@@ -15,10 +15,14 @@
  */
 package com.orientechnologies.orient.core.sql.operator;
 
-import com.orientechnologies.common.profiler.OProfiler;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+
 import com.orientechnologies.orient.core.command.OCommandContext;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORID;
+import com.orientechnologies.orient.core.index.OCompositeIndexDefinition;
 import com.orientechnologies.orient.core.index.OIndex;
 import com.orientechnologies.orient.core.index.OIndexDefinition;
 import com.orientechnologies.orient.core.index.OIndexDefinitionMultiValue;
@@ -30,10 +34,6 @@ import com.orientechnologies.orient.core.record.impl.ODocumentHelper;
 import com.orientechnologies.orient.core.sql.filter.OSQLFilterCondition;
 import com.orientechnologies.orient.core.sql.filter.OSQLFilterItemField;
 import com.orientechnologies.orient.core.sql.filter.OSQLFilterItemParameter;
-
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
 
 /**
  * EQUALS operator.
@@ -99,7 +99,7 @@ public class OQueryOperatorEquals extends OQueryOperatorEqualityNotNulls {
 
   @SuppressWarnings("unchecked")
   @Override
-  public Collection<OIdentifiable> executeIndexQuery(OIndex<?> index, List<Object> keyParams, int fetchLimit) {
+  public Object executeIndexQuery(OIndex<?> index, final INDEX_OPERATION_TYPE iOperationType, List<Object> keyParams, int fetchLimit) {
     final OIndexDefinition indexDefinition = index.getDefinition();
 
     final OIndexInternal<?> internalIndex = index.getInternal();
@@ -116,23 +116,34 @@ public class OQueryOperatorEquals extends OQueryOperatorEqualityNotNulls {
       if (key == null)
         return null;
 
-      final Object indexResult = index.get(key);
+      final Object indexResult;
+      if (iOperationType == INDEX_OPERATION_TYPE.GET)
+        indexResult = index.get(key);
+      else
+        indexResult = index.count(key);
+
       if (indexResult instanceof Collection)
         return (Collection<OIdentifiable>) indexResult;
 
-			if(indexResult == null)
-				return Collections.emptyList();
-			return  Collections.singletonList((OIdentifiable) indexResult);
-		} else {
+      if (indexResult == null)
+        return Collections.emptyList();
+      else if (indexResult instanceof Collection<?>)
+        return Collections.singletonList((OIdentifiable) indexResult);
+      else
+        return indexResult;
+
+    } else {
       // in case of composite keys several items can be returned in case of we perform search
       // using part of composite key stored in index.
 
-      final Object keyOne = indexDefinition.createValue(keyParams);
+      final OCompositeIndexDefinition compositeIndexDefinition = (OCompositeIndexDefinition) indexDefinition;
+
+      final Object keyOne = compositeIndexDefinition.createSingleValue(keyParams);
 
       if (keyOne == null)
         return null;
 
-      final Object keyTwo = indexDefinition.createValue(keyParams);
+      final Object keyTwo = compositeIndexDefinition.createSingleValue(keyParams);
 
       final Collection<OIdentifiable> result;
       if (fetchLimit > -1)
@@ -140,10 +151,7 @@ public class OQueryOperatorEquals extends OQueryOperatorEqualityNotNulls {
       else
         result = index.getValuesBetween(keyOne, true, keyTwo, true);
 
-      if (OProfiler.getInstance().isRecording()) {
-        OProfiler.getInstance().updateCounter("Query.compositeIndexUsage", 1);
-        OProfiler.getInstance().updateCounter("Query.compositeIndexUsage." + indexDefinition.getParamCount(), 1);
-      }
+      updateProfiler(index, keyParams, indexDefinition);
 
       return result;
     }

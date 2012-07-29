@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import com.orientechnologies.common.io.OIOException;
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.command.OCommandRequestInternal;
 import com.orientechnologies.orient.core.command.OCommandRequestText;
@@ -37,6 +38,7 @@ import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.db.raw.ODatabaseRaw;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecordTx;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
+import com.orientechnologies.orient.core.exception.OConfigurationException;
 import com.orientechnologies.orient.core.exception.OSecurityAccessException;
 import com.orientechnologies.orient.core.exception.OSecurityException;
 import com.orientechnologies.orient.core.exception.OStorageException;
@@ -66,8 +68,8 @@ import com.orientechnologies.orient.server.OClientConnection;
 import com.orientechnologies.orient.server.OClientConnectionManager;
 import com.orientechnologies.orient.server.OServer;
 import com.orientechnologies.orient.server.OServerMain;
-import com.orientechnologies.orient.server.config.OServerUserConfiguration;
 import com.orientechnologies.orient.server.distributed.ODistributedServerManager;
+import com.orientechnologies.orient.server.distributed.OStorageSynchronizer;
 import com.orientechnologies.orient.server.handler.OServerHandler;
 import com.orientechnologies.orient.server.handler.OServerHandlerHelper;
 import com.orientechnologies.orient.server.tx.OTransactionOptimisticProxy;
@@ -123,6 +125,11 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
       setDataCommandInfo("Listening");
       connection.data.commandDetail = "-";
       connection.data.lastCommandReceived = System.currentTimeMillis();
+    } else {
+      if (requestType != OChannelBinaryProtocol.REQUEST_DB_CLOSE && requestType != OChannelBinaryProtocol.REQUEST_SHUTDOWN) {
+        shutdown();
+        throw new OIOException("Found unknown session " + clientTxId);
+      }
     }
 
     OServerHandlerHelper.invokeHandlerCallbackOnBeforeClientRequest(connection, (byte) requestType);
@@ -581,6 +588,10 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
 
     final ODocument request = new ODocument(channel.readBytes());
 
+    final ODistributedServerManager dManager = server.getDistributedManager();
+    if (dManager == null)
+      throw new OConfigurationException("No distributed manager configured");
+
     ODocument response = null;
 
     final String operation = request.field("operation");
@@ -600,12 +611,8 @@ public class ONetworkProtocolBinary extends OBinaryNetworkProtocolAbstract {
       checkServerAccess("server.replication.resetJournal");
 
     } else if (operation.equals("getAllConflicts")) {
-      checkServerAccess("server.replication.getAllConflicts");
-
-      final OServerUserConfiguration replicatorUser = OServerMain.server().getUser("replicator");
-
-      final ODatabaseDocumentTx db = (ODatabaseDocumentTx) OServerMain.server().openDatabase(ODatabaseDocument.TYPE,
-          (String) request.field("db"), replicatorUser.name, replicatorUser.password);
+      final OStorageSynchronizer dbSynch = dManager.getDatabaseSynchronizer((String) request.field("db"));
+      response = dbSynch.getConflictResolver().getAllConflicts();
 
     }
 

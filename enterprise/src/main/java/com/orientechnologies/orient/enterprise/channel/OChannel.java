@@ -25,45 +25,46 @@ import com.orientechnologies.orient.core.config.OContextConfiguration;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 
 public abstract class OChannel extends OSharedResourceExternalTimeout {
-	public Socket				socket;
+  public Socket       socket;
 
-	public InputStream	inStream;
-	public OutputStream	outStream;
+  public InputStream  inStream;
+  public OutputStream outStream;
 
-	public int					socketBufferSize;
+  public int          socketBufferSize;
 
-	public OChannel(final Socket iSocket, final OContextConfiguration iConfig) throws IOException {
-		super(OGlobalConfiguration.NETWORK_LOCK_TIMEOUT.getValueAsInteger());
-		socket = iSocket;
-		socketBufferSize = iConfig.getValueAsInteger(OGlobalConfiguration.NETWORK_SOCKET_BUFFER_SIZE);
-	}
+  public OChannel(final Socket iSocket, final OContextConfiguration iConfig) throws IOException {
+    super(OGlobalConfiguration.NETWORK_LOCK_TIMEOUT.getValueAsInteger());
+    socket = iSocket;
+    socketBufferSize = iConfig.getValueAsInteger(OGlobalConfiguration.NETWORK_SOCKET_BUFFER_SIZE);
+    socket.setTcpNoDelay(true);
+  }
 
-	public void flush() throws IOException {
-		outStream.flush();
-	}
+  public void flush() throws IOException {
+    outStream.flush();
+  }
 
-	public void close() {
-		try {
-			if (socket != null)
-				socket.close();
-		} catch (IOException e) {
-		}
+  public void close() {
+    try {
+      if (socket != null)
+        socket.close();
+    } catch (IOException e) {
+    }
 
-		try {
-			if (inStream != null)
-				inStream.close();
-		} catch (IOException e) {
-		}
+    try {
+      if (inStream != null)
+        inStream.close();
+    } catch (IOException e) {
+    }
 
-		try {
-			if (outStream != null)
-				outStream.close();
-		} catch (IOException e) {
-		}
-	}
+    try {
+      if (outStream != null)
+        outStream.close();
+    } catch (IOException e) {
+    }
+  }
 
-	@Override
-	public String toString() {
-		return socket != null ? socket.getRemoteSocketAddress().toString() : "Not connected";
-	}
+  @Override
+  public String toString() {
+    return socket != null ? socket.getRemoteSocketAddress().toString() : "Not connected";
+  }
 }

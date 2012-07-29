@@ -279,7 +279,7 @@ public class OSchemaShared extends ODocumentWrapperNoClass implements OSchema, O
 
     for (int i = 0; i < iName.length(); ++i) {
       final char c = iName.charAt(i);
-      if (c == ':' || c == ',')
+      if (c == ':' || c == ',' || c == ' ')
         // INVALID CHARACTER
         return c;
     }
@@ -296,6 +296,9 @@ public class OSchemaShared extends ODocumentWrapperNoClass implements OSchema, O
    * @see com.orientechnologies.orient.core.metadata.schema.OSchema#dropClass(java.lang.String)
    */
   public void dropClass(final String iClassName) {
+    if (getDatabase().getTransaction().isActive())
+      throw new IllegalStateException("Cannot drop a class inside a transaction");
+
     if (iClassName == null)
       throw new IllegalArgumentException("Class name is null");
 
@@ -310,7 +313,7 @@ public class OSchemaShared extends ODocumentWrapperNoClass implements OSchema, O
       if (cls == null)
         throw new OSchemaException("Class " + iClassName + " was not found in current database");
 
-      if (cls.getBaseClasses() != null)
+      if (cls.getBaseClasses().hasNext())
         throw new OSchemaException("Class " + iClassName
             + " cannot be dropped because it has sub classes. Remove the dependencies before trying to drop it again");
 
@@ -327,6 +330,9 @@ public class OSchemaShared extends ODocumentWrapperNoClass implements OSchema, O
   }
 
   public void dropClassInternal(final String iClassName) {
+    if (getDatabase().getTransaction().isActive())
+      throw new IllegalStateException("Cannot drop a class inside a transaction");
+
     if (iClassName == null)
       throw new IllegalArgumentException("Class name is null");
 
@@ -341,7 +347,7 @@ public class OSchemaShared extends ODocumentWrapperNoClass implements OSchema, O
       if (cls == null)
         throw new OSchemaException("Class " + iClassName + " was not found in current database");
 
-      if (cls.getBaseClasses() != null)
+      if (cls.getBaseClasses().hasNext())
         throw new OSchemaException("Class " + iClassName
             + " cannot be dropped because it has sub classes. Remove the dependencies before trying to drop it again");
 

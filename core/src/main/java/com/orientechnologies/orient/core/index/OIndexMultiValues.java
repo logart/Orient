@@ -29,6 +29,7 @@ import com.orientechnologies.common.comparator.ODefaultComparator;
 import com.orientechnologies.common.listener.OProgressListener;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
+import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.serialization.serializer.stream.OStreamSerializerListRID;
@@ -56,6 +57,22 @@ public abstract class OIndexMultiValues extends OIndexMVRBTreeAbstract<Set<OIden
         return Collections.emptySet();
 
       return new HashSet<OIdentifiable>(values);
+
+    } finally {
+      releaseExclusiveLock();
+    }
+  }
+
+  public long count(final Object iKey) {
+    acquireExclusiveLock();
+    try {
+
+      final OMVRBTreeRIDSet values = (OMVRBTreeRIDSet) map.get(iKey);
+
+      if (values == null)
+        return 0;
+
+      return values.size();
 
     } finally {
       releaseExclusiveLock();
@@ -309,7 +326,6 @@ public abstract class OIndexMultiValues extends OIndexMVRBTreeAbstract<Set<OIden
     }
   }
 
-  @SuppressWarnings({ "rawtypes", "unchecked" })
   public Collection<OIdentifiable> getValues(final Collection<?> iKeys, final int maxValuesToFetch) {
     final List<Object> sortedKeys = new ArrayList<Object>(iKeys);
     Collections.sort(sortedKeys, ODefaultComparator.INSTANCE);
@@ -432,6 +448,13 @@ public abstract class OIndexMultiValues extends OIndexMVRBTreeAbstract<Set<OIden
   }
 
   public Collection<ODocument> getEntriesBetween(Object iRangeFrom, Object iRangeTo, boolean iInclusive, int maxEntriesToFetch) {
+
+    final OType[] types = getDefinition().getTypes();
+    if (types.length == 1) {
+      iRangeFrom = OType.convert(iRangeFrom, types[0].getDefaultJavaType());
+      iRangeTo = OType.convert(iRangeTo, types[0].getDefaultJavaType());
+    }
+
     acquireExclusiveLock();
 
     try {
@@ -495,7 +518,6 @@ public abstract class OIndexMultiValues extends OIndexMVRBTreeAbstract<Set<OIden
 
   }
 
-  @SuppressWarnings({ "rawtypes", "unchecked" })
   public Collection<ODocument> getEntries(Collection<?> iKeys, int maxEntriesToFetch) {
     final List<Object> sortedKeys = new ArrayList<Object>(iKeys);
     Collections.sort(sortedKeys, ODefaultComparator.INSTANCE);
