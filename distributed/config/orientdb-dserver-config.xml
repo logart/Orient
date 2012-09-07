@@ -2,7 +2,7 @@
 <orient-server>
 	<handlers>
 		<!-- CLUSTER PLUGIN, TO TURN ON SET THE 'ENABLED' PARAMETER TO 'true' -->
-		<handler class="com.orientechnologies.orient.server.hazelcast.OHazelcastPlugin">
+		<handler class="com.orientechnologies.orient.server.hazelcast.OAutoshardingPlugin">
 			<parameters>
 				<!-- <parameter name="alias" value="europe1" /> -->
 				<parameter name="enabled" value="true" />
@@ -68,8 +68,11 @@
 	<storages>
 		<!-- Default in-memory storage. Data are not saved permanently. -->
 		<storage path="memory:temp" name="temp" userName="admin" userPassword="admin" loaded-at-startup="true" />
+		<storage path="local:distributedStorage" name="distributedStorage" userName="admin" userPassword="admin" loaded-at-startup="true" />
 	</storages>
 	<users>
+        <user resources="*" password="root" name="root"/>
+        <user resources="*" password="replicator" name="replicator"/>
 	</users>
 	<properties>
 		<!-- Uses the Hazelcast's distributed cache as 2nd level cache -->

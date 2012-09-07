@@ -63,13 +63,14 @@ public class OTransactionNoTx extends OTransactionAbstract {
 
   /**
    * Update the record.
-   * 
+   *
+   * @param iForceCreate
    * @param iCallback
    */
-  public void saveRecord(final ORecordInternal<?> iRecord, final String iClusterName, final OPERATION_MODE iMode,
-      final ORecordCallback<? extends Number> iCallback) {
+  public void saveRecord( final ORecordInternal<?> iRecord, final String iClusterName, final OPERATION_MODE iMode,
+                          boolean iForceCreate, final ORecordCallback<? extends Number> iCallback ) {
     try {
-      database.executeSaveRecord(iRecord, iClusterName, iRecord.getVersion(), iRecord.getRecordType(), true, iMode, iCallback);
+      database.executeSaveRecord(iRecord, iClusterName, iRecord.getVersion(), iRecord.getRecordType(), true, iMode, iForceCreate, iCallback);
     } catch (Exception e) {
       // REMOVE IT FROM THE CACHE TO AVOID DIRTY RECORDS
       final ORecordId rid = (ORecordId) iRecord.getIdentity();

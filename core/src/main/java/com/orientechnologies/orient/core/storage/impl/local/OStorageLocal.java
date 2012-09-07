@@ -56,6 +56,7 @@ import com.orientechnologies.orient.core.storage.OClusterEntryIterator;
 import com.orientechnologies.orient.core.storage.OPhysicalPosition;
 import com.orientechnologies.orient.core.storage.ORawBuffer;
 import com.orientechnologies.orient.core.storage.ORecordCallback;
+import com.orientechnologies.orient.core.storage.ORecordDuplicatedException;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.OStorageEmbedded;
 import com.orientechnologies.orient.core.storage.fs.OMMapManagerLocator;
@@ -1488,43 +1489,38 @@ public class OStorageLocal extends OStorageEmbedded {
     try {
       final OPhysicalPosition ppos = new OPhysicalPosition(-1, -1, iRecordType);
 
-      if (!iClusterSegment.generatePositionBeforeCreation()) {
-        iClusterSegment.addPhysicalPosition(ppos);
-        iRid.clusterPosition = ppos.clusterPosition;
+      if ( iClusterSegment.generatePositionBeforeCreation() ) {
+        if (iRid.isNew()) {
+          iRid.clusterPosition = positionGenerator++;
+        } //otherwise it has been already generated
       } else {
-        // iRid.clusterPosition = positionGenerator.nextLong(Long.MAX_VALUE);
-        iRid.clusterPosition = positionGenerator++;
+        iClusterSegment.addPhysicalPosition( ppos );
+        iRid.clusterPosition = ppos.clusterPosition;
       }
 
-      lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
+      lockManager.acquireLock( Thread.currentThread(), iRid, LOCK.EXCLUSIVE );
       try {
 
         ppos.dataSegmentId = iDataSegment.getId();
         ppos.dataSegmentPos = iDataSegment.addRecord(iRid, iContent);
 
-        if (!iClusterSegment.generatePositionBeforeCreation()) {
-          // UPDATE THE POSITION IN CLUSTER WITH THE POSITION OF RECORD IN DATA
-          iClusterSegment.updateDataSegmentPosition(ppos.clusterPosition, ppos.dataSegmentId, ppos.dataSegmentPos);
-
-          if (iRecordVersion > -1 && iRecordVersion > ppos.recordVersion) {
-            // OVERWRITE THE VERSION
-            iClusterSegment.updateVersion(iRid.clusterPosition, iRecordVersion);
-            ppos.recordVersion = iRecordVersion;
-          }
-        } else {
-          if (iRecordVersion > -1 && iRecordVersion > ppos.recordVersion)
+        if ( iClusterSegment.generatePositionBeforeCreation() ) {
+          if ( iRecordVersion > -1 && iRecordVersion > ppos.recordVersion )
             ppos.recordVersion = iRecordVersion;
 
           ppos.clusterPosition = iRid.clusterPosition;
-          while (!iClusterSegment.addPhysicalPosition(ppos)) {
-            // iRid.clusterPosition = positionGenerator.nextLong(Long.MAX_VALUE);
-            lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
+          if ( !iClusterSegment.addPhysicalPosition( ppos ) ) {
+            iDataSegment.deleteRecord( ppos.dataSegmentPos );
+            throw new ORecordDuplicatedException( "Record with rid=" + iRid.toString() + " already exists in the database", iRid );
+          }
+        } else {
+          // UPDATE THE POSITION IN CLUSTER WITH THE POSITION OF RECORD IN DATA
+          iClusterSegment.updateDataSegmentPosition( ppos.clusterPosition, ppos.dataSegmentId, ppos.dataSegmentPos );
 
-            iRid.clusterPosition = positionGenerator++;
-            ppos.clusterPosition = iRid.clusterPosition;
-
-            lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
-            iDataSegment.setRecordRid(ppos.dataSegmentPos, iRid);
+          if ( iRecordVersion > -1 && iRecordVersion > ppos.recordVersion ) {
+            // OVERWRITE THE VERSION
+            iClusterSegment.updateVersion( iRid.clusterPosition, iRecordVersion );
+            ppos.recordVersion = iRecordVersion;
           }
         }
 
@@ -1544,7 +1540,6 @@ public class OStorageLocal extends OStorageEmbedded {
     }
   }
 
-  @Override
   public void changeRecordIdentity(ORID originalId, ORID newId) {
     final long timer = Orient.instance().getProfiler().startChrono();
 
@@ -1565,7 +1560,6 @@ public class OStorageLocal extends OStorageEmbedded {
     }
   }
 
-  @Override
   public boolean isLHClustersAreUsed() {
     return OGlobalConfiguration.USE_LHPEPS_CLUSTER.getValueAsBoolean();
   }

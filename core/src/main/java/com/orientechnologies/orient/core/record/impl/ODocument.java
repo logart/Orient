@@ -119,7 +119,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
    */
   @Deprecated
   public ODocument(final ODatabaseRecord iDatabase, final ORID iRID) {
-    this(iRID);
+    this( iRID );
   }
 
   /**
@@ -155,7 +155,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
    *          Record Id
    */
   public ODocument(final String iClassName, final ORID iRID) {
-    this(iClassName);
+    this( iClassName );
     _recordId = (ORecordId) iRID;
     _dirty = false;
     _status = STATUS.NOT_LOADED;
@@ -177,7 +177,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
    *          Class name
    */
   public ODocument(final String iClassName) {
-    setClassName(iClassName);
+    setClassName( iClassName );
     setup();
   }
 
@@ -225,7 +225,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
    * Fills a document passing the field names/values pair, where the first pair is mandatory.
    */
   public ODocument(final String iFieldName, final Object iFieldValue, final Object... iFields) {
-    this(iFields);
+    this( iFields );
     field(iFieldName, iFieldValue);
   }
 
@@ -475,7 +475,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
     if (_fieldValues == null || _fieldValues.size() == 0)
       return EMPTY_STRINGS;
 
-    return _fieldValues.keySet().toArray(new String[_fieldValues.keySet().size()]);
+    return _fieldValues.keySet().toArray( new String[_fieldValues.keySet().size()] );
   }
 
   /**
@@ -605,7 +605,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
    * Fills a document passing the field names/values.
    */
   public ODocument fields(final String iFieldName, final Object iFieldValue, final Object... iFields) {
-    field(iFieldName, iFieldValue);
+    field( iFieldName, iFieldValue );
     if (iFields != null && iFields.length > 0)
       for (int i = 0; i < iFields.length; i += 2) {
         field(iFields[i].toString(), iFields[i + 1]);
@@ -841,7 +841,7 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
     if (_fieldCollectionChangeTimeLines != null)
       dirtyFields.addAll(_fieldCollectionChangeTimeLines.keySet());
 
-    return dirtyFields.toArray(new String[dirtyFields.size()]);
+    return dirtyFields.toArray( new String[dirtyFields.size()] );
   }
 
   /**
@@ -1238,19 +1238,29 @@ public class ODocument extends ORecordSchemaAwareAbstract<Object> implements Ite
 
   @Override
   public ODocument save() {
-    if (_clazz != null)
-      return save(getDatabase().getClusterNameById(_clazz.getDefaultClusterId()));
-
-    convertAllMultiValuesToTrackedVersions();
-    validate();
-    return (ODocument) super.save();
+    return save( false );
   }
 
   @Override
   public ODocument save(final String iClusterName) {
+    return save(iClusterName, false);
+  }
+
+  @Override
+  public ODocument save( boolean forceCreate ) {
+    if (_clazz != null)
+      return save(getDatabase().getClusterNameById(_clazz.getDefaultClusterId()), forceCreate);
+
     convertAllMultiValuesToTrackedVersions();
     validate();
-    return (ODocument) super.save(iClusterName);
+    return (ODocument) super.save(forceCreate);
+  }
+
+  @Override
+  public ODocument save(final String iClusterName, boolean forceCreate ) {
+    convertAllMultiValuesToTrackedVersions();
+    validate();
+    return (ODocument) super.save(iClusterName, forceCreate);
   }
 
   /*

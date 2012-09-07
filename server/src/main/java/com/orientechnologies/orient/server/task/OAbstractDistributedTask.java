@@ -94,7 +94,7 @@ public abstract class OAbstractDistributedTask<T> implements Callable<T>, Extern
    *          The result on local node
    * @param remoteResult
    *          the result on remote node
-   * @param remoteResult2
+   * @param iRemoteNode
    */
   public void handleConflict(final String iRemoteNode, Object localResult, Object remoteResult) {
   }

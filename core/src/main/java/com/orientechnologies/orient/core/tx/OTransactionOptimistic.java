@@ -185,8 +185,8 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
     addRecord(iRecord, ORecordOperation.DELETED, null);
   }
 
-  public void saveRecord(final ORecordInternal<?> iRecord, final String iClusterName, final OPERATION_MODE iMode,
-      final ORecordCallback<? extends Number> iCallback) {
+  public void saveRecord( final ORecordInternal<?> iRecord, final String iClusterName, final OPERATION_MODE iMode,
+                          boolean iForceCreate, final ORecordCallback<? extends Number> iCallback ) {
     if (iRecord == null)
       return;
     addRecord(iRecord, iRecord.getIdentity().isValid() ? ORecordOperation.UPDATED : ORecordOperation.CREATED, iClusterName);
@@ -220,7 +220,7 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
         case ORecordOperation.CREATED:
         case ORecordOperation.UPDATED:
           database.executeSaveRecord(iRecord, iClusterName, iRecord.getVersion(), iRecord.getRecordType(), false,
-              OPERATION_MODE.SYNCHRONOUS, null);
+              OPERATION_MODE.SYNCHRONOUS, false, null);
           break;
         case ORecordOperation.DELETED:
           database.executeDeleteRecord(iRecord, iRecord.getVersion(), false, false, OPERATION_MODE.SYNCHRONOUS);

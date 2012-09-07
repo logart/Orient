@@ -237,14 +237,14 @@ public abstract class ODatabaseRecordWrapperAbstract<DB extends ODatabaseRecord>
     return (RET) underlying.save(iRecord, iClusterName);
   }
 
-  public <RET extends ORecordInternal<?>> RET save(final ORecordInternal<?> iRecord, final OPERATION_MODE iMode,
-      final ORecordCallback<? extends Number> iCallback) {
-    return (RET) underlying.save(iRecord, iMode, iCallback);
+  public <RET extends ORecordInternal<?>> RET save( final ORecordInternal<?> iRecord, final OPERATION_MODE iMode,
+                                                    boolean iForceCreate, final ORecordCallback<? extends Number> iCallback ) {
+    return (RET) underlying.save(iRecord, iMode, iForceCreate, iCallback);
   }
 
-  public <RET extends ORecordInternal<?>> RET save(final ORecordInternal<?> iRecord, final String iClusterName,
-      final OPERATION_MODE iMode, final ORecordCallback<? extends Number> iCallback) {
-    return (RET) underlying.save(iRecord, iClusterName, iMode, iCallback);
+  public <RET extends ORecordInternal<?>> RET save( final ORecordInternal<?> iRecord, final String iClusterName,
+                                                    final OPERATION_MODE iMode, boolean iForceCreate, final ORecordCallback<? extends Number> iCallback ) {
+    return (RET) underlying.save(iRecord, iClusterName, iMode, iForceCreate, iCallback);
   }
 
   public void setInternal(final ATTRIBUTES attribute, final Object iValue) {

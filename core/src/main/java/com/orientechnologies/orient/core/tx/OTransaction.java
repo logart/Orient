@@ -48,8 +48,8 @@ public interface OTransaction {
 
   public ORecordInternal<?> loadRecord(ORID iRid, ORecordInternal<?> iRecord, String iFetchPlan);
 
-  public void saveRecord(ORecordInternal<?> iContent, String iClusterName, OPERATION_MODE iMode,
-      ORecordCallback<? extends Number> iCallback);
+  public void saveRecord( ORecordInternal<?> iContent, String iClusterName, OPERATION_MODE iMode,
+                          boolean iForceCreate, ORecordCallback<? extends Number> iCallback );
 
   public void deleteRecord(ORecordInternal<?> iRecord, OPERATION_MODE iMode);
 

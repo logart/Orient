@@ -200,28 +200,28 @@ public class ODatabaseRecordTx extends ODatabaseRecordAbstract {
 
 	@SuppressWarnings("unchecked")
   @Override
-	public <RET extends ORecordInternal<?>> RET save(final ORecordInternal<?> iContent, final OPERATION_MODE iMode,
-			final ORecordCallback<? extends Number> iCallback) {
-		return (RET) save(iContent, (String) null, iMode, iCallback);
+	public <RET extends ORecordInternal<?>> RET save( final ORecordInternal<?> iContent, final OPERATION_MODE iMode,
+                                                    boolean iForceCreate, final ORecordCallback<? extends Number> iCallback ) {
+		return (RET) save(iContent, (String) null, iMode, iForceCreate, iCallback);
 	}
 
   @SuppressWarnings("unchecked")
 	@Override
 	public <RET extends ORecordInternal<?>> RET save(final ORecordInternal<?> iContent) {
-		return (RET) save(iContent, (String) null, OPERATION_MODE.SYNCHRONOUS, null);
+		return (RET) save(iContent, (String) null, OPERATION_MODE.SYNCHRONOUS, false, null);
 	}
 
   @SuppressWarnings("unchecked")
 	@Override
 	public <RET extends ORecordInternal<?>> RET save(final ORecordInternal<?> iContent, final String iClusterName) {
-		return (RET) save(iContent, iClusterName, OPERATION_MODE.SYNCHRONOUS, null);
+		return (RET) save(iContent, iClusterName, OPERATION_MODE.SYNCHRONOUS, false, null);
 	}
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public <RET extends ORecordInternal<?>> RET save(final ORecordInternal<?> iContent, final String iClusterName,
-			final OPERATION_MODE iMode, ORecordCallback<? extends Number> iCallback) {
-		currentTx.saveRecord(iContent, iClusterName, iMode, iCallback);
+	public <RET extends ORecordInternal<?>> RET save( final ORecordInternal<?> iContent, final String iClusterName,
+                                                    final OPERATION_MODE iMode, boolean iForceCreate, ORecordCallback<? extends Number> iCallback ) {
+		currentTx.saveRecord(iContent, iClusterName, iMode, iForceCreate, iCallback);
 		return (RET) iContent;
 	}
 

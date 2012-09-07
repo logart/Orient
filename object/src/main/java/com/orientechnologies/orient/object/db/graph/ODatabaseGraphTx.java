@@ -174,9 +174,9 @@ public class ODatabaseGraphTx extends ODatabasePojoAbstract<OGraphElement> {
 		return (RET) iObject;
 	}
 
-	public <RET extends OGraphElement> RET save(final OGraphElement iObject, final OPERATION_MODE iMode,
-			final ORecordCallback<? extends Number> iCallback) {
-		underlying.save(iObject.getDocument(), iMode, iCallback);
+	public <RET extends OGraphElement> RET save( final OGraphElement iObject, final OPERATION_MODE iMode,
+                                               boolean iForceCreate, final ORecordCallback<? extends Number> iCallback ) {
+		underlying.save(iObject.getDocument(), iMode, iForceCreate, iCallback);
 		return (RET) iObject;
 	}
 
@@ -185,9 +185,9 @@ public class ODatabaseGraphTx extends ODatabasePojoAbstract<OGraphElement> {
 		return (RET) iObject;
 	}
 
-	public <RET extends OGraphElement> RET save(final OGraphElement iObject, final String iClusterName, final OPERATION_MODE iMode,
-			final ORecordCallback<? extends Number> iCallback) {
-		underlying.save(iObject.getDocument(), iClusterName, iMode, iCallback);
+	public <RET extends OGraphElement> RET save( final OGraphElement iObject, final String iClusterName, final OPERATION_MODE iMode,
+                                               boolean iForceCreate, final ORecordCallback<? extends Number> iCallback ) {
+		underlying.save(iObject.getDocument(), iClusterName, iMode, iForceCreate, iCallback);
 		return (RET) iObject;
 	}
 

@@ -270,4 +270,71 @@
          includes="orientdb-graphed-*/" excludes="**/*.log.*"/>
   </target>
 
+    <target name="distributed-test">
+        <echo>STARTING DISTRIBUTED TESTS...</echo>
+
+
+        <copy todir="../target/inst1">
+            <fileset dir="../${orient.path}"/>
+        </copy>
+        <copy todir="../target/inst2">
+            <fileset dir="../${orient.path}"/>
+        </copy>
+
+        <exec dir="../target/inst1/bin" executable="cmd" spawn="true" osfamily="windows">
+            <env key="JAVA_OPTS"
+                 value="-Dcom.sun.management.jmxremote.port=4321 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"/>
+            <arg value="/c start dserver.bat"/>
+        </exec>
+
+        <exec dir="../target/inst1/bin" executable="sh" spawn="true" osfamily="unix">
+            <env key="JAVA_OPTS"
+                 value="-Dcom.sun.management.jmxremote.port=4321 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"/>
+            <arg value="./dserver.sh"/>
+        </exec>
+
+        <echo>WAITING FOR SERVER STARTUP...</echo>
+        <sleep seconds="5"/>
+
+        <exec dir="../target/inst2/bin" executable="cmd" spawn="true" osfamily="windows">
+            <env key="JAVA_OPTS"
+                 value="-Dcom.sun.management.jmxremote.port=4322 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"/>
+            <arg value="/c start dserver.bat"/>
+        </exec>
+
+        <exec dir="../target/inst2/bin" executable="sh" spawn="true" osfamily="unix">
+            <env key="JAVA_OPTS"
+                 value="-Dcom.sun.management.jmxremote.port=4322 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"/>
+            <arg value="./dserver.sh"/>
+        </exec>
+
+        <echo>WAITING FOR ANOTHER SERVER...</echo>
+        <sleep seconds="5"/>
+
+        <!--<echo>EXECUTING TESTS USING SHARDED DATABASE: remote:localhost/demo</echo>-->
+
+        <!--<testng outputDir="target/test-output" haltOnFailure="true">-->
+            <!--<classpath>-->
+                <!--<pathelement location="${project.build}"/>-->
+                <!--<fileset dir="${global.lib}">-->
+                    <!--<include name="*.jar"/>-->
+                <!--</fileset>-->
+            <!--</classpath>-->
+            <!--<xmlfileset dir="${project.build}/com/orientechnologies/orient/test/database/auto"-->
+                        <!--includes="remote-test-db-from-scratch.xml"/>-->
+        <!--</testng>-->
+
+        <!--<echo>SHUTDOWNING THE SERVER...</echo>-->
+
+        <!--<exec dir="../${orient.path}/bin" executable="cmd" spawn="true" osfamily="windows">-->
+            <!--<arg value="/c shutdown.bat"/>-->
+        <!--</exec>-->
+
+        <!--<exec dir="../${orient.path}/bin" executable="sh" spawn="true" osfamily="unix">-->
+            <!--<arg value="./shutdown.sh"/>-->
+        <!--</exec>-->
+
+        <!--<sleep seconds="10"/>-->
+    </target>
+
 </project>
