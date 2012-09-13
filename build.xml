@@ -274,20 +274,20 @@
         <echo>STARTING DISTRIBUTED TESTS...</echo>
 
 
-        <copy todir="../target/inst1">
-            <fileset dir="../${orient.path}"/>
+        <copy todir="target/inst1">
+            <fileset dir="${db.release}"/>
         </copy>
-        <copy todir="../target/inst2">
-            <fileset dir="../${orient.path}"/>
+        <copy todir="target/inst2">
+            <fileset dir="${db.release}"/>
         </copy>
 
-        <exec dir="../target/inst1/bin" executable="cmd" spawn="true" osfamily="windows">
+        <exec dir="target/inst1/bin" executable="cmd" spawn="true" osfamily="windows">
             <env key="JAVA_OPTS"
                  value="-Dcom.sun.management.jmxremote.port=4321 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"/>
             <arg value="/c start dserver.bat"/>
         </exec>
 
-        <exec dir="../target/inst1/bin" executable="sh" spawn="true" osfamily="unix">
+        <exec dir="target/inst1/bin" executable="sh" spawn="true" osfamily="unix">
             <env key="JAVA_OPTS"
                  value="-Dcom.sun.management.jmxremote.port=4321 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"/>
             <arg value="./dserver.sh"/>
@@ -296,13 +296,13 @@
         <echo>WAITING FOR SERVER STARTUP...</echo>
         <sleep seconds="5"/>
 
-        <exec dir="../target/inst2/bin" executable="cmd" spawn="true" osfamily="windows">
+        <exec dir="target/inst2/bin" executable="cmd" spawn="true" osfamily="windows">
             <env key="JAVA_OPTS"
                  value="-Dcom.sun.management.jmxremote.port=4322 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"/>
             <arg value="/c start dserver.bat"/>
         </exec>
 
-        <exec dir="../target/inst2/bin" executable="sh" spawn="true" osfamily="unix">
+        <exec dir="target/inst2/bin" executable="sh" spawn="true" osfamily="unix">
             <env key="JAVA_OPTS"
                  value="-Dcom.sun.management.jmxremote.port=4322 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"/>
             <arg value="./dserver.sh"/>

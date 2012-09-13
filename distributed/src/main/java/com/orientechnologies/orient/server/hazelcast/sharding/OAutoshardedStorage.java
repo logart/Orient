@@ -3,11 +3,11 @@ package com.orientechnologies.orient.server.hazelcast.sharding;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.Callable;
 
 import com.orientechnologies.common.log.OLogManager;
+import com.orientechnologies.common.util.MersenneTwisterFast;
 import com.orientechnologies.orient.core.cache.OLevel2RecordCache;
 import com.orientechnologies.orient.core.command.OCommandRequestText;
 import com.orientechnologies.orient.core.config.OStorageConfiguration;
@@ -32,12 +32,13 @@ import com.orientechnologies.orient.server.hazelcast.sharding.hazelcast.ServerIn
  * @since 8/28/12
  */
 public class OAutoshardedStorage implements OStorage {
-  protected OStorageEmbedded   wrapped;
-  private final ServerInstance serverInstance;
+  protected OStorageEmbedded        wrapped;
+  private final ServerInstance      serverInstance;
 
   // TODO create generator for each cluster
-  private final Random         idGenerator           = new Random();
-  private final Set<Integer>   undistributedClusters = new HashSet<Integer>();
+  private final MersenneTwisterFast positionGenerator     = new MersenneTwisterFast();
+
+  private final Set<Integer>        undistributedClusters = new HashSet<Integer>();
 
   public OAutoshardedStorage(ServerInstance serverInstance, OStorageEmbedded wrapped) {
     this.serverInstance = serverInstance;
@@ -64,13 +65,13 @@ public class OAutoshardedStorage implements OStorage {
     int retryCount = 0;
     while (true) {
       try {
-        iRecordId.clusterPosition = Math.abs(idGenerator.nextLong());
+        iRecordId.clusterPosition = Math.abs(positionGenerator.nextLong());
 
         final ODHTNode node = serverInstance.findSuccessor(iRecordId.clusterPosition);
         result = node.createRecord(wrapped.getName(), iRecordId, iContent, iRecordVersion, iRecordType);
         break;
       } catch (ORecordDuplicatedException e) {
-        if ( retryCount > 10 ) {
+        if (retryCount > 10) {
           throw e;
         }
         retryCount++;
@@ -100,12 +101,9 @@ public class OAutoshardedStorage implements OStorage {
       return wrapped.updateRecord(iRecordId, iContent, iVersion, iRecordType, iMode, iCallback);
     }
 
-    iRecordId.clusterPosition = Math.abs(idGenerator.nextLong());
-
     final ODHTNode node = serverInstance.findSuccessor(iRecordId.clusterPosition);
-    int result = node.updateRecord(wrapped.getName(), iRecordId, iContent, iVersion, iRecordType);
 
-    return result;
+    return node.updateRecord(wrapped.getName(), iRecordId, iContent, iVersion, iRecordType);
   }
 
   @Override
@@ -115,12 +113,9 @@ public class OAutoshardedStorage implements OStorage {
       return wrapped.deleteRecord(iRecordId, iVersion, iMode, iCallback);
     }
 
-    iRecordId.clusterPosition = Math.abs(idGenerator.nextLong());
-
     final ODHTNode node = serverInstance.findSuccessor(iRecordId.clusterPosition);
-    boolean result = node.deleteRecord(wrapped.getName(), iRecordId, iVersion);
 
-    return result;
+    return node.deleteRecord(wrapped.getName(), iRecordId, iVersion);
   }
 
   @Override
