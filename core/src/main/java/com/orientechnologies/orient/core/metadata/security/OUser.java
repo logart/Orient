@@ -35,8 +35,9 @@ import com.orientechnologies.orient.core.type.ODocumentWrapper;
  */
 public class OUser extends ODocumentWrapper {
 	public static final String	ADMIN	= "admin";
+  public static final String CLASS_NAME = "OUser";
 
-	public enum STATUSES {
+  public enum STATUSES {
 		SUSPENDED, ACTIVE
 	}
 
@@ -50,7 +51,7 @@ public class OUser extends ODocumentWrapper {
 	}
 
 	public OUser(final String iName) {
-		super("OUser");
+		super( CLASS_NAME );
 		document.field("name", iName);
 		setAccountStatus(STATUSES.ACTIVE);
 	}

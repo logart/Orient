@@ -296,17 +296,17 @@
         <echo>WAITING FOR SERVER STARTUP...</echo>
         <sleep seconds="5"/>
 
-        <exec dir="target/inst2/bin" executable="cmd" spawn="true" osfamily="windows">
-            <env key="JAVA_OPTS"
-                 value="-Dcom.sun.management.jmxremote.port=4322 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"/>
-            <arg value="/c start dserver.bat"/>
-        </exec>
+        <!--<exec dir="target/inst2/bin" executable="cmd" spawn="true" osfamily="windows">-->
+            <!--<env key="JAVA_OPTS"-->
+                 <!--value="-Dcom.sun.management.jmxremote.port=4322 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"/>-->
+            <!--<arg value="/c start dserver.bat"/>-->
+        <!--</exec>-->
 
-        <exec dir="target/inst2/bin" executable="sh" spawn="true" osfamily="unix">
-            <env key="JAVA_OPTS"
-                 value="-Dcom.sun.management.jmxremote.port=4322 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"/>
-            <arg value="./dserver.sh"/>
-        </exec>
+        <!--<exec dir="target/inst2/bin" executable="sh" spawn="true" osfamily="unix">-->
+            <!--<env key="JAVA_OPTS"-->
+                 <!--value="-Dcom.sun.management.jmxremote.port=4322 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"/>-->
+            <!--<arg value="./dserver.sh"/>-->
+        <!--</exec>-->
 
         <echo>WAITING FOR ANOTHER SERVER...</echo>
         <sleep seconds="5"/>

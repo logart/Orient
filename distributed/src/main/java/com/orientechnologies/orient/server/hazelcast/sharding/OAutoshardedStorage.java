@@ -24,6 +24,8 @@ import com.orientechnologies.orient.core.storage.OStorageEmbedded;
 import com.orientechnologies.orient.core.tx.OTransaction;
 import com.orientechnologies.orient.server.distributed.ODistributedException;
 import com.orientechnologies.orient.server.distributed.ODistributedThreadLocal;
+import com.orientechnologies.orient.server.hazelcast.OAutoshardingPlugin;
+import com.orientechnologies.orient.server.hazelcast.sharding.distributed.ODHTConfiguration;
 import com.orientechnologies.orient.server.hazelcast.sharding.distributed.ODHTNode;
 import com.orientechnologies.orient.server.hazelcast.sharding.hazelcast.ServerInstance;
 
@@ -40,15 +42,13 @@ public class OAutoshardedStorage implements OStorage {
 
   private final Set<Integer>        undistributedClusters = new HashSet<Integer>();
 
-  public OAutoshardedStorage(ServerInstance serverInstance, OStorageEmbedded wrapped) {
+  public OAutoshardedStorage( ServerInstance serverInstance, OStorageEmbedded wrapped, ODHTConfiguration dhtConfiguration ) {
     this.serverInstance = serverInstance;
     this.wrapped = wrapped;
 
-    undistributedClusters.add(wrapped.getClusterIdByName(CLUSTER_INTERNAL_NAME));
-    undistributedClusters.add(wrapped.getClusterIdByName(CLUSTER_INDEX_NAME));
-    undistributedClusters.add(wrapped.getClusterIdByName("orole"));
-    undistributedClusters.add(wrapped.getClusterIdByName("ouser"));
-    undistributedClusters.add(wrapped.getClusterIdByName("orids"));
+    for ( String clusterName : dhtConfiguration.getUndistributableClusters() ) {
+      undistributedClusters.add( wrapped.getClusterIdByName( clusterName ) );
+    }
   }
 
   @Override

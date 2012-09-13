@@ -7,8 +7,8 @@
 <hazelcast xsi:schemaLocation="http://www.hazelcast.com/schema/config hazelcast-config-2.1.xsd" xmlns="http://www.hazelcast.com/schema/config"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 	<group>
-		<name>orientdb</name>
-		<password>orientdb</password>
+		<name>orientdb-enish</name>
+		<password>secret</password>
 	</group>
 	<network>
 		<port auto-increment="true">2434</port>

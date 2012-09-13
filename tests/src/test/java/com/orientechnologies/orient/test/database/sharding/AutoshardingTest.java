@@ -35,6 +35,8 @@ public class AutoshardingTest {
     ODatabaseDocumentTx database2 = new ODatabaseDocumentTx("remote:localhost:2425/distributedStorage");
     database2.open("admin", "admin");
 
+    database2.load( new ORecordId( "#4:2609970823279663185" ) );
+
     for ( ORID id : documents ) {
       final ODocument document = database2.load( id );
       System.out.println(id + " - " + document.field( "f1" ));

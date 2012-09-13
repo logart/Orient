@@ -1,16 +1,24 @@
 package com.orientechnologies.orient.server.hazelcast;
 
-import com.hazelcast.core.HazelcastInstance;
+import java.util.HashSet;
+import java.util.Set;
+
 import com.orientechnologies.common.parser.OSystemVariableResolver;
 import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.db.ODatabase;
 import com.orientechnologies.orient.core.db.ODatabaseComplex;
 import com.orientechnologies.orient.core.db.ODatabaseLifecycleListener;
+import com.orientechnologies.orient.core.metadata.security.ORole;
+import com.orientechnologies.orient.core.metadata.security.OUser;
+import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.OStorageEmbedded;
+import com.orientechnologies.orient.core.type.tree.provider.OMVRBTreeRIDProvider;
 import com.orientechnologies.orient.server.OServer;
+import com.orientechnologies.orient.server.OServerMain;
 import com.orientechnologies.orient.server.config.OServerParameterConfiguration;
-import com.orientechnologies.orient.server.hazelcast.sharding.OAutoshardedStorage;
 import com.orientechnologies.orient.server.handler.OServerHandlerAbstract;
+import com.orientechnologies.orient.server.hazelcast.sharding.OAutoshardedStorage;
+import com.orientechnologies.orient.server.hazelcast.sharding.distributed.ODHTConfiguration;
 import com.orientechnologies.orient.server.hazelcast.sharding.hazelcast.ServerInstance;
 
 /**
@@ -19,52 +27,82 @@ import com.orientechnologies.orient.server.hazelcast.sharding.hazelcast.ServerIn
  */
 public class OAutoshardingPlugin extends OServerHandlerAbstract implements ODatabaseLifecycleListener {
 
-    private boolean enabled = true;
-    private ServerInstance serverInstance;
+  private boolean        enabled = true;
+  private ServerInstance serverInstance;
+  private DHTConfiguration dhtConfiguration;
 
-    @Override
-    public String getName() {
-        return "autosharding";
-    }
+  @Override
+  public String getName() {
+    return "autosharding";
+  }
 
-    @Override
-    public void config(OServer oServer, OServerParameterConfiguration[] iParams) {
-        oServer.setVariable("OAutoshardingPlugin", this);
+  @Override
+  public void config(OServer oServer, OServerParameterConfiguration[] iParams) {
+    oServer.setVariable("OAutoshardingPlugin", this);
 
-        String configFile = "/hazelcast.xml";
-        for (OServerParameterConfiguration param : iParams) {
-            if (param.name.equalsIgnoreCase("enabled")) {
-                if (!Boolean.parseBoolean(param.value)) {
-                    enabled = false;
-                    return;
-                }
-            } else if (param.name.equalsIgnoreCase("configuration.hazelcast")) {
-                configFile = OSystemVariableResolver.resolveSystemVariables(param.value);
-            }
+    String configFile = "/hazelcast.xml";
+    for (OServerParameterConfiguration param : iParams) {
+      if (param.name.equalsIgnoreCase("enabled")) {
+        if (!Boolean.parseBoolean(param.value)) {
+          enabled = false;
+          return;
         }
+      } else if (param.name.equalsIgnoreCase("configuration.hazelcast")) {
+        configFile = OSystemVariableResolver.resolveSystemVariables(param.value);
+      }
+    }
 
-        serverInstance = new ServerInstance(configFile);
+    dhtConfiguration = new DHTConfiguration();
+
+    serverInstance = new ServerInstance(configFile);
+    serverInstance.setDHTConfiguration(dhtConfiguration);
+  }
+
+  @Override
+  public void startup() {
+    if (!enabled)
+      return;
+
+    serverInstance.init();
+
+    super.startup();
+    Orient.instance().addDbLifecycleListener(this);
+  }
+
+  @Override
+  public void onOpen(ODatabase iDatabase) {
+    if (iDatabase instanceof ODatabaseComplex<?>) {
+      iDatabase.replaceStorage(new OAutoshardedStorage(serverInstance, (OStorageEmbedded) iDatabase.getStorage(), dhtConfiguration));
+    }
+  }
+
+  @Override
+  public void onClose(ODatabase iDatabase) {
+  }
+
+  public static class DHTConfiguration implements ODHTConfiguration {
+
+    private final HashSet<String> clusters;
+
+    public DHTConfiguration() {
+      clusters = new HashSet<String>();
+
+      clusters.add( OStorage.CLUSTER_INTERNAL_NAME.toLowerCase() );
+      clusters.add( OStorage.CLUSTER_INDEX_NAME.toLowerCase() );
+      clusters.add( ORole.CLASS_NAME.toLowerCase() );
+      clusters.add( OUser.CLASS_NAME.toLowerCase() );
+      clusters.add( OMVRBTreeRIDProvider.PERSISTENT_CLASS_NAME.toLowerCase() );
     }
 
     @Override
-    public void startup() {
-        if (!enabled)
-            return;
-
-        serverInstance.init();
-
-        super.startup();
-        Orient.instance().addDbLifecycleListener(this);
+    public Set<String> getDistributedStorageNames() {
+      return OServerMain.server().getAvailableStorageNames().keySet();
     }
 
     @Override
-    public void onOpen(ODatabase iDatabase) {
-        if (iDatabase instanceof ODatabaseComplex<?>) {
-            iDatabase.replaceStorage(new OAutoshardedStorage(serverInstance, (OStorageEmbedded) iDatabase.getStorage()));
-        }
+    public Set<String> getUndistributableClusters() {
+      return clusters;
     }
+  }
 
-    @Override
-    public void onClose(ODatabase iDatabase) {
-    }
 }

@@ -4,14 +4,20 @@ import com.hazelcast.config.FileSystemXmlConfig;
 import com.hazelcast.config.XmlConfigBuilder;
 import com.hazelcast.core.*;
 import com.orientechnologies.common.hash.OMurmurHash3;
+import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.exception.OConfigurationException;
 import com.orientechnologies.orient.server.OServer;
+import com.orientechnologies.orient.server.OServerMain;
+import com.orientechnologies.orient.server.hazelcast.OAutoshardingPlugin;
+import com.orientechnologies.orient.server.hazelcast.sharding.distributed.ODHTConfiguration;
 import com.orientechnologies.orient.server.hazelcast.sharding.distributed.ODHTNode;
 import com.orientechnologies.orient.server.hazelcast.sharding.distributed.ODHTNodeLookup;
 import com.orientechnologies.orient.server.hazelcast.sharding.distributed.OLocalDHTNode;
+import com.orientechnologies.orient.server.managed.OrientServer;
 
 import java.io.FileNotFoundException;
 import java.util.Map;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,8 +34,9 @@ public class ServerInstance implements MembershipListener, ODHTNodeLookup {
     private volatile HazelcastInstance hazelcastInstance;
     private final Timer timer = new Timer("DHT timer", true);
     private String configFile;
+  private ODHTConfiguration dhtConfiguration;
 
-    public ServerInstance(String configFile) {
+  public ServerInstance(String configFile) {
         this.configFile = configFile;
     }
 
@@ -42,6 +49,7 @@ public class ServerInstance implements MembershipListener, ODHTNodeLookup {
 
         localNode = new OLocalDHTNode(getNodeId(hazelcastInstance.getCluster().getLocalMember()));
         localNode.setNodeLookup(this);
+        localNode.setDhtConfiguration( dhtConfiguration );
         INSTANCES.put(hazelcastInstance.getCluster().getLocalMember().getUuid(), this);
 
         hazelcastInstance.getCluster().addMembershipListener(this);
@@ -111,4 +119,8 @@ public class ServerInstance implements MembershipListener, ODHTNodeLookup {
 
         return nodeId;
     }
+
+  public void setDHTConfiguration( ODHTConfiguration dhtConfiguration ) {
+    this.dhtConfiguration = dhtConfiguration;
+  }
 }

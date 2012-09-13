@@ -24,6 +24,7 @@ import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
+import com.orientechnologies.orient.core.iterator.ORecordIteratorCluster;
 import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.storage.OPhysicalPosition;
 import com.orientechnologies.orient.core.storage.ORawBuffer;
@@ -45,8 +46,15 @@ public class OLocalDHTNode implements ODHTNode {
 
   private volatile long                      migrationId       = -1;
   private volatile ODHTNodeLookup            nodeLookup;
+  private volatile ODHTConfiguration         dhtConfiguration;
   private AtomicInteger                      next              = new AtomicInteger(1);
-  private final OLockManager<Long, Runnable> lockManager       = new OLockManager<Long, Runnable>(true, 500);
+
+  // TODO remove it
+  @Deprecated
+  private final OLockManager<Long, Runnable> lockManagerForMap = new OLockManager<Long, Runnable>(true, 500);
+
+  private final OLockManager<ORID, Runnable> lockManager       = new OLockManager<ORID, Runnable>(true, 500);
+
   private final ExecutorService              executorService   = Executors.newCachedThreadPool();
   private final Queue<Long>                  notificationQueue = new ConcurrentLinkedQueue<Long>();
 
@@ -73,6 +81,10 @@ public class OLocalDHTNode implements ODHTNode {
 
   public void setNodeLookup(ODHTNodeLookup nodeLookup) {
     this.nodeLookup = nodeLookup;
+  }
+
+  public void setDhtConfiguration(ODHTConfiguration dhtConfiguration) {
+    this.dhtConfiguration = dhtConfiguration;
   }
 
   public void create() {
@@ -168,11 +180,11 @@ public class OLocalDHTNode implements ODHTNode {
 
   private void putData(Long dataId, String data) {
     // log("Put for " + dataId);
-    lockManager.acquireLock(Thread.currentThread(), dataId, OLockManager.LOCK.EXCLUSIVE);
+    lockManagerForMap.acquireLock(Thread.currentThread(), dataId, OLockManager.LOCK.EXCLUSIVE);
     try {
       this.db.put(dataId, data);
     } finally {
-      lockManager.releaseLock(Thread.currentThread(), dataId, OLockManager.LOCK.EXCLUSIVE);
+      lockManagerForMap.releaseLock(Thread.currentThread(), dataId, OLockManager.LOCK.EXCLUSIVE);
     }
   }
 
@@ -206,11 +218,11 @@ public class OLocalDHTNode implements ODHTNode {
 
   private String readData(Long dataId) {
     String data;
-    lockManager.acquireLock(Thread.currentThread(), dataId, OLockManager.LOCK.SHARED);
+    lockManagerForMap.acquireLock(Thread.currentThread(), dataId, OLockManager.LOCK.SHARED);
     try {
       data = db.get(dataId);
     } finally {
-      lockManager.releaseLock(Thread.currentThread(), dataId, OLockManager.LOCK.SHARED);
+      lockManagerForMap.releaseLock(Thread.currentThread(), dataId, OLockManager.LOCK.SHARED);
     }
     return data;
   }
@@ -238,7 +250,7 @@ public class OLocalDHTNode implements ODHTNode {
   }
 
   public void requestMigration(long requesterId) {
-    executorService.submit(new MergeCallable(nodeLookup, requesterId));
+    executorService.submit(new MergeCallable(requesterId));
     log("Data migration was started for node " + requesterId);
   }
 
@@ -250,7 +262,7 @@ public class OLocalDHTNode implements ODHTNode {
       try {
         Thread.sleep(100);
       } catch (InterruptedException e) {
-        OLogManager.instance().error( this, "Interrupted", e );
+        OLogManager.instance().error(this, "Interrupted", e);
       }
     }
 
@@ -312,13 +324,18 @@ public class OLocalDHTNode implements ODHTNode {
   private ORawBuffer executeReadRecord(String storageName, ORID iRid) {
     ODistributedThreadLocal.INSTANCE.distributedExecution = true;
     try {
-      final ODatabaseDocumentTx database = openDatabase(storageName);
+      lockManager.acquireLock(Thread.currentThread(), iRid, OLockManager.LOCK.EXCLUSIVE);
       try {
+        final ODatabaseDocumentTx database = openDatabase(storageName);
+        try {
 
-        return new ORawBuffer(database.load(iRid));
+          return new ORawBuffer(database.load(iRid));
 
+        } finally {
+          closeDatabase(database);
+        }
       } finally {
-        closeDatabase(database);
+        lockManager.releaseLock(Thread.currentThread(), iRid, OLockManager.LOCK.EXCLUSIVE);
       }
     } finally {
       ODistributedThreadLocal.INSTANCE.distributedExecution = false;
@@ -331,19 +348,23 @@ public class OLocalDHTNode implements ODHTNode {
     try {
       final ORecordInternal<?> record = Orient.instance().getRecordFactoryManager().newInstance(iRecordType);
 
-      final ODatabaseDocumentTx database = openDatabase(storageName);
+      lockManager.acquireLock(Thread.currentThread(), iRecordId, OLockManager.LOCK.EXCLUSIVE);
       try {
-        record.fill(iRecordId, iVersion, iContent, true);
-        if (iRecordId.getClusterId() == -1)
-          record.save();
-        else
-          record.save(database.getClusterNameById(iRecordId.getClusterId()));
+        final ODatabaseDocumentTx database = openDatabase(storageName);
+        try {
+          record.fill(iRecordId, iVersion, iContent, true);
+          if (iRecordId.getClusterId() == -1)
+            record.save();
+          else
+            record.save(database.getClusterNameById(iRecordId.getClusterId()));
 
-        return record.getVersion();
+          return record.getVersion();
+        } finally {
+          closeDatabase(database);
+        }
       } finally {
-        closeDatabase(database);
+        lockManager.releaseLock(Thread.currentThread(), iRecordId, OLockManager.LOCK.EXCLUSIVE);
       }
-
     } finally {
       ODistributedThreadLocal.INSTANCE.distributedExecution = false;
     }
@@ -364,28 +385,33 @@ public class OLocalDHTNode implements ODHTNode {
 
     if (state == NodeState.MERGING) {
       final ODHTNode successorNode = nodeLookup.findById(fingerPoints.get(0));
-      result = successorNode.deleteRecord( storageName, iRecordId, iVersion );
+      result = successorNode.deleteRecord(storageName, iRecordId, iVersion);
     }
 
-    result = result | executeDeleteRecord( storageName, iRecordId, iVersion );
+    result = result | executeDeleteRecord(storageName, iRecordId, iVersion);
 
     return result;
   }
 
-  private boolean executeDeleteRecord(String storageName, ORecordId iRecordId, int iVersion) {
+  private boolean executeDeleteRecord(String storageName, final ORecordId iRecordId, int iVersion) {
     ODistributedThreadLocal.INSTANCE.distributedExecution = true;
     try {
-      final ODatabaseDocumentTx database = openDatabase(storageName);
+      lockManager.acquireLock(Thread.currentThread(), iRecordId, OLockManager.LOCK.EXCLUSIVE);
       try {
-        final ORecordInternal record = database.load(iRecordId);
-        if (record != null) {
-          record.setVersion(iVersion);
-          record.delete();
-          return true;
+        final ODatabaseDocumentTx database = openDatabase(storageName);
+        try {
+          final ORecordInternal record = database.load(iRecordId);
+          if (record != null) {
+            record.setVersion(iVersion);
+            record.delete();
+            return true;
+          }
+          return false;
+        } finally {
+          closeDatabase(database);
         }
-        return false;
       } finally {
-        closeDatabase(database);
+        lockManager.releaseLock(Thread.currentThread(), iRecordId, OLockManager.LOCK.EXCLUSIVE);
       }
     } finally {
       ODistributedThreadLocal.INSTANCE.distributedExecution = false;
@@ -414,11 +440,11 @@ public class OLocalDHTNode implements ODHTNode {
   }
 
   private boolean removeData(Long dataId) {
-    lockManager.acquireLock(Thread.currentThread(), dataId, OLockManager.LOCK.EXCLUSIVE);
+    lockManagerForMap.acquireLock(Thread.currentThread(), dataId, OLockManager.LOCK.EXCLUSIVE);
     try {
       return db.remove(dataId) != null;
     } finally {
-      lockManager.releaseLock(Thread.currentThread(), dataId, OLockManager.LOCK.EXCLUSIVE);
+      lockManagerForMap.releaseLock(Thread.currentThread(), dataId, OLockManager.LOCK.EXCLUSIVE);
     }
   }
 
@@ -613,11 +639,78 @@ public class OLocalDHTNode implements ODHTNode {
   }
 
   private final class MergeCallable implements Callable<Void> {
+    private final long requesterNode;
+
+    private MergeCallable(long requesterNode) {
+      this.requesterNode = requesterNode;
+    }
+
+    public Void call() throws Exception {
+      for (String storageName : dhtConfiguration.getDistributedStorageNames()) {
+
+        final ODatabaseDocumentTx db = openDatabase(storageName);
+
+
+        final Set<String> clusterNames = db.getStorage().getClusterNames();
+        for (String clusterName : clusterNames) {
+          if ( dhtConfiguration.getUndistributableClusters().contains( clusterName.toLowerCase() ) ) {
+            continue;
+          }
+
+          // TODO replace by another special iterator
+          final ORecordIteratorCluster<? extends ORecordInternal<?>> it = db.browseCluster( clusterName );
+          while ( it.hasNext() ) {
+            final ORecordInternal<?> rec = it.next();
+            lockManager.acquireLock( Thread.currentThread(), rec.getIdentity(), OLockManager.LOCK.EXCLUSIVE );
+            try {
+              final long successorId = findSuccessor( rec.getIdentity().getClusterPosition() );
+              if ( successorId != id ) {
+                final ODHTNode node = nodeLookup.findById( successorId );
+
+                // TODO change to migrate record
+                node.createRecord( storageName, (ORecordId) rec.getIdentity(), rec.toStream(), rec.getVersion(), rec.getRecordType() );
+
+                // TODO change to replicate local delete
+                ODistributedThreadLocal.INSTANCE.distributedExecution = true;
+                try {
+                  rec.delete();
+                } finally {
+                  ODistributedThreadLocal.INSTANCE.distributedExecution = false;
+                }
+              }
+            } finally {
+              lockManager.releaseLock( Thread.currentThread(), rec.getIdentity(), OLockManager.LOCK.EXCLUSIVE );
+            }
+          }
+        }
+      }
+
+      if (state == NodeState.STABLE) {
+        final ODHTNode node = nodeLookup.findById(requesterNode);
+        node.notifyMigrationEnd(id);
+      } else {
+        notificationQueue.add(requesterNode);
+        if (state == NodeState.STABLE) {
+          Long nodeToNotifyId = notificationQueue.poll();
+          while (nodeToNotifyId != null) {
+            final ODHTNode node = nodeLookup.findById(nodeToNotifyId);
+            node.notifyMigrationEnd(id);
+            nodeToNotifyId = notificationQueue.poll();
+          }
+        }
+      }
+
+      log("Migration was successfully finished for node " + requesterNode);
+      return null;
+    }
+  }
+
+  private final class OldMergeCallable implements Callable<Void> {
     private Iterator<Long>       keyIterator;
     private final ODHTNodeLookup nodeLookup;
     private final long           requesterNode;
 
-    private MergeCallable(ODHTNodeLookup nodeLookup, long requesterNode) {
+    private OldMergeCallable(ODHTNodeLookup nodeLookup, long requesterNode) {
       this.nodeLookup = nodeLookup;
       this.requesterNode = requesterNode;
       this.keyIterator = db.keySet().iterator();
@@ -627,7 +720,7 @@ public class OLocalDHTNode implements ODHTNode {
       while (keyIterator.hasNext()) {
         long key = keyIterator.next();
         // log("Migration - examine data with key : " + key);
-        lockManager.acquireLock(Thread.currentThread(), key, OLockManager.LOCK.EXCLUSIVE);
+        lockManagerForMap.acquireLock(Thread.currentThread(), key, OLockManager.LOCK.EXCLUSIVE);
         try {
           final String data = get(key);
           if (data != null) {
@@ -645,7 +738,7 @@ public class OLocalDHTNode implements ODHTNode {
           // log("Key " + key + " is kept on current node.");
           // }
         } finally {
-          lockManager.releaseLock(Thread.currentThread(), key, OLockManager.LOCK.EXCLUSIVE);
+          lockManagerForMap.releaseLock(Thread.currentThread(), key, OLockManager.LOCK.EXCLUSIVE);
         }
       }
 
