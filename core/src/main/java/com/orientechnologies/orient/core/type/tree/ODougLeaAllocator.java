@@ -9,24 +9,29 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.OBinary
  */
 public class ODougLeaAllocator implements OMemory {
 
-  private static final OBinaryConverter CONVERTER       = OBinaryConverterFactory.getConverter();
+  private static final OBinaryConverter CONVERTER         = OBinaryConverterFactory.getConverter();
 
-  private static final int              BUCKET_OVERHEAD = 8;
-  private static final int              MIN_CHUNK_SIZE  = 16;
+  private static final int              BUCKET_OVERHEAD   = 8;
+  private static final int              MIN_CHUNK_SIZE    = 16;
 
-  private static final int              SMALL_BIN_COUNT = 64;
-  private static final int              BIG_BIN_COUNT   = 64;
+  private static final int              SMALL_BIN_COUNT   = 64;
+  private static final int              BIG_BIN_COUNT     = 64;
 
-  private static final int              SMALL_BIN_SHIFT = 3;
-  private static final int              BIG_BIN_SHIFT   = 8;
+  private static final int              SMALL_BIN_SHIFT   = 3;
+  private static final int              BIG_BIN_SHIFT     = 8;
+
+  private static final int              MAX_SMALL_REQUEST = 504;  // or no?
 
   private byte[]                        buffer;
 
-  private int[]                         smallBin        = new int[SMALL_BIN_COUNT];
-  private BitMap                        smallMap        = new BitMap(0L);
+  private int[]                         smallBin          = new int[SMALL_BIN_COUNT];
+  private BitMap                        smallMap          = new BitMap(0L);
 
-  private int[]                         bigBin          = new int[BIG_BIN_COUNT];
-  private BitMap                        bigMap          = new BitMap(0L);
+  private int[]                         bigBin            = new int[BIG_BIN_COUNT];
+  private BitMap                        bigMap            = new BitMap(0L);
+
+  private int                           dvPtr             = OMemory.NULL_POINTER;
+  private int                           dvSize;
 
   public ODougLeaAllocator(int bufferSize) {
     int alignedBufferSize = bufferSize & 0xFFFFFFF0;
@@ -51,7 +56,17 @@ public class ODougLeaAllocator implements OMemory {
   }
 
   public int allocate(int size) {
-    int nb = padRequest(size);
+    final int nb = padRequest(size);
+
+    if (nb <= MAX_SMALL_REQUEST) { // SMALL REQUEST
+      int binIndex = getSmallBinIndex(nb);
+      if (smallMap.fitsWithoutRemainder(binIndex)) { // REMAINDERLESS
+        binIndex += smallMap.indexOffsetWithoutRemainder(binIndex);
+
+      } else if (nb > dvSize) { // DV CHUNK IS TOO SMALL
+
+      }
+    }
 
     return OMemory.NULL_POINTER;
   }
@@ -138,7 +153,7 @@ public class ODougLeaAllocator implements OMemory {
 
     chunk.updateBoundaryTags(size, false, true);
     if (smallMap.isMarked(binIndex)) {
-      final int fdPtr = smallBin[chunkPtr];
+      final int fdPtr = smallBin[binIndex];
       final DataChunk fd = new DataChunk(fdPtr);
 
       final int bkPtr = fd.getBk();
@@ -199,9 +214,9 @@ public class ODougLeaAllocator implements OMemory {
 
   private void unlinkChunk(int chunkPtr, int size) {
     if (isSmall(size)) {
-      insertSmallChunk(chunkPtr, size);
+      unlinkSmallChunk(chunkPtr, size);
     } else {
-      insertBigChunk(chunkPtr, size);
+      unlinkBigChunk(chunkPtr, size);
     }
   }
 
@@ -225,6 +240,20 @@ public class ODougLeaAllocator implements OMemory {
     // pointer = readInt(pointer, NEXT_POINTER_OFFSET);
     // }
     return space;
+  }
+
+  private void clearDv() {
+    if (dvPtr != OMemory.NULL_POINTER) {
+      insertChunk(dvPtr, dvSize);
+      dvPtr = OMemory.NULL_POINTER;
+    }
+  }
+
+  private void replaceDv(int chunkPtr, int chunkSize) {
+    clearDv();
+    unlinkChunk(chunkPtr, chunkSize);
+    dvPtr = chunkPtr;
+    dvSize = chunkSize;
   }
 
   private int padRequest(int size) {
@@ -341,6 +370,30 @@ public class ODougLeaAllocator implements OMemory {
 
     public long getSet() {
       return set;
+    }
+
+    /**
+     * Look whether one of {@code index} or {@code index + 1} chunks (or both)
+     * is not empty. If so, then request fits without remainder to a chunk size.
+     * <p/>
+     * Only for small requests.
+     *
+     * @param index Small bin index
+     * @return {@code true} if at least one of the chunks is not empty,
+     *         {@code false} if both are empty
+     */
+    public boolean fitsWithoutRemainder(int index) {
+      return ((set >> index) & 3l) != 0;
+    }
+
+    /**
+     * Count index offset for a small bin that
+     *
+     * @param index Small bin index
+     * @return 0 if {@code index} chunk is not empty, 1 if it is empty
+     */
+    public int indexOffsetWithoutRemainder(int index) {
+      return (int) (~(set >> index) & 1);
     }
   }
 }
