@@ -20,7 +20,7 @@ public class ODougLeaAllocator implements OMemory {
   private static final int              SMALL_BIN_SHIFT   = 3;
   private static final int              BIG_BIN_SHIFT     = 8;
 
-  private static final int              MAX_SMALL_REQUEST = 504;  // or no?
+  private static final int              MAX_SMALL_REQUEST = (SMALL_BIN_COUNT - 1) << SMALL_BIN_SHIFT;
 
   private byte[]                        buffer;
 
@@ -62,13 +62,24 @@ public class ODougLeaAllocator implements OMemory {
       int binIndex = getSmallBinIndex(nb);
       if (smallMap.fitsWithoutRemainder(binIndex)) { // REMAINDERLESS
         binIndex += smallMap.indexOffsetWithoutRemainder(binIndex);
-
-      } else if (nb > dvSize) { // DV CHUNK IS TOO SMALL
-
+        return allocateSmall( binIndex, nb );
+      } else if (nb > dvSize && smallMap.isNonEmptyBinForIndex( binIndex )) { // DV CHUNK IS TOO SMALL AND THERE
+                                                                              // IS AT LEAST ONE NON-EMPTY SMALL BIN
+        binIndex += smallMap.indexOffset( binIndex );
+        return allocateSmall( binIndex, nb );
       }
+
     }
 
     return OMemory.NULL_POINTER;
+  }
+
+  private int allocateSmall(int binIndex, int size) {
+    final int b = smallBin[binIndex];
+    final int p = new DataChunk(b).getFd();
+    unlinkSmallChunk(p, size);
+    // TODO UPDATE INUSE AND PINUSE
+    return chunkToMemory(p);
   }
 
   public void free(int pointer) {
@@ -133,7 +144,7 @@ public class ODougLeaAllocator implements OMemory {
 
   /**
    * Checks correctness of allocator representation.
-   * 
+   *
    * @return free space
    */
   public int checkStructure() {
@@ -258,6 +269,10 @@ public class ODougLeaAllocator implements OMemory {
 
   private int padRequest(int size) {
     return size + BUCKET_OVERHEAD;
+  }
+
+  private int chunkToMemory(int chunkPtr) {
+    return chunkPtr + BUCKET_OVERHEAD;
   }
 
   private void writeInt(int pointer, int offset, int value) {
@@ -394,6 +409,14 @@ public class ODougLeaAllocator implements OMemory {
      */
     public int indexOffsetWithoutRemainder(int index) {
       return (int) (~(set >> index) & 1);
+    }
+
+    public int indexOffset(int index) {
+      return Long.numberOfTrailingZeros( set >> index );
+    }
+
+    public boolean isNonEmptyBinForIndex(int index) {
+      return set >> index != 0;
     }
   }
 }
