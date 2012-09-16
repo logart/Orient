@@ -24,7 +24,6 @@ import com.orientechnologies.orient.core.storage.OStorageEmbedded;
 import com.orientechnologies.orient.core.tx.OTransaction;
 import com.orientechnologies.orient.server.distributed.ODistributedException;
 import com.orientechnologies.orient.server.distributed.ODistributedThreadLocal;
-import com.orientechnologies.orient.server.hazelcast.OAutoshardingPlugin;
 import com.orientechnologies.orient.server.hazelcast.sharding.distributed.ODHTConfiguration;
 import com.orientechnologies.orient.server.hazelcast.sharding.distributed.ODHTNode;
 import com.orientechnologies.orient.server.hazelcast.sharding.hazelcast.ServerInstance;
@@ -37,27 +36,23 @@ public class OAutoshardedStorage implements OStorage {
   protected OStorageEmbedded        wrapped;
   private final ServerInstance      serverInstance;
 
-  // TODO create generator for each cluster
   private final MersenneTwisterFast positionGenerator     = new MersenneTwisterFast();
 
   private final Set<Integer>        undistributedClusters = new HashSet<Integer>();
 
-  public OAutoshardedStorage( ServerInstance serverInstance, OStorageEmbedded wrapped, ODHTConfiguration dhtConfiguration ) {
+  public OAutoshardedStorage(ServerInstance serverInstance, OStorageEmbedded wrapped, ODHTConfiguration dhtConfiguration) {
     this.serverInstance = serverInstance;
     this.wrapped = wrapped;
 
-    for ( String clusterName : dhtConfiguration.getUndistributableClusters() ) {
-      undistributedClusters.add( wrapped.getClusterIdByName( clusterName ) );
+    for (String clusterName : dhtConfiguration.getUndistributableClusters()) {
+      undistributedClusters.add(wrapped.getClusterIdByName(clusterName));
     }
   }
 
   @Override
   public OPhysicalPosition createRecord(int iDataSegmentId, ORecordId iRecordId, byte[] iContent, int iRecordVersion,
       byte iRecordType, int iMode, ORecordCallback<Long> iCallback) {
-    if (ODistributedThreadLocal.INSTANCE.distributedExecution || undistributedClusters.contains(iRecordId.getClusterId())) {
-      // ALREADY DISTRIBUTED
-      OLogManager.instance().info(this, "Record " + iRecordId.toString() + " has been distributed to this node.");
-
+    if (undistributedClusters.contains(iRecordId.getClusterId())) {
       return wrapped.createRecord(iDataSegmentId, iRecordId, iContent, iRecordVersion, iRecordType, iMode, iCallback);
     }
 
@@ -65,10 +60,16 @@ public class OAutoshardedStorage implements OStorage {
     int retryCount = 0;
     while (true) {
       try {
-        iRecordId.clusterPosition = Math.abs(positionGenerator.nextLong());
+        if (iRecordId.isNew())
+          iRecordId.clusterPosition = Math.abs(positionGenerator.nextLong());
 
         final ODHTNode node = serverInstance.findSuccessor(iRecordId.clusterPosition);
-        result = node.createRecord(wrapped.getName(), iRecordId, iContent, iRecordVersion, iRecordType);
+        if (node.isLocal()) {
+          OLogManager.instance().info(this, "Record " + iRecordId.toString() + " has been distributed to this node.");
+
+          return wrapped.createRecord(iDataSegmentId, iRecordId, iContent, iRecordVersion, iRecordType, iMode, iCallback);
+        } else
+          result = node.createRecord(wrapped.getName(), iRecordId, iContent, iRecordVersion, iRecordType);
         break;
       } catch (ORecordDuplicatedException e) {
         if (retryCount > 10) {
@@ -84,38 +85,43 @@ public class OAutoshardedStorage implements OStorage {
 
   @Override
   public ORawBuffer readRecord(ORecordId iRid, String iFetchPlan, boolean iIgnoreCache, ORecordCallback<ORawBuffer> iCallback) {
-    if (ODistributedThreadLocal.INSTANCE.distributedExecution || undistributedClusters.contains(iRid.getClusterId())) {
-      // ALREADY DISTRIBUTED
+    if (undistributedClusters.contains(iRid.getClusterId())) {
       return wrapped.readRecord(iRid, iFetchPlan, iIgnoreCache, iCallback);
     }
 
     final ODHTNode node = serverInstance.findSuccessor(iRid.clusterPosition);
-    return node.readRecord(wrapped.getName(), iRid);
+
+		if (node.isLocal())
+      return wrapped.readRecord(iRid, iFetchPlan, iIgnoreCache, iCallback);
+    else
+      return node.readRecord(wrapped.getName(), iRid);
   }
 
   @Override
   public int updateRecord(ORecordId iRecordId, byte[] iContent, int iVersion, byte iRecordType, int iMode,
       ORecordCallback<Integer> iCallback) {
-    if (ODistributedThreadLocal.INSTANCE.distributedExecution || undistributedClusters.contains(iRecordId.getClusterId())) {
-      // ALREADY DISTRIBUTED
+    if (undistributedClusters.contains(iRecordId.getClusterId())) {
       return wrapped.updateRecord(iRecordId, iContent, iVersion, iRecordType, iMode, iCallback);
     }
 
     final ODHTNode node = serverInstance.findSuccessor(iRecordId.clusterPosition);
-
-    return node.updateRecord(wrapped.getName(), iRecordId, iContent, iVersion, iRecordType);
+		if (node.isLocal())
+			return wrapped.updateRecord(iRecordId, iContent, iVersion, iRecordType, iMode, iCallback);
+		else
+			return node.updateRecord(wrapped.getName(), iRecordId, iContent, iVersion, iRecordType);
   }
 
   @Override
   public boolean deleteRecord(ORecordId iRecordId, int iVersion, int iMode, ORecordCallback<Boolean> iCallback) {
-    if (ODistributedThreadLocal.INSTANCE.distributedExecution || undistributedClusters.contains(iRecordId.getClusterId())) {
-      // ALREADY DISTRIBUTED
+    if (undistributedClusters.contains(iRecordId.getClusterId())) {
       return wrapped.deleteRecord(iRecordId, iVersion, iMode, iCallback);
     }
 
     final ODHTNode node = serverInstance.findSuccessor(iRecordId.clusterPosition);
-
-    return node.deleteRecord(wrapped.getName(), iRecordId, iVersion);
+		if (node.isLocal())
+			return wrapped.deleteRecord(iRecordId, iVersion, iMode, iCallback);
+		else
+			return node.deleteRecord(wrapped.getName(), iRecordId, iVersion);
   }
 
   @Override

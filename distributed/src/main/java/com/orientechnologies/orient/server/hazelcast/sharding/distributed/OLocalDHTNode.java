@@ -322,51 +322,41 @@ public class OLocalDHTNode implements ODHTNode {
   }
 
   private ORawBuffer executeReadRecord(String storageName, ORID iRid) {
-    ODistributedThreadLocal.INSTANCE.distributedExecution = true;
+    lockManager.acquireLock(Thread.currentThread(), iRid, OLockManager.LOCK.EXCLUSIVE);
     try {
-      lockManager.acquireLock(Thread.currentThread(), iRid, OLockManager.LOCK.EXCLUSIVE);
+      final ODatabaseDocumentTx database = openDatabase(storageName);
       try {
-        final ODatabaseDocumentTx database = openDatabase(storageName);
-        try {
 
-          return new ORawBuffer(database.load(iRid));
+        return new ORawBuffer(database.load(iRid));
 
-        } finally {
-          closeDatabase(database);
-        }
       } finally {
-        lockManager.releaseLock(Thread.currentThread(), iRid, OLockManager.LOCK.EXCLUSIVE);
+        closeDatabase(database);
       }
     } finally {
-      ODistributedThreadLocal.INSTANCE.distributedExecution = false;
+      lockManager.releaseLock(Thread.currentThread(), iRid, OLockManager.LOCK.EXCLUSIVE);
     }
   }
 
   @Override
   public int updateRecord(String storageName, ORecordId iRecordId, byte[] iContent, int iVersion, byte iRecordType) {
-    ODistributedThreadLocal.INSTANCE.distributedExecution = true;
+    final ORecordInternal<?> record = Orient.instance().getRecordFactoryManager().newInstance(iRecordType);
+
+    lockManager.acquireLock(Thread.currentThread(), iRecordId, OLockManager.LOCK.EXCLUSIVE);
     try {
-      final ORecordInternal<?> record = Orient.instance().getRecordFactoryManager().newInstance(iRecordType);
-
-      lockManager.acquireLock(Thread.currentThread(), iRecordId, OLockManager.LOCK.EXCLUSIVE);
+      final ODatabaseDocumentTx database = openDatabase(storageName);
       try {
-        final ODatabaseDocumentTx database = openDatabase(storageName);
-        try {
-          record.fill(iRecordId, iVersion, iContent, true);
-          if (iRecordId.getClusterId() == -1)
-            record.save();
-          else
-            record.save(database.getClusterNameById(iRecordId.getClusterId()));
+        record.fill(iRecordId, iVersion, iContent, true);
+        if (iRecordId.getClusterId() == -1)
+          record.save();
+        else
+          record.save(database.getClusterNameById(iRecordId.getClusterId()));
 
-          return record.getVersion();
-        } finally {
-          closeDatabase(database);
-        }
+        return record.getVersion();
       } finally {
-        lockManager.releaseLock(Thread.currentThread(), iRecordId, OLockManager.LOCK.EXCLUSIVE);
+        closeDatabase(database);
       }
     } finally {
-      ODistributedThreadLocal.INSTANCE.distributedExecution = false;
+      lockManager.releaseLock(Thread.currentThread(), iRecordId, OLockManager.LOCK.EXCLUSIVE);
     }
   }
 
@@ -393,28 +383,28 @@ public class OLocalDHTNode implements ODHTNode {
     return result;
   }
 
+  @Override
+  public boolean isLocal() {
+    return true;
+  }
+
   private boolean executeDeleteRecord(String storageName, final ORecordId iRecordId, int iVersion) {
-    ODistributedThreadLocal.INSTANCE.distributedExecution = true;
+    lockManager.acquireLock(Thread.currentThread(), iRecordId, OLockManager.LOCK.EXCLUSIVE);
     try {
-      lockManager.acquireLock(Thread.currentThread(), iRecordId, OLockManager.LOCK.EXCLUSIVE);
+      final ODatabaseDocumentTx database = openDatabase(storageName);
       try {
-        final ODatabaseDocumentTx database = openDatabase(storageName);
-        try {
-          final ORecordInternal record = database.load(iRecordId);
-          if (record != null) {
-            record.setVersion(iVersion);
-            record.delete();
-            return true;
-          }
-          return false;
-        } finally {
-          closeDatabase(database);
+        final ORecordInternal record = database.load(iRecordId);
+        if (record != null) {
+          record.setVersion(iVersion);
+          record.delete();
+          return true;
         }
+        return false;
       } finally {
-        lockManager.releaseLock(Thread.currentThread(), iRecordId, OLockManager.LOCK.EXCLUSIVE);
+        closeDatabase(database);
       }
     } finally {
-      ODistributedThreadLocal.INSTANCE.distributedExecution = false;
+      lockManager.releaseLock(Thread.currentThread(), iRecordId, OLockManager.LOCK.EXCLUSIVE);
     }
   }
 
@@ -650,25 +640,24 @@ public class OLocalDHTNode implements ODHTNode {
 
         final ODatabaseDocumentTx db = openDatabase(storageName);
 
-
         final Set<String> clusterNames = db.getStorage().getClusterNames();
         for (String clusterName : clusterNames) {
-          if ( dhtConfiguration.getUndistributableClusters().contains( clusterName.toLowerCase() ) ) {
+          if (dhtConfiguration.getUndistributableClusters().contains(clusterName.toLowerCase())) {
             continue;
           }
 
           // TODO replace by another special iterator
-          final ORecordIteratorCluster<? extends ORecordInternal<?>> it = db.browseCluster( clusterName );
-          while ( it.hasNext() ) {
+          final ORecordIteratorCluster<? extends ORecordInternal<?>> it = db.browseCluster(clusterName);
+          while (it.hasNext()) {
             final ORecordInternal<?> rec = it.next();
-            lockManager.acquireLock( Thread.currentThread(), rec.getIdentity(), OLockManager.LOCK.EXCLUSIVE );
+            lockManager.acquireLock(Thread.currentThread(), rec.getIdentity(), OLockManager.LOCK.EXCLUSIVE);
             try {
-              final long successorId = findSuccessor( rec.getIdentity().getClusterPosition() );
-              if ( successorId != id ) {
-                final ODHTNode node = nodeLookup.findById( successorId );
+              final long successorId = findSuccessor(rec.getIdentity().getClusterPosition());
+              if (successorId != id) {
+                final ODHTNode node = nodeLookup.findById(successorId);
 
                 // TODO change to migrate record
-                node.createRecord( storageName, (ORecordId) rec.getIdentity(), rec.toStream(), rec.getVersion(), rec.getRecordType() );
+                node.createRecord(storageName, (ORecordId) rec.getIdentity(), rec.toStream(), rec.getVersion(), rec.getRecordType());
 
                 // TODO change to replicate local delete
                 ODistributedThreadLocal.INSTANCE.distributedExecution = true;
@@ -679,7 +668,7 @@ public class OLocalDHTNode implements ODHTNode {
                 }
               }
             } finally {
-              lockManager.releaseLock( Thread.currentThread(), rec.getIdentity(), OLockManager.LOCK.EXCLUSIVE );
+              lockManager.releaseLock(Thread.currentThread(), rec.getIdentity(), OLockManager.LOCK.EXCLUSIVE);
             }
           }
         }

@@ -22,13 +22,15 @@ import com.orientechnologies.orient.server.hazelcast.sharding.distributed.ODHTCo
 import com.orientechnologies.orient.server.hazelcast.sharding.hazelcast.ServerInstance;
 
 /**
- * @author <a href="mailto:enisher@exigenservices.com">Artem Orobets</a>
+ * Distributed plugin implementation that supports autosharding
+ * 
+ * @author <a href="mailto:enisher@gmail.com">Artem Orobets</a>
  * @since 8/27/12
  */
 public class OAutoshardingPlugin extends OServerHandlerAbstract implements ODatabaseLifecycleListener {
 
-  private boolean        enabled = true;
-  private ServerInstance serverInstance;
+  private boolean          enabled = true;
+  private ServerInstance   serverInstance;
   private DHTConfiguration dhtConfiguration;
 
   @Override
@@ -72,7 +74,8 @@ public class OAutoshardingPlugin extends OServerHandlerAbstract implements OData
   @Override
   public void onOpen(ODatabase iDatabase) {
     if (iDatabase instanceof ODatabaseComplex<?>) {
-      iDatabase.replaceStorage(new OAutoshardedStorage(serverInstance, (OStorageEmbedded) iDatabase.getStorage(), dhtConfiguration));
+      iDatabase
+          .replaceStorage(new OAutoshardedStorage(serverInstance, (OStorageEmbedded) iDatabase.getStorage(), dhtConfiguration));
     }
   }
 
@@ -87,11 +90,11 @@ public class OAutoshardingPlugin extends OServerHandlerAbstract implements OData
     public DHTConfiguration() {
       clusters = new HashSet<String>();
 
-      clusters.add( OStorage.CLUSTER_INTERNAL_NAME.toLowerCase() );
-      clusters.add( OStorage.CLUSTER_INDEX_NAME.toLowerCase() );
-      clusters.add( ORole.CLASS_NAME.toLowerCase() );
-      clusters.add( OUser.CLASS_NAME.toLowerCase() );
-      clusters.add( OMVRBTreeRIDProvider.PERSISTENT_CLASS_NAME.toLowerCase() );
+      clusters.add(OStorage.CLUSTER_INTERNAL_NAME.toLowerCase());
+      clusters.add(OStorage.CLUSTER_INDEX_NAME.toLowerCase());
+      clusters.add(ORole.CLASS_NAME.toLowerCase());
+      clusters.add(OUser.CLASS_NAME.toLowerCase());
+      clusters.add(OMVRBTreeRIDProvider.PERSISTENT_CLASS_NAME.toLowerCase());
     }
 
     @Override

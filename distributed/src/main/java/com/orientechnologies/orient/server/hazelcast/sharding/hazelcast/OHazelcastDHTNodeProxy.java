@@ -104,6 +104,11 @@ public class OHazelcastDHTNodeProxy implements ODHTNode {
     return callOnRemoteMember(new DeleteRecordNodeCall(nodeId, member.getUuid(), storageName, iRecordId, iVersion), false);
   }
 
+  @Override
+  public boolean isLocal() {
+    return false;
+  }
+
   private <T> T callOnRemoteMember(final NodeCall<T> call, boolean async) {
     try {
       Future<T> future = (Future<T>) hazelcastInstance.getExecutorService().submit(new DistributedTask<T>(call, member));
