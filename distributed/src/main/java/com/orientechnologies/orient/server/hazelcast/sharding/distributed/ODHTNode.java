@@ -22,14 +22,6 @@ public interface ODHTNode {
 
   public long findSuccessor(long id);
 
-  public void put(Long id, String data);
-
-  public String get(Long id);
-
-  public boolean remove(Long id);
-
-  public int size();
-
   public void notifyMigrationEnd(long nodeId);
 
   public void requestMigration(long requesterId);

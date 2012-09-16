@@ -42,16 +42,10 @@ public class OLocalDHTNode implements ODHTNode {
   private final long                         id;
   private final AtomicLongArray              fingerPoints      = new AtomicLongArray(63);
 
-  private final Map<Long, String>            db                = new ConcurrentHashMap<Long, String>();
-
   private volatile long                      migrationId       = -1;
   private volatile ODHTNodeLookup            nodeLookup;
   private volatile ODHTConfiguration         dhtConfiguration;
   private AtomicInteger                      next              = new AtomicInteger(1);
-
-  // TODO remove it
-  @Deprecated
-  private final OLockManager<Long, Runnable> lockManagerForMap = new OLockManager<Long, Runnable>(true, 500);
 
   private final OLockManager<ORID, Runnable> lockManager       = new OLockManager<ORID, Runnable>(true, 500);
 
@@ -163,90 +157,6 @@ public class OLocalDHTNode implements ODHTNode {
 
   public Long getPredecessor() {
     return predecessor.get();
-  }
-
-  public void put(Long dataId, String data) {
-    while (state == NodeState.JOIN) {
-      log("Wait till node will be joined.");
-      try {
-        Thread.sleep(100);
-      } catch (InterruptedException e) {
-        e.printStackTrace();
-      }
-    }
-
-    putData(dataId, data);
-  }
-
-  private void putData(Long dataId, String data) {
-    // log("Put for " + dataId);
-    lockManagerForMap.acquireLock(Thread.currentThread(), dataId, OLockManager.LOCK.EXCLUSIVE);
-    try {
-      this.db.put(dataId, data);
-    } finally {
-      lockManagerForMap.releaseLock(Thread.currentThread(), dataId, OLockManager.LOCK.EXCLUSIVE);
-    }
-  }
-
-  public String get(Long dataId) {
-    while (state == NodeState.JOIN) {
-      log("Wait till node will be joined.");
-      try {
-        Thread.sleep(100);
-      } catch (InterruptedException e) {
-        e.printStackTrace();
-      }
-    }
-
-    if (state == NodeState.MERGING) {
-      String data;
-      data = readData(dataId);
-
-      if (data == null) {
-        final ODHTNode successorNode = nodeLookup.findById(fingerPoints.get(0));
-        data = successorNode.get(dataId);
-        if (data == null && successorNode.getNodeId() != id)
-          return readData(dataId);
-        else
-          return data;
-      } else
-        return data;
-    }
-
-    return readData(dataId);
-  }
-
-  private String readData(Long dataId) {
-    String data;
-    lockManagerForMap.acquireLock(Thread.currentThread(), dataId, OLockManager.LOCK.SHARED);
-    try {
-      data = db.get(dataId);
-    } finally {
-      lockManagerForMap.releaseLock(Thread.currentThread(), dataId, OLockManager.LOCK.SHARED);
-    }
-    return data;
-  }
-
-  public boolean remove(Long dataId) {
-    boolean result = false;
-
-    while (state == NodeState.JOIN) {
-      log("Wait till node will be joined.");
-      try {
-        Thread.sleep(100);
-      } catch (InterruptedException e) {
-        e.printStackTrace();
-      }
-    }
-
-    if (state == NodeState.MERGING) {
-      final ODHTNode successorNode = nodeLookup.findById(fingerPoints.get(0));
-      result = successorNode.remove(dataId);
-    }
-
-    result = result | removeData(dataId);
-
-    return result;
   }
 
   public void requestMigration(long requesterId) {
@@ -427,19 +337,6 @@ public class OLocalDHTNode implements ODHTNode {
   protected void closeDatabase(final ODatabaseDocumentTx iDatabase) {
     if (!inheritedDatabase)
       iDatabase.close();
-  }
-
-  private boolean removeData(Long dataId) {
-    lockManagerForMap.acquireLock(Thread.currentThread(), dataId, OLockManager.LOCK.EXCLUSIVE);
-    try {
-      return db.remove(dataId) != null;
-    } finally {
-      lockManagerForMap.releaseLock(Thread.currentThread(), dataId, OLockManager.LOCK.EXCLUSIVE);
-    }
-  }
-
-  public int size() {
-    return db.size();
   }
 
   public void stabilize() {
@@ -646,7 +543,6 @@ public class OLocalDHTNode implements ODHTNode {
             continue;
           }
 
-          // TODO replace by another special iterator
           final ORecordIteratorCluster<? extends ORecordInternal<?>> it = db.browseCluster(clusterName);
           while (it.hasNext()) {
             final ORecordInternal<?> rec = it.next();
@@ -656,10 +552,8 @@ public class OLocalDHTNode implements ODHTNode {
               if (successorId != id) {
                 final ODHTNode node = nodeLookup.findById(successorId);
 
-                // TODO change to migrate record
                 node.createRecord(storageName, (ORecordId) rec.getIdentity(), rec.toStream(), rec.getVersion(), rec.getRecordType());
 
-                // TODO change to replicate local delete
                 ODistributedThreadLocal.INSTANCE.distributedExecution = true;
                 try {
                   rec.delete();
@@ -671,63 +565,6 @@ public class OLocalDHTNode implements ODHTNode {
               lockManager.releaseLock(Thread.currentThread(), rec.getIdentity(), OLockManager.LOCK.EXCLUSIVE);
             }
           }
-        }
-      }
-
-      if (state == NodeState.STABLE) {
-        final ODHTNode node = nodeLookup.findById(requesterNode);
-        node.notifyMigrationEnd(id);
-      } else {
-        notificationQueue.add(requesterNode);
-        if (state == NodeState.STABLE) {
-          Long nodeToNotifyId = notificationQueue.poll();
-          while (nodeToNotifyId != null) {
-            final ODHTNode node = nodeLookup.findById(nodeToNotifyId);
-            node.notifyMigrationEnd(id);
-            nodeToNotifyId = notificationQueue.poll();
-          }
-        }
-      }
-
-      log("Migration was successfully finished for node " + requesterNode);
-      return null;
-    }
-  }
-
-  private final class OldMergeCallable implements Callable<Void> {
-    private Iterator<Long>       keyIterator;
-    private final ODHTNodeLookup nodeLookup;
-    private final long           requesterNode;
-
-    private OldMergeCallable(ODHTNodeLookup nodeLookup, long requesterNode) {
-      this.nodeLookup = nodeLookup;
-      this.requesterNode = requesterNode;
-      this.keyIterator = db.keySet().iterator();
-    }
-
-    public Void call() throws Exception {
-      while (keyIterator.hasNext()) {
-        long key = keyIterator.next();
-        // log("Migration - examine data with key : " + key);
-        lockManagerForMap.acquireLock(Thread.currentThread(), key, OLockManager.LOCK.EXCLUSIVE);
-        try {
-          final String data = get(key);
-          if (data != null) {
-            final long nodeId = findSuccessor(key);
-            if (nodeId != id) {
-              // log("Key " + key + " belongs to node " + nodeId + ". Key is going to be migrated.");
-              final ODHTNode node = nodeLookup.findById(nodeId);
-              node.put(key, data);
-
-              keyIterator.remove();
-              // log("Key " + key + " was successfully removed.");
-            }
-          }
-          // else {
-          // log("Key " + key + " is kept on current node.");
-          // }
-        } finally {
-          lockManagerForMap.releaseLock(Thread.currentThread(), key, OLockManager.LOCK.EXCLUSIVE);
         }
       }
 

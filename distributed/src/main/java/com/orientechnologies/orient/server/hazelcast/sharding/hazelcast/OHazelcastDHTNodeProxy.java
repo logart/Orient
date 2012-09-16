@@ -57,24 +57,8 @@ public class OHazelcastDHTNodeProxy implements ODHTNode {
     return callOnRemoteMember(new FindSuccessorNodeCall(nodeId, member.getUuid(), id), false);
   }
 
-  public void put(Long id, String data) {
-    callOnRemoteMember(new PutNodeCall(nodeId, member.getUuid(), data, id), false);
-  }
-
-  public String get(Long id) {
-    return callOnRemoteMember(new GetNodeCall(nodeId, member.getUuid(), id), false);
-  }
-
-  public int size() {
-    return callOnRemoteMember(new SizeNodeCall(nodeId, member.getUuid()), false);
-  }
-
   public void notifyMigrationEnd(long notifierId) {
     callOnRemoteMember(new NotifyMigrationEndNodeCall(this.nodeId, member.getUuid(), notifierId), true);
-  }
-
-  public boolean remove(Long id) {
-    return callOnRemoteMember(new RemoveNodeCall(nodeId, member.getUuid(), id), false);
   }
 
   public void requestMigration(long requesterId) {
@@ -170,20 +154,6 @@ public class OHazelcastDHTNodeProxy implements ODHTNode {
     }
   }
 
-  private static final class SizeNodeCall extends NodeCall<Integer> {
-    public SizeNodeCall() {
-    }
-
-    private SizeNodeCall(long nodeId, String memberUUID) {
-      super(nodeId, memberUUID);
-    }
-
-    @Override
-    protected Integer call(ODHTNode node) {
-      return node.size();
-    }
-  }
-
   private static final class GetPredecessorNodeCall extends NodeCall<Long> {
     public GetPredecessorNodeCall() {
     }
@@ -272,99 +242,6 @@ public class OHazelcastDHTNodeProxy implements ODHTNode {
     @Override
     protected Long call(ODHTNode node) {
       return node.findSuccessor(keyId);
-    }
-
-    @Override
-    public void writeExternal(ObjectOutput out) throws IOException {
-      super.writeExternal(out);
-      out.writeLong(keyId);
-    }
-
-    @Override
-    public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-      super.readExternal(in);
-      keyId = in.readLong();
-    }
-  }
-
-  private static final class PutNodeCall extends NodeCall<Void> {
-    private String data;
-    private Long   keyId;
-
-    public PutNodeCall() {
-    }
-
-    private PutNodeCall(long nodeId, String memberUUID, String data, Long keyId) {
-      super(nodeId, memberUUID);
-      this.data = data;
-      this.keyId = keyId;
-    }
-
-    @Override
-    protected Void call(ODHTNode node) {
-      node.put(keyId, data);
-
-      return null;
-    }
-
-    @Override
-    public void writeExternal(ObjectOutput out) throws IOException {
-      super.writeExternal(out);
-      out.writeLong(keyId);
-      out.writeUTF(data);
-    }
-
-    @Override
-    public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-      super.readExternal(in);
-      keyId = in.readLong();
-      data = in.readUTF();
-    }
-  }
-
-  private static final class GetNodeCall extends NodeCall<String> {
-    private Long keyId;
-
-    public GetNodeCall() {
-    }
-
-    private GetNodeCall(long nodeId, String memberUUID, Long keyId) {
-      super(nodeId, memberUUID);
-      this.keyId = keyId;
-    }
-
-    @Override
-    protected String call(ODHTNode node) {
-      return node.get(keyId);
-    }
-
-    @Override
-    public void writeExternal(ObjectOutput out) throws IOException {
-      super.writeExternal(out);
-      out.writeLong(keyId);
-    }
-
-    @Override
-    public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-      super.readExternal(in);
-      keyId = in.readLong();
-    }
-  }
-
-  private static final class RemoveNodeCall extends NodeCall<Boolean> {
-    private long keyId;
-
-    public RemoveNodeCall() {
-    }
-
-    private RemoveNodeCall(long nodeId, String memberUUID, long keyId) {
-      super(nodeId, memberUUID);
-      this.keyId = keyId;
-    }
-
-    @Override
-    protected Boolean call(ODHTNode node) {
-      return node.remove(keyId);
     }
 
     @Override
@@ -572,7 +449,7 @@ public class OHazelcastDHTNodeProxy implements ODHTNode {
     private ORecordId iRecordId;
     private int       iVersion;
 
-    private DeleteRecordNodeCall() {
+    public DeleteRecordNodeCall() {
     }
 
     public DeleteRecordNodeCall(long nodeId, String uuid, String storageName, ORecordId iRecordId, int iVersion) {
