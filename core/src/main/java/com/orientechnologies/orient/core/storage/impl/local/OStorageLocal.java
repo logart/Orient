@@ -33,7 +33,6 @@ import com.orientechnologies.common.io.OFileUtils;
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.common.parser.OSystemVariableResolver;
 import com.orientechnologies.common.profiler.OProfiler.OProfilerHookValue;
-import com.orientechnologies.common.util.MersenneTwisterFast;
 import com.orientechnologies.common.util.OArrays;
 import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.command.OCommandOutputListener;
@@ -78,7 +77,7 @@ public class OStorageLocal extends OStorageEmbedded {
 
   private static String[]               ALL_FILE_EXTENSIONS = { "ocf", ".och", ".ocl", ".oda", ".odh", ".otx", ".oco", ".ocs" };
 
-  private final MersenneTwisterFast     positionGenerator   = new MersenneTwisterFast();
+  private volatile long                 positionGenerator   = 0;
 
   private OModificationLock             modificationLock    = new OModificationLock();
 
@@ -1489,10 +1488,12 @@ public class OStorageLocal extends OStorageEmbedded {
     try {
       final OPhysicalPosition ppos = new OPhysicalPosition(-1, -1, iRecordType);
 
+      boolean sequentialPositionGeneration = false;
       if (iClusterSegment.generatePositionBeforeCreation()) {
         if (iRid.isNew()) {
-          iRid.clusterPosition = Math.abs( positionGenerator.nextLong() );
-        } // otherwise it has been already generated
+          iRid.clusterPosition = positionGenerator++;
+          sequentialPositionGeneration = true;
+        } // GENERATED EXTERNALLY
       } else {
         iClusterSegment.addPhysicalPosition(ppos);
         iRid.clusterPosition = ppos.clusterPosition;
@@ -1509,10 +1510,7 @@ public class OStorageLocal extends OStorageEmbedded {
             ppos.recordVersion = iRecordVersion;
 
           ppos.clusterPosition = iRid.clusterPosition;
-          if (!iClusterSegment.addPhysicalPosition(ppos)) {
-            iDataSegment.deleteRecord(ppos.dataSegmentPos);
-            throw new ORecordDuplicatedException("Record with rid=" + iRid.toString() + " already exists in the database", iRid);
-          }
+          addPhysicalPosition(iDataSegment, iClusterSegment, iRid, ppos, sequentialPositionGeneration);
         } else {
           // UPDATE THE POSITION IN CLUSTER WITH THE POSITION OF RECORD IN DATA
           iClusterSegment.updateDataSegmentPosition(ppos.clusterPosition, ppos.dataSegmentId, ppos.dataSegmentPos);
@@ -1537,6 +1535,31 @@ public class OStorageLocal extends OStorageEmbedded {
       lock.releaseExclusiveLock();
 
       Orient.instance().getProfiler().stopChrono(PROFILER_CREATE_RECORD, timer);
+    }
+  }
+
+  private void addPhysicalPosition(ODataLocal iDataSegment, OCluster iClusterSegment, ORecordId iRid, OPhysicalPosition ppos,
+      boolean sequentialPositionGeneration) throws IOException {
+    if (!iClusterSegment.addPhysicalPosition(ppos)) {
+
+      if (sequentialPositionGeneration) {
+
+        do {
+          // iRid.clusterPosition = positionGenerator.nextLong(Long.MAX_VALUE);
+          lockManager.releaseLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
+
+          iRid.clusterPosition = positionGenerator++;
+          ppos.clusterPosition = iRid.clusterPosition;
+
+          lockManager.acquireLock(Thread.currentThread(), iRid, LOCK.EXCLUSIVE);
+          iDataSegment.setRecordRid(ppos.dataSegmentPos, iRid);
+        } while (!iClusterSegment.addPhysicalPosition(ppos));
+
+      } else {
+        iDataSegment.deleteRecord(ppos.dataSegmentPos);
+        throw new ORecordDuplicatedException("Record with rid=" + iRid.toString() + " already exists in the database", iRid);
+      }
+
     }
   }
 
