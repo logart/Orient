@@ -12,6 +12,7 @@ public class ODougLeaAllocator implements OMemory {
   private static final OBinaryConverter CONVERTER         = OBinaryConverterFactory.getConverter();
 
   private static final int              BUCKET_OVERHEAD   = 8;
+  private static final int              BOUNDARY_TAG_SIZE = 8;
   private static final int              MIN_CHUNK_SIZE    = 16;
 
   private static final int              SMALL_BIN_COUNT   = 64;
@@ -31,7 +32,7 @@ public class ODougLeaAllocator implements OMemory {
   private BitMap                        bigMap            = new BitMap(0L);
 
   private int                           dvPtr             = OMemory.NULL_POINTER;
-  private int                           dvSize;
+  private int                           dvSize            = 0;
 
   public ODougLeaAllocator(int bufferSize) {
     int alignedBufferSize = bufferSize & 0xFFFFFFF0;
@@ -63,12 +64,33 @@ public class ODougLeaAllocator implements OMemory {
       if (smallMap.fitsWithoutRemainder(binIndex)) { // REMAINDERLESS
         binIndex += smallMap.indexOffsetWithoutRemainder(binIndex);
         return allocateSmall( binIndex, nb );
-      } else if (nb > dvSize && smallMap.isNonEmptyBinForIndex( binIndex )) { // DV CHUNK IS TOO SMALL AND THERE
-                                                                              // IS AT LEAST ONE NON-EMPTY SMALL BIN
-        binIndex += smallMap.indexOffset( binIndex );
-        return allocateSmall( binIndex, nb );
-      }
+      } else if (nb > dvSize) { // DV CHUNK IS TOO SMALL
+        if (smallMap.isNonEmptyBinForIndex( binIndex )) { // THERE IS AT LEAST ONE NON-EMPTY SMALL BIN
+          binIndex += smallMap.indexOffset( binIndex );
+          return allocateSmall( binIndex, nb );
+        } else { // ALLOCATE SMALL REQUEST IN LARGE BIN
 
+        }
+      }
+    } else { // ALLOCATE LARGE REQUEST IN LARGE BIN
+
+    }
+
+    if (nb <= dvSize) { // USE LAST REMAINDER
+      int ptr = dvPtr;
+      int rsize = dvSize - nb;
+      if (rsize > MIN_CHUNK_SIZE) { // SPLIT DV
+        dvPtr += nb;
+        dvSize = rsize;
+        new DataChunk(dvPtr).updateBoundaryTags(rsize, false, true);
+        final DataChunk chunk = new DataChunk(ptr);
+        chunk.updateBoundaryTags(nb, true, chunk.isPrevInUse());
+      } else { // USE WHOLE DV
+        dvPtr = OMemory.NULL_POINTER;
+        setInuseAndPinuse(ptr, true, dvSize);
+        dvSize = 0;
+      }
+      return chunkToMemory(ptr);
     }
 
     return OMemory.NULL_POINTER;
@@ -78,8 +100,16 @@ public class ODougLeaAllocator implements OMemory {
     final int b = smallBin[binIndex];
     final int p = new DataChunk(b).getFd();
     unlinkSmallChunk(p, size);
-    // TODO UPDATE INUSE AND PINUSE
+    setInuseAndPinuse(p, true, size);
     return chunkToMemory(p);
+  }
+
+  private void setInuseAndPinuse(int chunkPtr, boolean inUse, int size) {
+    new DataChunk(chunkPtr).setInUse(inUse);
+    final int nextPtr = chunkPtr + size;
+    //if (nextPtr > )
+    final DataChunk nextChunk = new DataChunk(nextPtr);
+    nextChunk.setPrevInUse(inUse);
   }
 
   public void free(int pointer) {
@@ -257,6 +287,7 @@ public class ODougLeaAllocator implements OMemory {
     if (dvPtr != OMemory.NULL_POINTER) {
       insertChunk(dvPtr, dvSize);
       dvPtr = OMemory.NULL_POINTER;
+      dvSize = 0;
     }
   }
 
@@ -272,7 +303,7 @@ public class ODougLeaAllocator implements OMemory {
   }
 
   private int chunkToMemory(int chunkPtr) {
-    return chunkPtr + BUCKET_OVERHEAD;
+    return chunkPtr + BOUNDARY_TAG_SIZE;
   }
 
   private void writeInt(int pointer, int offset, int value) {
@@ -295,6 +326,8 @@ public class ODougLeaAllocator implements OMemory {
     private static final int IN_USE                 = 0x1;
     private static final int P_IN_USE               = 0x2;
 
+    private static final int SIZE_MASK              = ~0x7;
+
     private final int        headPointer;
 
     public DataChunk(int headPointer) {
@@ -313,6 +346,28 @@ public class ODougLeaAllocator implements OMemory {
 
       if (!inUse)
         writeInt(headPointer, size - 4, size);
+    }
+
+    public void setInUse(boolean inUse) {
+      int head = readInt(headPointer, 0);
+      head = inUse ? head | IN_USE : head ^ IN_USE;
+      writeInt(headPointer, 0, head);
+    }
+
+    public void setPrevInUse(boolean inUse) {
+      int head = readInt(headPointer, 0);
+      head = inUse ? head | P_IN_USE : head ^ P_IN_USE;
+      writeInt(headPointer, 0, head);
+    }
+
+    public boolean isInUse() {
+      final int head = readInt(headPointer, 0);
+      return (head & IN_USE) != 0;
+    }
+
+    public boolean isPrevInUse() {
+      final int head = readInt(headPointer, 0);
+      return (head & P_IN_USE) != 0;
     }
 
     public int getFd() {
