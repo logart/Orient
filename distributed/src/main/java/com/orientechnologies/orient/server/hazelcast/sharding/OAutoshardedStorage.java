@@ -29,7 +29,7 @@ import com.orientechnologies.orient.server.hazelcast.sharding.distributed.ODHTNo
 import com.orientechnologies.orient.server.hazelcast.sharding.hazelcast.ServerInstance;
 
 /**
- * @author <a href="mailto:enisher@exigenservices.com">Artem Orobets</a>
+ * @author <a href="mailto:enisher@gmail.com">Artem Orobets</a>
  * @since 8/28/12
  */
 public class OAutoshardedStorage implements OStorage {
@@ -113,7 +113,7 @@ public class OAutoshardedStorage implements OStorage {
 
   @Override
   public boolean deleteRecord(ORecordId iRecordId, int iVersion, int iMode, ORecordCallback<Boolean> iCallback) {
-    if (undistributedClusters.contains(iRecordId.getClusterId())) {
+    if (ODistributedThreadLocal.INSTANCE.distributedExecution || undistributedClusters.contains(iRecordId.getClusterId())) {
       return wrapped.deleteRecord(iRecordId, iVersion, iMode, iCallback);
     }
 
