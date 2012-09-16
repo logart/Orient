@@ -398,7 +398,7 @@ public class OHazelcastDHTNodeProxy implements ODHTNode {
     }
   }
 
-  private class UpdateRecordNodeCall extends NodeCall<Integer> {
+  private static class UpdateRecordNodeCall extends NodeCall<Integer> {
     private String    storageName;
     private ORecordId iRecordId;
     private byte[]    iContent;
@@ -444,7 +444,7 @@ public class OHazelcastDHTNodeProxy implements ODHTNode {
     }
   }
 
-  private class DeleteRecordNodeCall extends NodeCall<Boolean> {
+  private static class DeleteRecordNodeCall extends NodeCall<Boolean> {
     private String    storageName;
     private ORecordId iRecordId;
     private int       iVersion;
