@@ -11,7 +11,7 @@ public class ODougLeaAllocator implements OMemory {
 
   private static final OBinaryConverter CONVERTER         = OBinaryConverterFactory.getConverter();
 
-  private static final int              BUCKET_OVERHEAD   = 8;
+  private static final int              CHUNK_OVERHEAD    = 8;
   private static final int              BOUNDARY_TAG_SIZE = 8;
   private static final int              MIN_CHUNK_SIZE    = 16;
 
@@ -53,7 +53,12 @@ public class ODougLeaAllocator implements OMemory {
   }
 
   public int allocate(byte[] bytes) {
-    return 0;
+    int pointer = allocate(bytes.length);
+
+    if (pointer != OMemory.NULL_POINTER)
+      set(pointer, 0, bytes.length, bytes);
+
+    return pointer;
   }
 
   public int allocate(int size) {
@@ -63,11 +68,11 @@ public class ODougLeaAllocator implements OMemory {
       int binIndex = getSmallBinIndex(nb);
       if (smallMap.fitsWithoutRemainder(binIndex)) { // REMAINDERLESS
         binIndex += smallMap.indexOffsetWithoutRemainder(binIndex);
-        return allocateSmall( binIndex, nb );
+        return allocateSmall(binIndex, nb);
       } else if (nb > dvSize) { // DV CHUNK IS TOO SMALL
-        if (smallMap.isNonEmptyBinForIndex( binIndex )) { // THERE IS AT LEAST ONE NON-EMPTY SMALL BIN
-          binIndex += smallMap.indexOffset( binIndex );
-          return allocateSmall( binIndex, nb );
+        if (smallMap.isNonEmptyBinForIndex(binIndex)) { // THERE IS AT LEAST ONE NON-EMPTY SMALL BIN
+          binIndex += smallMap.indexOffset(binIndex);
+          return allocateSmall(binIndex, nb);
         } else { // ALLOCATE SMALL REQUEST IN LARGE BIN
 
         }
@@ -104,10 +109,22 @@ public class ODougLeaAllocator implements OMemory {
     return chunkToMemory(p);
   }
 
+  /**
+   * Update "in use" and "previous in use" flags.
+   * 
+   * @param chunkPtr
+   *          pointer to the chunk
+   * @param inUse
+   *          flag that shows that current chunk is in use
+   * @param size
+   *          of chunk
+   */
   private void setInuseAndPinuse(int chunkPtr, boolean inUse, int size) {
     new DataChunk(chunkPtr).setInUse(inUse);
     final int nextPtr = chunkPtr + size;
-    //if (nextPtr > )
+    // if (nextPtr > )
+
+    // TODO recheck this strange part...
     final DataChunk nextChunk = new DataChunk(nextPtr);
     nextChunk.setPrevInUse(inUse);
   }
@@ -174,7 +191,7 @@ public class ODougLeaAllocator implements OMemory {
 
   /**
    * Checks correctness of allocator representation.
-   *
+   * 
    * @return free space
    */
   public int checkStructure() {
@@ -299,7 +316,7 @@ public class ODougLeaAllocator implements OMemory {
   }
 
   private int padRequest(int size) {
-    return size + BUCKET_OVERHEAD;
+    return size + CHUNK_OVERHEAD;
   }
 
   private int chunkToMemory(int chunkPtr) {
@@ -443,14 +460,14 @@ public class ODougLeaAllocator implements OMemory {
     }
 
     /**
-     * Look whether one of {@code index} or {@code index + 1} chunks (or both)
-     * is not empty. If so, then request fits without remainder to a chunk size.
+     * Look whether one of {@code index} or {@code index + 1} chunks (or both) is not empty. If so, then request fits without
+     * remainder to a chunk size.
      * <p/>
      * Only for small requests.
-     *
-     * @param index Small bin index
-     * @return {@code true} if at least one of the chunks is not empty,
-     *         {@code false} if both are empty
+     * 
+     * @param index
+     *          Small bin index
+     * @return {@code true} if at least one of the chunks is not empty, {@code false} if both are empty
      */
     public boolean fitsWithoutRemainder(int index) {
       return ((set >> index) & 3l) != 0;
@@ -458,8 +475,9 @@ public class ODougLeaAllocator implements OMemory {
 
     /**
      * Count index offset for a small bin that
-     *
-     * @param index Small bin index
+     * 
+     * @param index
+     *          Small bin index
      * @return 0 if {@code index} chunk is not empty, 1 if it is empty
      */
     public int indexOffsetWithoutRemainder(int index) {
@@ -467,7 +485,7 @@ public class ODougLeaAllocator implements OMemory {
     }
 
     public int indexOffset(int index) {
-      return Long.numberOfTrailingZeros( set >> index );
+      return Long.numberOfTrailingZeros(set >> index);
     }
 
     public boolean isNonEmptyBinForIndex(int index) {
