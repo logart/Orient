@@ -32,22 +32,20 @@ import com.orientechnologies.orient.core.serialization.serializer.OStringSeriali
 public class ORecordId implements ORID {
   private static final long     serialVersionUID       = 247070594054408657L;
 
-  public static final int       PERSISTENT_SIZE        = OBinaryProtocol.SIZE_SHORT + OBinaryProtocol.SIZE_LONG;
-
   public static final ORecordId EMPTY_RECORD_ID        = new ORecordId();
   public static final byte[]    EMPTY_RECORD_ID_STREAM = EMPTY_RECORD_ID.toStream();
 
-  public int                    clusterId              = CLUSTER_ID_INVALID;                                    // INT TO AVOID
-                                                                                                                 // JVM
-                                                                                                                 // PENALITY, BUT
-                                                                                                                 // IT'S STORED
-                                                                                                                 // AS SHORT
-  public long                   clusterPosition        = CLUSTER_POS_INVALID;
+  public int                    clusterId              = CLUSTER_ID_INVALID;               // INT TO AVOID
+                                                                                            // JVM
+                                                                                            // PENALITY, BUT
+                                                                                            // IT'S STORED
+                                                                                            // AS SHORT
+  public OClusterPosition       clusterPosition        = OClusterPosition.INVALID_POSITION;
 
   public ORecordId() {
   }
 
-  public ORecordId(final int iClusterId, final long iPosition) {
+  public ORecordId(final int iClusterId, final OClusterPosition iPosition) {
     clusterId = iClusterId;
     checkClusterLimits();
     clusterPosition = iPosition;
@@ -79,19 +77,19 @@ public class ORecordId implements ORID {
   }
 
   public boolean isValid() {
-    return clusterPosition != CLUSTER_POS_INVALID;
+    return clusterPosition.isValid();
   }
 
   public boolean isPersistent() {
-    return clusterId > -1 && clusterPosition > -1;
+    return clusterId > -1 && clusterPosition.isPersistent();
   }
 
   public boolean isNew() {
-    return clusterPosition < 0;
+    return clusterPosition.isNew();
   }
 
   public boolean isTemporary() {
-    return clusterId != -1 && clusterPosition < -1;
+    return clusterId != -1 && clusterPosition.isTemporary();
   }
 
   @Override
@@ -110,7 +108,7 @@ public class ORecordId implements ORID {
     return iBuffer;
   }
 
-  public static String generateString(final int iClusterId, final long iPosition) {
+  public static String generateString(final int iClusterId, final OClusterPosition iPosition) {
     final StringBuilder buffer = new StringBuilder(12);
     buffer.append(PREFIX);
     buffer.append(iClusterId);
@@ -120,28 +118,27 @@ public class ORecordId implements ORID {
   }
 
   @Override
-  public int hashCode() {
-    final int prime = 31;
-    int result = 1;
-    result = prime * result + clusterId;
-    result = prime * result + (int) (clusterPosition ^ (clusterPosition >>> 32));
-    return result;
+  public boolean equals(Object o) {
+    if (this == o)
+      return true;
+    if (o == null || getClass() != o.getClass())
+      return false;
+
+    ORecordId oRecordId = (ORecordId) o;
+
+    if (clusterId != oRecordId.clusterId)
+      return false;
+    if (!clusterPosition.equals(oRecordId.clusterPosition))
+      return false;
+
+    return true;
   }
 
   @Override
-  public boolean equals(final Object obj) {
-    if (this == obj)
-      return true;
-    if (obj == null)
-      return false;
-    if (!(obj instanceof OIdentifiable))
-      return false;
-    final ORecordId other = (ORecordId) ((OIdentifiable) obj).getIdentity();
-    if (clusterId != other.clusterId)
-      return false;
-    if (clusterPosition != other.clusterPosition)
-      return false;
-    return true;
+  public int hashCode() {
+    int result = clusterId;
+    result = 31 * result + clusterPosition.hashCode();
+    return result;
   }
 
   public int compareTo(final OIdentifiable iOther) {
@@ -153,14 +150,9 @@ public class ORecordId implements ORID {
 
     final int otherClusterId = iOther.getIdentity().getClusterId();
     if (clusterId == otherClusterId) {
-      final long otherClusterPos = iOther.getIdentity().getClusterPosition();
+      final OClusterPosition otherClusterPos = iOther.getIdentity().getClusterPosition();
 
-      if (clusterPosition == otherClusterPos)
-        return 0;
-      else if (clusterPosition > otherClusterPos)
-        return 1;
-      else if (clusterPosition < otherClusterPos)
-        return -1;
+      return clusterPosition.compareTo(otherClusterPos);
     } else if (clusterId > otherClusterId)
       return 1;
 
@@ -191,40 +183,57 @@ public class ORecordId implements ORID {
 
   public ORecordId fromStream(final InputStream iStream) throws IOException {
     clusterId = OBinaryProtocol.bytes2short(iStream);
-    clusterPosition = OBinaryProtocol.bytes2long(iStream);
+
+    final byte[] content = new byte[OClusterPositionFactory.INSTANCE.getSerializedSize()];
+    int contentLength = 0;
+    int bytesToRead;
+    do {
+      bytesToRead = iStream.read(content, contentLength, content.length - contentLength);
+      if (bytesToRead < 0)
+        break;
+
+      contentLength += bytesToRead;
+    } while (contentLength < content.length);
+
+    clusterPosition = OClusterPositionFactory.INSTANCE.fromStream(content);
     return this;
   }
 
   public ORecordId fromStream(final OMemoryStream iStream) {
     clusterId = iStream.getAsShort();
-    clusterPosition = iStream.getAsLong();
+    clusterPosition = OClusterPositionFactory.INSTANCE.fromStream(iStream.getAsByteArray());
     return this;
   }
 
   public ORecordId fromStream(final byte[] iBuffer) {
     if (iBuffer != null) {
       clusterId = OBinaryProtocol.bytes2short(iBuffer, 0);
-      clusterPosition = OBinaryProtocol.bytes2long(iBuffer, OBinaryProtocol.SIZE_SHORT);
+
+      clusterPosition = OClusterPositionFactory.INSTANCE.fromStream(iBuffer, OBinaryProtocol.SIZE_SHORT);
     }
     return this;
   }
 
   public int toStream(final OutputStream iStream) throws IOException {
     final int beginOffset = OBinaryProtocol.short2bytes((short) clusterId, iStream);
-    OBinaryProtocol.long2bytes(clusterPosition, iStream);
+    iStream.write(clusterPosition.toStream());
     return beginOffset;
   }
 
   public int toStream(final OMemoryStream iStream) throws IOException {
     final int beginOffset = OBinaryProtocol.short2bytes((short) clusterId, iStream);
-    OBinaryProtocol.long2bytes(clusterPosition, iStream);
+    iStream.set(clusterPosition.toStream());
     return beginOffset;
   }
 
   public byte[] toStream() {
-    byte[] buffer = new byte[PERSISTENT_SIZE];
+    final int serializedSize = OClusterPositionFactory.INSTANCE.getSerializedSize();
+
+    byte[] buffer = new byte[OBinaryProtocol.SIZE_SHORT + serializedSize];
+
     OBinaryProtocol.short2bytes((short) clusterId, buffer, 0);
-    OBinaryProtocol.long2bytes(clusterPosition, buffer, OBinaryProtocol.SIZE_SHORT);
+    System.arraycopy(clusterPosition.toStream(), 0, buffer, 0, serializedSize);
+
     return buffer;
   }
 
@@ -232,7 +241,7 @@ public class ORecordId implements ORID {
     return clusterId;
   }
 
-  public long getClusterPosition() {
+  public OClusterPosition getClusterPosition() {
     return clusterPosition;
   }
 
@@ -258,7 +267,7 @@ public class ORecordId implements ORID {
 
     clusterId = Integer.parseInt(parts.get(0));
     checkClusterLimits();
-    clusterPosition = Long.parseLong(parts.get(1));
+    clusterPosition = OClusterPositionFactory.INSTANCE.valueOf(parts.get(1));
   }
 
   public void copyFrom(final ORID iSource) {
@@ -270,7 +279,7 @@ public class ORecordId implements ORID {
   }
 
   public String next() {
-    return generateString(clusterId, clusterPosition + 1);
+    return generateString(clusterId, clusterPosition.inc());
   }
 
   public ORID getIdentity() {
