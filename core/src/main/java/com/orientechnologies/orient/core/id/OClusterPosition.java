@@ -20,20 +20,20 @@ package com.orientechnologies.orient.core.id;
  * @author Andrey Lomakin
  * @since 12.11.12
  */
-public interface OClusterPosition extends Comparable<OClusterPosition> {
+public abstract class OClusterPosition extends Number implements Comparable<OClusterPosition> {
   public final static OClusterPosition INVALID_POSITION = OClusterPositionFactory.INSTANCE.valueOf(-1);
 
-  public OClusterPosition inc();
+  public abstract OClusterPosition inc();
 
-  public OClusterPosition dec();
+  public abstract OClusterPosition dec();
 
-  public boolean isValid();
+  public abstract boolean isValid();
 
-  public boolean isPersistent();
+  public abstract boolean isPersistent();
 
-  public boolean isNew();
+  public abstract boolean isNew();
 
-  public boolean isTemporary();
+  public abstract boolean isTemporary();
 
-  public byte[] toStream();
+  public abstract byte[] toStream();
 }

@@ -14,6 +14,7 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
+import com.orientechnologies.orient.core.id.OClusterPositionFactory;
 import com.orientechnologies.orient.core.storage.OCluster;
 import com.orientechnologies.orient.core.storage.OPhysicalPosition;
 import com.orientechnologies.orient.core.storage.OStorage;
@@ -59,16 +60,17 @@ public class ClusterLocalLHPEPSTest {
     OCluster localCluster = getCluster();
 
     for (int i = 0; i < KEYS_COUNT; i++) {
-      localCluster.addPhysicalPosition(new OPhysicalPosition(i));
-      Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(i)));
+      localCluster.addPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(i)));
+      Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(i))));
     }
 
     for (int i = 0; i < KEYS_COUNT; i++) {
-      Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(i)), i + " key is absent");
+      Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(i))), i
+          + " key is absent");
     }
 
     for (int i = KEYS_COUNT; i < 2 * KEYS_COUNT; i++) {
-      Assert.assertNull(localCluster.getPhysicalPosition(new OPhysicalPosition(i)));
+      Assert.assertNull(localCluster.getPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(i))));
     }
   }
 
@@ -84,14 +86,15 @@ public class ClusterLocalLHPEPSTest {
       if (key < 0)
         key = -key;
 
-      if (localCluster.addPhysicalPosition(new OPhysicalPosition(key))) {
+      if (localCluster.addPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(key)))) {
         keys.add(key);
-        Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(key)));
+        Assert
+            .assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(key))));
       }
     }
 
     for (long key : keys)
-      Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(key)));
+      Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(key))));
   }
 
   @Test
@@ -99,19 +102,19 @@ public class ClusterLocalLHPEPSTest {
     OCluster localCluster = getCluster();
 
     for (int i = 0; i < KEYS_COUNT; i++)
-      localCluster.addPhysicalPosition(new OPhysicalPosition(i));
+      localCluster.addPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(i)));
 
     for (int i = 0; i < KEYS_COUNT; i++) {
       if (i % 3 == 0)
-        localCluster.removePhysicalPosition(i);
+        localCluster.removePhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(i));
       // Assert.assertNull(localCluster.getPhysicalPosition(new OPhysicalPosition(i)));
     }
 
     for (int i = 0; i < KEYS_COUNT; i++) {
       if (i % 3 == 0)
-        Assert.assertNull(localCluster.getPhysicalPosition(new OPhysicalPosition(i)));
+        Assert.assertNull(localCluster.getPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(i))));
       else
-        Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(i)));
+        Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(i))));
     }
   }
 
@@ -126,21 +129,22 @@ public class ClusterLocalLHPEPSTest {
       if (key < 0)
         key = -key;
 
-      localCluster.addPhysicalPosition(new OPhysicalPosition(key));
+      localCluster.addPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(key)));
       longs.add(key);
     }
 
     for (long key : longs) {
       if (key % 3 == 0) {
-        localCluster.removePhysicalPosition(key);
+        localCluster.removePhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(key));
       }
     }
 
     for (long key : longs) {
       if (key % 3 == 0)
-        Assert.assertNull(localCluster.getPhysicalPosition(new OPhysicalPosition(key)));
+        Assert.assertNull(localCluster.getPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(key))));
       else
-        Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(key)));
+        Assert
+            .assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(key))));
     }
   }
 
@@ -149,24 +153,26 @@ public class ClusterLocalLHPEPSTest {
     OCluster localCluster = getCluster();
 
     for (int i = 0; i < KEYS_COUNT; i++)
-      Assert.assertNotNull(localCluster.addPhysicalPosition(new OPhysicalPosition(i)));
+      Assert.assertNotNull(localCluster.addPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(i))));
 
     for (int i = 0; i < KEYS_COUNT; i++) {
       if (i % 3 == 0)
-        localCluster.removePhysicalPosition(i);
+        localCluster.removePhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(i));
 
       if (i % 2 == 0)
-        Assert.assertNotNull(localCluster.addPhysicalPosition(new OPhysicalPosition(KEYS_COUNT + i)));
+        Assert.assertNotNull(localCluster.addPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE
+            .valueOf(KEYS_COUNT + i))));
     }
 
     for (int i = 0; i < KEYS_COUNT; i++) {
       if (i % 3 == 0)
-        Assert.assertNull(localCluster.getPhysicalPosition(new OPhysicalPosition(i)));
+        Assert.assertNull(localCluster.getPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(i))));
       else
-        Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(i)));
+        Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(i))));
 
       if (i % 2 == 0)
-        Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(KEYS_COUNT + i)));
+        Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE
+            .valueOf(KEYS_COUNT + i))));
     }
   }
 
@@ -177,29 +183,33 @@ public class ClusterLocalLHPEPSTest {
 
     // add
     for (int i = 0; i < KEYS_COUNT; i++) {
-      localCluster.addPhysicalPosition(new OPhysicalPosition(longs.get(i)));
+      localCluster.addPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(longs.get(i))));
     }
 
     // remove+add
     for (int i = 0; i < KEYS_COUNT; i++) {
       if (i % 3 == 0) {
-        localCluster.removePhysicalPosition(longs.get(i));
+        localCluster.removePhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(longs.get(i)));
       }
 
       if (i % 2 == 0) {
-        localCluster.addPhysicalPosition(new OPhysicalPosition(longs.get(i + KEYS_COUNT)));
+        localCluster
+            .addPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(longs.get(i + KEYS_COUNT))));
       }
     }
 
     // check removed ok
     for (int i = 0; i < KEYS_COUNT; i++) {
       if (i % 3 == 0)
-        Assert.assertNull(localCluster.getPhysicalPosition(new OPhysicalPosition(longs.get(i))));
+        Assert.assertNull(localCluster.getPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(longs
+            .get(i)))));
       else
-        Assert.assertNotNull(localCluster.addPhysicalPosition(new OPhysicalPosition(longs.get(i))));
+        Assert.assertNotNull(localCluster.addPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(longs
+            .get(i)))));
 
       if (i % 2 == 0)
-        Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(longs.get(KEYS_COUNT + i))));
+        Assert.assertNotNull(localCluster.getPhysicalPosition(new OPhysicalPosition(OClusterPositionFactory.INSTANCE.valueOf(longs
+            .get(KEYS_COUNT + i)))));
     }
   }
 

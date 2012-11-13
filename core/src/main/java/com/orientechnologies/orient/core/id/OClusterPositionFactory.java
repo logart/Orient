@@ -16,6 +16,11 @@
 
 package com.orientechnologies.orient.core.id;
 
+import java.io.DataInput;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInput;
+
 import com.orientechnologies.common.serialization.types.OLongSerializer;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 
@@ -44,6 +49,51 @@ public abstract class OClusterPositionFactory {
 
   public OClusterPosition fromStream(byte[] content) {
     return fromStream(content, 0);
+  }
+
+  public OClusterPosition fromStream(InputStream in) throws IOException {
+    int bytesToRead;
+    int contentLength = 0;
+
+    final int clusterSize = OClusterPositionFactory.INSTANCE.getSerializedSize();
+    final byte[] clusterContent = new byte[clusterSize];
+
+    do {
+      bytesToRead = in.read(clusterContent, contentLength, clusterSize - contentLength);
+      if (bytesToRead < 0)
+        break;
+
+      contentLength += bytesToRead;
+    } while (contentLength < clusterSize);
+
+    return fromStream(clusterContent);
+  }
+
+  public OClusterPosition fromStream(ObjectInput in) throws IOException {
+    int bytesToRead;
+    int contentLength = 0;
+
+    final int clusterSize = OClusterPositionFactory.INSTANCE.getSerializedSize();
+    final byte[] clusterContent = new byte[clusterSize];
+
+    do {
+      bytesToRead = in.read(clusterContent, contentLength, clusterSize - contentLength);
+      if (bytesToRead < 0)
+        break;
+
+      contentLength += bytesToRead;
+    } while (contentLength < clusterSize);
+
+    return fromStream(clusterContent);
+  }
+
+  public OClusterPosition fromStream(DataInput in) throws IOException {
+    final int clusterSize = OClusterPositionFactory.INSTANCE.getSerializedSize();
+    final byte[] clusterContent = new byte[clusterSize];
+
+    in.readFully(clusterContent);
+
+    return fromStream(clusterContent);
   }
 
   private static final class OClusterPositionFactoryLong extends OClusterPositionFactory {

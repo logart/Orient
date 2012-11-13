@@ -35,12 +35,14 @@ public class ORecordId implements ORID {
   public static final ORecordId EMPTY_RECORD_ID        = new ORecordId();
   public static final byte[]    EMPTY_RECORD_ID_STREAM = EMPTY_RECORD_ID.toStream();
 
-  public int                    clusterId              = CLUSTER_ID_INVALID;               // INT TO AVOID
-                                                                                            // JVM
-                                                                                            // PENALITY, BUT
-                                                                                            // IT'S STORED
-                                                                                            // AS SHORT
+  public int                    clusterId              = CLUSTER_ID_INVALID;                                      // INT TO AVOID
+                                                                                                                   // JVM
+                                                                                                                   // PENALITY, BUT
+                                                                                                                   // IT'S STORED
+                                                                                                                   // AS SHORT
   public OClusterPosition       clusterPosition        = OClusterPosition.INVALID_POSITION;
+  public static final int       PERSISTENT_SIZE        = OBinaryProtocol.SIZE_SHORT
+                                                           + OClusterPositionFactory.INSTANCE.getSerializedSize();
 
   public ORecordId() {
   }

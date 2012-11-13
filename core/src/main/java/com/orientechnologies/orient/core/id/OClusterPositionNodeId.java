@@ -20,8 +20,12 @@ package com.orientechnologies.orient.core.id;
  * @author Andrey Lomakin
  * @since 12.11.12
  */
-public class OClusterPositionNodeId implements OClusterPosition {
+public final class OClusterPositionNodeId extends OClusterPosition {
   private final ONodeId nodeId;
+
+  public ONodeId getNodeId() {
+    return nodeId;
+  }
 
   public OClusterPositionNodeId(ONodeId nodeId) {
     this.nodeId = nodeId;
@@ -64,6 +68,26 @@ public class OClusterPositionNodeId implements OClusterPosition {
 
   @Override
   public int compareTo(OClusterPosition o) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public int intValue() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public long longValue() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public float floatValue() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public double doubleValue() {
     throw new UnsupportedOperationException();
   }
 }

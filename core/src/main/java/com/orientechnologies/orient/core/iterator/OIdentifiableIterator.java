@@ -56,7 +56,7 @@ public abstract class OIdentifiableIterator<REC extends OIdentifiable> implement
   protected long                        firstClusterEntry      = -1;
   protected long                        lastClusterEntry       = -1;
 
-  protected long[]                      currentPositions;
+  protected OClusterPosition[]          currentPositions;
   protected int                         currentPositionIndex;
 
   protected long                        currentEntry           = -1;
@@ -87,7 +87,7 @@ public abstract class OIdentifiableIterator<REC extends OIdentifiable> implement
   protected ORecordInternal<?> getTransactionEntry() {
     final boolean noPhysicalRecordToBrowse;
 
-    if (current.clusterPosition <= -2)
+    if (current.clusterPosition.isTemporary())
       noPhysicalRecordToBrowse = true;
     else if (directionForward)
       noPhysicalRecordToBrowse = (lastClusterEntry == currentEntry && (currentPositionIndex >= currentPositions.length || currentPositions.length == 0))
@@ -293,9 +293,9 @@ public abstract class OIdentifiableIterator<REC extends OIdentifiable> implement
     return true;
   }
 
-  protected long currentPosition() {
+  protected OClusterPosition currentPosition() {
     if (currentPositionIndex < 0 || currentPositionIndex >= currentPositions.length)
-      return -1;
+      return OClusterPosition.INVALID_POSITION;
 
     return currentPositions[currentPositionIndex];
   }

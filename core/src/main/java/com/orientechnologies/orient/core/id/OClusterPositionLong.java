@@ -22,11 +22,15 @@ import com.orientechnologies.common.serialization.types.OLongSerializer;
  * @author Andrey Lomakin
  * @since 12.11.12
  */
-public class OClusterPositionLong implements OClusterPosition {
+public final class OClusterPositionLong extends OClusterPosition {
   private final long value;
 
   public OClusterPositionLong(long value) {
     this.value = value;
+  }
+
+  public long getValue() {
+    return value;
   }
 
   @Override
@@ -78,5 +82,50 @@ public class OClusterPositionLong implements OClusterPosition {
       return -1;
     else
       return 0;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o)
+      return true;
+    if (o == null || getClass() != o.getClass())
+      return false;
+
+    OClusterPositionLong that = (OClusterPositionLong) o;
+
+    if (value != that.value)
+      return false;
+
+    return true;
+  }
+
+  @Override
+  public int hashCode() {
+    return (int) (value ^ (value >>> 32));
+  }
+
+  @Override
+  public String toString() {
+    return Long.toString(value);
+  }
+
+  @Override
+  public int intValue() {
+    return (int) value;
+  }
+
+  @Override
+  public long longValue() {
+    return value;
+  }
+
+  @Override
+  public float floatValue() {
+    return value;
+  }
+
+  @Override
+  public double doubleValue() {
+    return value;
   }
 }
