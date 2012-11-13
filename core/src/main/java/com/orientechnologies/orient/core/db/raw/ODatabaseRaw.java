@@ -249,7 +249,7 @@ public class ODatabaseRaw implements ODatabase {
     Orient.instance().getRecordFactoryManager().getRecordTypeClass(iRecordType);
 
     try {
-      if (iForceCreate || iRid.clusterPosition < 0) {
+      if (iForceCreate || iRid.clusterPosition.isNew()) {
         // CREATE
         final OStorageOperationResult<OPhysicalPosition> ppos = storage.createRecord(iDataSegmentId, iRid, iContent, iVersion,
             iRecordType, iMode, (ORecordCallback<Long>) iCallBack);
