@@ -67,13 +67,13 @@ public class IndexTxAwareOneValueGetEntriesTest {
 
     Assert.assertNotNull(database.getTransaction().getIndexChanges("idxTxAwareOneValueGetEntriesTest"));
     final Collection<?> resultTwo = index.getEntries(Arrays.asList(1, 2, 3));
-    Assert.assertEquals(resultTwo.size(), OClusterPositionFactory.INSTANCE.valueOf(3));
+    Assert.assertEquals(resultTwo.size(), 3);
 
     database.rollback();
 
     Assert.assertNull(database.getTransaction().getIndexChanges("idxTxAwareOneValueGetEntriesTest"));
     final Collection<?> resultThree = index.getEntries(Arrays.asList(1, 2));
-    Assert.assertEquals(resultThree.size(), OClusterPositionFactory.INSTANCE.valueOf(2));
+    Assert.assertEquals(resultThree.size(), 2);
   }
 
   @Test
@@ -152,7 +152,7 @@ public class IndexTxAwareOneValueGetEntriesTest {
 
     Assert.assertNull(database.getTransaction().getIndexChanges("idxTxAwareOneValueGetEntriesTest"));
     final Collection<?> resultOne = index.getEntries(Arrays.asList(1, 2));
-    Assert.assertEquals(resultOne.size(), OClusterPositionFactory.INSTANCE.valueOf(2));
+    Assert.assertEquals(resultOne.size(), 2);
 
     database.begin();
 
@@ -160,7 +160,7 @@ public class IndexTxAwareOneValueGetEntriesTest {
 
     Assert.assertNotNull(database.getTransaction().getIndexChanges("idxTxAwareOneValueGetEntriesTest"));
     final Collection<?> resultTwo = index.getEntries(Arrays.asList(1, 2));
-    Assert.assertEquals(resultTwo.size(), OClusterPositionFactory.INSTANCE.valueOf(1));
+    Assert.assertEquals(resultTwo.size(), 1);
 
     database.rollback();
 

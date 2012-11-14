@@ -301,7 +301,7 @@ public class IndexTest {
     Collection<OIdentifiable> indexCollection = index.getValuesMajor(3, false);
     Assert.assertEquals(indexCollection.size(), 2);
     for (OIdentifiable identifiable : indexCollection) {
-      valuesMajorResults.remove(identifiable.getIdentity().getClusterPosition());
+      valuesMajorResults.remove(identifiable.getIdentity().getClusterPosition().longValue());
     }
     Assert.assertEquals(valuesMajorResults.size(), 0);
 
@@ -309,13 +309,14 @@ public class IndexTest {
     indexCollection = index.getValuesMajor(3, true);
     Assert.assertEquals(indexCollection.size(), 3);
     for (OIdentifiable identifiable : indexCollection) {
-      valuesMajorInclusiveResults.remove(identifiable.getIdentity().getClusterPosition());
+      valuesMajorInclusiveResults.remove(identifiable.getIdentity().getClusterPosition().longValue());
     }
     Assert.assertEquals(valuesMajorInclusiveResults.size(), 0);
 
     indexCollection = index.getValuesMajor(5, true);
     Assert.assertEquals(indexCollection.size(), 1);
-    Assert.assertEquals(indexCollection.iterator().next().getIdentity().getClusterPosition(), 5L);
+    Assert.assertEquals(indexCollection.iterator().next().getIdentity().getClusterPosition(),
+        OClusterPositionFactory.INSTANCE.valueOf(5));
 
     indexCollection = index.getValuesMajor(5, false);
     Assert.assertEquals(indexCollection.size(), 0);
@@ -385,7 +386,7 @@ public class IndexTest {
     Collection<OIdentifiable> indexCollection = index.getValuesMinor(3, false);
     Assert.assertEquals(indexCollection.size(), 3);
     for (OIdentifiable identifiable : indexCollection) {
-      valuesMinorResults.remove(identifiable.getIdentity().getClusterPosition());
+      valuesMinorResults.remove(identifiable.getIdentity().getClusterPosition().longValue());
     }
     Assert.assertEquals(valuesMinorResults.size(), 0);
 
@@ -393,13 +394,14 @@ public class IndexTest {
     indexCollection = index.getValuesMinor(3, true);
     Assert.assertEquals(indexCollection.size(), 4);
     for (OIdentifiable identifiable : indexCollection) {
-      valuesMinorInclusiveResults.remove(identifiable.getIdentity().getClusterPosition());
+      valuesMinorInclusiveResults.remove(identifiable.getIdentity().getClusterPosition().longValue());
     }
     Assert.assertEquals(valuesMinorInclusiveResults.size(), 0);
 
     indexCollection = index.getValuesMinor(0, true);
     Assert.assertEquals(indexCollection.size(), 1);
-    Assert.assertEquals(indexCollection.iterator().next().getIdentity().getClusterPosition(), 0L);
+    Assert.assertEquals(indexCollection.iterator().next().getIdentity().getClusterPosition(),
+        OClusterPositionFactory.INSTANCE.valueOf(0));
 
     indexCollection = index.getValuesMinor(0, false);
     Assert.assertEquals(indexCollection.size(), 0);

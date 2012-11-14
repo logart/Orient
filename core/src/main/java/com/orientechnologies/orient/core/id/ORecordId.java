@@ -120,19 +120,19 @@ public class ORecordId implements ORID {
   }
 
   @Override
-  public boolean equals(Object o) {
-    if (this == o)
+  public boolean equals(Object obj) {
+    if (this == obj)
       return true;
-    if (o == null || getClass() != o.getClass())
+    if (obj == null)
       return false;
-
-    ORecordId oRecordId = (ORecordId) o;
-
-    if (clusterId != oRecordId.clusterId)
+    if (!(obj instanceof OIdentifiable))
       return false;
-    if (!clusterPosition.equals(oRecordId.clusterPosition))
-      return false;
+    final ORecordId other = (ORecordId) ((OIdentifiable) obj).getIdentity();
 
+    if (clusterId != other.clusterId)
+      return false;
+    if (!clusterPosition.equals(other.clusterPosition))
+      return false;
     return true;
   }
 
@@ -186,24 +186,14 @@ public class ORecordId implements ORID {
   public ORecordId fromStream(final InputStream iStream) throws IOException {
     clusterId = OBinaryProtocol.bytes2short(iStream);
 
-    final byte[] content = new byte[OClusterPositionFactory.INSTANCE.getSerializedSize()];
-    int contentLength = 0;
-    int bytesToRead;
-    do {
-      bytesToRead = iStream.read(content, contentLength, content.length - contentLength);
-      if (bytesToRead < 0)
-        break;
-
-      contentLength += bytesToRead;
-    } while (contentLength < content.length);
-
-    clusterPosition = OClusterPositionFactory.INSTANCE.fromStream(content);
+    clusterPosition = OClusterPositionFactory.INSTANCE.fromStream(iStream);
     return this;
   }
 
   public ORecordId fromStream(final OMemoryStream iStream) {
     clusterId = iStream.getAsShort();
-    clusterPosition = OClusterPositionFactory.INSTANCE.fromStream(iStream.getAsByteArray());
+    clusterPosition = OClusterPositionFactory.INSTANCE.fromStream(iStream.getAsByteArrayFixed(OClusterPositionFactory.INSTANCE
+        .getSerializedSize()));
     return this;
   }
 
@@ -224,7 +214,7 @@ public class ORecordId implements ORID {
 
   public int toStream(final OMemoryStream iStream) throws IOException {
     final int beginOffset = OBinaryProtocol.short2bytes((short) clusterId, iStream);
-    iStream.set(clusterPosition.toStream());
+    iStream.write(clusterPosition.toStream());
     return beginOffset;
   }
 
@@ -234,7 +224,7 @@ public class ORecordId implements ORID {
     byte[] buffer = new byte[OBinaryProtocol.SIZE_SHORT + serializedSize];
 
     OBinaryProtocol.short2bytes((short) clusterId, buffer, 0);
-    System.arraycopy(clusterPosition.toStream(), 0, buffer, 0, serializedSize);
+    System.arraycopy(clusterPosition.toStream(), 0, buffer, OBinaryProtocol.SIZE_SHORT, serializedSize);
 
     return buffer;
   }

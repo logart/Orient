@@ -31,7 +31,7 @@ import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 
 @Test(groups = { "index" })
 public class FullTextIndexTest {
-  private static final int    TOT  = 1000;
+  private static final int    TOT  = 1;
   private ODatabaseDocumentTx database;
   private static final String TEXT = "Jay Glenn Miner (May 31, 1932 to June 20, 1994), was a famous integrated circuit designer, known primarily for his "
                                        + "work in multimedia chips and as the 'father of the Amiga'[1]. He received a BS in EECS from "

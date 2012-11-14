@@ -33,6 +33,7 @@ import com.orientechnologies.orient.core.db.ODatabaseComplex.OPERATION_MODE;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentPool;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
+import com.orientechnologies.orient.core.id.OClusterPosition;
 import com.orientechnologies.orient.core.id.OClusterPositionFactory;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
@@ -790,9 +791,9 @@ public class CRUDDocumentPhysicalTest {
         record.field("location", "Italy");
         record.field("salary", (i + 300));
 
-        database.save(record, OPERATION_MODE.ASYNCHRONOUS, false, new ORecordCallback<Long>() {
+        database.save(record, OPERATION_MODE.ASYNCHRONOUS, false, new ORecordCallback<OClusterPosition>() {
 
-          public void call(ORecordId iRID, Long iParameter) {
+          public void call(ORecordId iRID, OClusterPosition iParameter) {
             System.out.println("asynchInsertion callback for record " + iRID + ": " + callBackCalled.incrementAndGet());
           }
         });

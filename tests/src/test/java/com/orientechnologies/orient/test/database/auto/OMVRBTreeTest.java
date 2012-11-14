@@ -70,7 +70,7 @@ public class OMVRBTreeTest {
     // ITERABLE
     int i = 0;
     for (OIdentifiable rid : set2) {
-      Assert.assertEquals(rid.getIdentity().getClusterPosition(), i);
+      Assert.assertEquals(rid.getIdentity().getClusterPosition(), OClusterPositionFactory.INSTANCE.valueOf(i));
       // System.out.println("Adding " + rid);
       i++;
     }
@@ -82,7 +82,7 @@ public class OMVRBTreeTest {
     i = 0;
     for (Iterator<OIdentifiable> it = set2.iterator(); it.hasNext();) {
       final OIdentifiable rid = it.next();
-      Assert.assertEquals(rid.getIdentity().getClusterPosition(), i);
+      Assert.assertEquals(rid.getIdentity().getClusterPosition(), OClusterPositionFactory.INSTANCE.valueOf(i));
       // System.out.println("Removing " + rid);
       it.remove();
       i++;
