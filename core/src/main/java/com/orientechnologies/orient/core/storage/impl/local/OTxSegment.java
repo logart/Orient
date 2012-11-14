@@ -312,7 +312,7 @@ public class OTxSegment extends OSingleFileSegment {
       offset += OBinaryProtocol.SIZE_SHORT;
 
       final byte[] content = new byte[OClusterPositionFactory.INSTANCE.getSerializedSize()];
-      file.read(0, content, content.length);
+      file.read(offset, content, content.length);
       rid.clusterPosition = OClusterPositionFactory.INSTANCE.fromStream(content);
       offset += CLUSTER_OFFSET_SIZE;
 
