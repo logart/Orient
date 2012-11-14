@@ -18,7 +18,6 @@ package com.orientechnologies.orient.enterprise.channel.binary;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.net.Socket;
@@ -225,18 +224,7 @@ public abstract class OChannelBinary extends OChannel {
   public ORecordId readRID() throws IOException {
     final int clusterId = readShort();
 
-    final int clusterPositionSize = OClusterPositionFactory.INSTANCE.getSerializedSize();
-    updateMetricReceivedBytes(clusterPositionSize);
-
-    final OClusterPosition clusterPosition;
-    if (debug) {
-      OLogManager.instance().debug(this, "%s - Reading long (" + clusterPositionSize + " bytes)...",
-          socket.getRemoteSocketAddress());
-      clusterPosition = OClusterPositionFactory.INSTANCE.fromStream((InputStream) in);
-      OLogManager.instance().debug(this, "%s - Read cluster position: %s", socket.getRemoteSocketAddress(), clusterPosition);
-    } else
-      clusterPosition = OClusterPositionFactory.INSTANCE.fromStream((InputStream) in);
-
+    final OClusterPosition clusterPosition = OClusterPositionFactory.INSTANCE.fromStream(readBytes());
     return new ORecordId(clusterId, clusterPosition);
   }
 
